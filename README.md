@@ -10,7 +10,7 @@ Pithos achieves its speed by collapsing abstraction boundaries between language 
 
 ---
 
-## 📚 Documentation Directory
+##  Documentation Directory
 
 To make the codebase easier to navigate, detailed guides and theory have been split into standalone documents:
 
@@ -19,7 +19,7 @@ To make the codebase easier to navigate, detailed guides and theory have been sp
 
 ---
 
-## 📊 Directory Structure
+##  Directory Structure
 
 ```
 .
@@ -50,11 +50,11 @@ To make the codebase easier to navigate, detailed guides and theory have been sp
 
 ---
 
-## 📦 Precompiled Native Libraries
+##  Precompiled Native Libraries
 
 Precompiled native libraries are automatically published as GitHub Release assets:
 
-👉 [Download Latest Release Assets](https://github.com/F1nnSBK/lcvk/releases/latest)
+ [Download Latest Release Assets](https://github.com/F1nnSBK/lcvk/releases/latest)
 
 Each release includes:
 - `libpithos-linux-x86_64.so` — Linux (x86_64)
@@ -65,7 +65,7 @@ Each release includes:
 
 ---
 
-## 🔬 System Verification & Performance Results
+##  System Verification & Performance Results
 
 <!-- BENCHMARK_METRICS_START -->
 ### Visual Charts (Vector Anomaly Distribution & Throughput Analysis)
@@ -85,7 +85,7 @@ Each release includes:
 
 ---
 
-## 🚀 Build & Run
+##  Build & Run
 
 ### 0. One-Click Benchmark (Reproducibility)
 Run the entire evaluation suite (baselines + Pithos sweeps, including compaction and WAL verifications):
@@ -133,7 +133,7 @@ mvn clean package -Pcuda -Dcuda.enabled=true
 
 ---
 
-## 🗺️ Roadmap & Next Steps
+## ️ Roadmap & Next Steps
 
 ### 1. Distribute Search Topologies
 - **Objective**: Scale out to multi-node clusters.
