@@ -856,8 +856,8 @@ public class FlatIndex implements Index {
                 long baseOffset0 = i * (numLongs0 * 16L);
                 long t0Sign = tier0.get(ValueLayout.JAVA_LONG, baseOffset0);
                 long t0Mask = tier0.get(ValueLayout.JAVA_LONG, baseOffset0 + (numLongs0 * 8L));
-                if ((t0Mask & (1L << 63)) == 0L || (t0Sign & (1L << 63)) == 0L)
-                    continue;
+                // Bug fix: Removed unconditional MSB filter that discarded 50% of the dataset
+                // if ((t0Mask & (1L << 63)) == 0L || (t0Sign & (1L << 63)) == 0L) continue;
 
                 dbWords[0] = t0Sign;
                 dbMasks[0] = t0Mask;
@@ -868,8 +868,8 @@ public class FlatIndex implements Index {
             } else { // 1-bit mode
                 long baseOffset0 = i * (numLongs0 * 8L);
                 long t0Val = tier0.get(ValueLayout.JAVA_LONG, baseOffset0);
-                if ((t0Val & (1L << 63)) == 0L)
-                    continue;
+                // Bug fix: Removed unconditional MSB filter that discarded 50% of the dataset
+                // if ((t0Val & (1L << 63)) == 0L) continue;
 
                 dbWords[0] = t0Val;
                 if (numLongs0 > 1) {

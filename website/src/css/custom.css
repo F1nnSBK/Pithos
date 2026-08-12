@@ -1,0 +1,54 @@
+:root {
+  --ifm-color-primary: #00f0ff;
+  --ifm-color-primary-dark: #00d8e6;
+  --ifm-color-primary-darker: #00ccda;
+  --ifm-color-primary-darkest: #00a8b3;
+  --ifm-color-primary-light: #1affff;
+  --ifm-color-primary-lighter: #33ffff;
+  --ifm-color-primary-lightest: #80ffff;
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 240, 255, 0.1);
+  --ifm-background-color: #050505;
+  --ifm-font-family-base: 'Inter', sans-serif;
+  --ifm-heading-font-family: 'Outfit', sans-serif;
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #00f0ff;
+  --ifm-color-primary-dark: #00d8e6;
+  --ifm-color-primary-darker: #00ccda;
+  --ifm-color-primary-darkest: #00a8b3;
+  --ifm-color-primary-light: #1affff;
+  --ifm-color-primary-lighter: #33ffff;
+  --ifm-color-primary-lightest: #80ffff;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 240, 255, 0.3);
+  --ifm-background-color: #050505;
+}
+
+/* Premium UI Utility Classes */
+.hero-gradient-text {
+  background: linear-gradient(90deg, #00f0ff, #0077ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  display: inline-block;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 800;
+}
+
+.glass-header {
+  background-color: rgba(5, 5, 5, 0.6) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(0, 240, 255, 0.2) !important;
+}
+
+.premium-button {
+  transition: all 0.3s ease;
+  font-family: 'Outfit', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.premium-button:hover {
+  transform: translateY(-2px);
+}
