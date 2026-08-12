@@ -6,7 +6,8 @@ const sidebars: SidebarsConfig = {
     'C_API_REFERENCE',
     'MATH_THEORY',
     'CUDA_INTEGRATION',
-    'NEXT_STEPS'
+    'NEXT_STEPS',
+    'release-notes'
   ],
 };
 
