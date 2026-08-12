@@ -25,23 +25,18 @@ To make the codebase easier to navigate, detailed guides and theory have been sp
 .
 ├── pom.xml                 # Maven configuration (dimension-agnostic pithos packaging, CUDA profile)
 ├── README.md               # This file
-├── run_benchmark.sh        # One-click benchmark (reproducible results)
-├── reproduce_all.sh        # Reproduce all benchmarks and verification
 ├── test_client.c           # C verification client calling Pithos float C-API
-├── benchmark.py            # Central Python API Wrapper (PithosMIDB singleton)
 ├── pithos.h                # C API header file
 ├── graal_isolate.h         # GraalVM Native Image header
 ├── docs/                   # Documentation resources
 │   ├── ARCHITECTURAL_PRINCIPLES.md # Math, theory, and system architecture
 │   ├── C_API_REFERENCE.md          # C-API declarations and tuning guidelines
 │   └── archive/                    # Archived log history
-├── benchmarks/             # All evaluation, sweep, and verification scripts
+├── benchmarks/             # Verification scripts
 │   ├── run_real_verification.py    # Lunar Pit / adapter classification pipeline
-│   ├── benchmark_baselines.py      # JIT loop and FAISS baseline comparison
 │   ├── verify_compaction.py        # Index compaction verification script
 │   ├── verify_wal.py               # Write-Ahead Log verification script
-│   ├── verify_optional_fp16.py     # FP16 vs. Non-FP16 verification script
-│   └── ...                         # Sweeps, candidate recall, and FFI benchmarks
+│   └── verify_optional_fp16.py     # FP16 vs. Non-FP16 verification script
 ├── examples/               # Developer integration demos
 │   ├── cpp/demo.c                  # C integration demo linking libpithos
 │   └── java/ZeroCostDemo.java      # FFM Panama off-heap GC bypass demo
@@ -65,33 +60,6 @@ Each release includes:
 
 ---
 
-##  System Verification & Performance Results
-
-<!-- BENCHMARK_METRICS_START -->
-### Visual Charts (Vector Anomaly Distribution & Throughput Analysis)
-
-#### Hamming Distance Distribution
-![Hamming Distance Distribution](assets/distribution_plot.svg)
-
-#### Throughput Comparison
-![Throughput Comparison](assets/throughput_comparison.svg)
-
-#### Performance Crossover Curve
-![Performance Crossover Curve](assets/crossover_curve.png)
-
-#### Workload Reduction vs. Target Recall Elbow Curve
-![Workload Reduction vs. Target Recall](assets/candidate_tradeoff.png)
-<!-- BENCHMARK_METRICS_END -->
-
----
-
-##  Build & Run
-
-### 0. One-Click Benchmark (Reproducibility)
-Run the entire evaluation suite (baselines + Pithos sweeps, including compaction and WAL verifications):
-```bash
-./run_benchmark.sh
-```
 
 ### 1. Compile & Build (Native macOS)
 Ensure you have the workspace-bundled **GraalVM JDK 25** and **Maven** installed, then set `JAVA_HOME` and compile:
@@ -102,23 +70,11 @@ mvn clean package
 ```
 This executes all unit tests (including SVD, FWHT, compaction, and WAL recovery) and compiles `libpithos.dylib` inside `target/` and the root directory.
 
-### 2. Running Scale Benchmark
-```bash
-export JAVA_HOME=/Users/finnhertsch/projects/lcvk/graalvm/Contents/Home
-export PATH=$JAVA_HOME/bin:$PATH
-.venv/bin/python benchmark.py
-```
-
-### 3. Real-Data Verification
+### 2. Real-Data Verification
 ```bash
 export JAVA_HOME=/Users/finnhertsch/projects/lcvk/graalvm/Contents/Home
 export PATH=$JAVA_HOME/bin:$PATH
 .venv/bin/python benchmarks/run_real_verification.py
-```
-
-### 4. Running Baseline Benchmarks
-```bash
-.venv/bin/python benchmarks/benchmark_baselines.py
 ```
 
 ### 5. Building with CUDA Support (Linux)
