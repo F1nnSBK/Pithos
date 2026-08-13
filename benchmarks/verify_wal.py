@@ -13,9 +13,14 @@ def main():
     dimension = 64
     tiers = np.array([32, 64], dtype=np.int32)
     db_path = "temp/db_wal_py"
-    
+    for ext in ["", "_ids.bin", "_metadata.bin", "_tier_0.bin", "_tier_1.bin", "_fp16.bin", "_wal.bin"]:
+        p = db_path + ext
+        if os.path.exists(p):
+            os.remove(p)
+            
     # Compile base index
     vectors = generate_hypersphere_vectors(10, dimension)
+
     ids = np.arange(10, dtype=np.int64)
     status = engine.compile_index_file(db_path, 1, 1000, dimension, tiers, ids, vectors)
     if status != 0:

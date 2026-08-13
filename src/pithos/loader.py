@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional, List
 
 LIB_NAME_BASE = "pithos"
-GITHUB_REPO = "F1nnSBK/lcvk"
+GITHUB_REPO = "F1nnSBK/Pithos"
 DEFAULT_CACHE_DIR = Path.home() / ".pithos" / "lib"
 
 def get_platform_info() -> tuple[str, str, str]:
@@ -59,8 +59,10 @@ def get_candidate_library_paths(custom_path: Optional[str] = None) -> List[Path]
     candidates.append(lib_dir / f"pithos.{ext}")
     candidates.append(lib_dir / f"libpithos-{sys_tag}-{arch_tag}.{ext}")
     
-    # 2. Local repository build directories (target/, build-binaries/)
+    # 2. Local repository build directories (repo root, target/, build-binaries/)
     repo_root = package_dir.parent.parent
+    candidates.append(repo_root / f"libpithos.{ext}")
+    candidates.append(repo_root / f"pithos.{ext}")
     candidates.append(repo_root / "target" / f"pithos.{ext}")
     candidates.append(repo_root / "target" / f"libpithos.{ext}")
     candidates.append(repo_root / "build-binaries" / f"libpithos-{sys_tag}-{arch_tag}.{ext}")
@@ -71,6 +73,7 @@ def get_candidate_library_paths(custom_path: Optional[str] = None) -> List[Path]
     candidates.append(DEFAULT_CACHE_DIR / f"libpithos.{ext}")
     
     return candidates
+
 
 def download_native_library(target_path: Path, cuda: bool = False, version: str = "latest") -> Path:
     """Downloads the pre-built native library asset from GitHub Releases."""

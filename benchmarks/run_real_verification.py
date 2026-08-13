@@ -309,18 +309,17 @@ def main():
     with open(metrics_path, "w") as f:
         json.dump(metrics_data, f, indent=2)
     
-    # Generate updated plots automatically
     try:
         from generate_graphics import create_distribution_plot
         create_distribution_plot()
         print("Updated Hamming distance distribution plot successfully.")
+    except ImportError:
+        pass
     except Exception as e:
         print(f"Warning: Could not regenerate distribution plot ({e})")
         
-    # Keep multi-tier files and temp files for analysis and subsequent queries
-    pass
-            
     print_performance_table(duration_p1, duration_p2, trace_data)
+
 
 if __name__ == "__main__":
     main()

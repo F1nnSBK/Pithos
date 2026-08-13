@@ -37,9 +37,10 @@ function HomepageHeader() {
           </Link>
           <Link
             className="button button--outline button--primary button--lg premium-button"
-            href="https://github.com/F1nnSBK/lcvk/releases/latest">
+            href="https://github.com/F1nnSBK/Pithos/releases/latest">
             Download Latest Release
           </Link>
+
         </div>
       </div>
     </header>

@@ -14,10 +14,10 @@ const config: Config = {
   },
 
   url: 'https://F1nnSBK.github.io',
-  baseUrl: '/lcvk/',
+  baseUrl: '/Pithos/',
 
   organizationName: 'F1nnSBK',
-  projectName: 'lcvk',
+  projectName: 'Pithos',
 
   onBrokenLinks: 'warn',
 
@@ -32,10 +32,11 @@ const config: Config = {
       {
         docs: {
           sidebarPath: './sidebars.ts',
-          editUrl: 'https://github.com/F1nnSBK/lcvk/tree/develop-docs/website/',
+          editUrl: 'https://github.com/F1nnSBK/Pithos/tree/main/website/',
           remarkPlugins: [remarkMath],
           rehypePlugins: [rehypeKatex],
         },
+
         theme: {
           customCss: './src/css/custom.css',
         },
@@ -80,7 +81,7 @@ const config: Config = {
           label: 'Documentation',
         },
         {
-          href: 'https://github.com/F1nnSBK/lcvk',
+          href: 'https://github.com/F1nnSBK/Pithos',
           label: 'GitHub',
           position: 'right',
         },
@@ -103,13 +104,14 @@ const config: Config = {
           items: [
             {
               label: 'GitHub',
-              href: 'https://github.com/F1nnSBK/lcvk',
+              href: 'https://github.com/F1nnSBK/Pithos',
             },
           ],
         },
       ],
       copyright: `Copyright © ${new Date().getFullYear()} Pithos. Built with Docusaurus.`,
     },
+
     prism: {
       theme: prismThemes.dracula,
       darkTheme: prismThemes.dracula,

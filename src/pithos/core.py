@@ -34,6 +34,19 @@ class IndexInfo:
     planet_radius: int
     tiers_count: int
 
+    def __getitem__(self, item: str) -> Any:
+        return getattr(self, item)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "dimension": self.dimension,
+            "size": self.size,
+            "planet_id": self.planet_id,
+            "planet_radius": self.planet_radius,
+            "tiers_count": self.tiers_count,
+        }
+
+
 class DeltaBuffer:
     """
     Log-Structured Merge (LSM) in-memory write buffer for real-time inserts.
@@ -152,6 +165,26 @@ class Index:
     def __len__(self) -> int:
         return int(self._ffi.lib.vdb_size(self._ffi.thread, self._name.encode("utf-8")))
 
+    def size(self) -> int:
+        """Returns the total number of records in the index."""
+        return len(self)
+
+    @property
+    def dimension(self) -> int:
+        return self.info().dimension
+
+    @property
+    def planet_id(self) -> int:
+        return self.info().planet_id
+
+    @property
+    def planet_radius(self) -> int:
+        return self.info().planet_radius
+
+    @property
+    def tier_count(self) -> int:
+        return self.info().tiers_count
+
     def set_chunk_size(self, chunk_size: int) -> None:
         """Configures the parallel record chunk size for Disruptor worker threads."""
         status = self._ffi.lib.vdb_set_chunk_size(
@@ -259,6 +292,7 @@ class Index:
         families: np.ndarray,
         thresholds: np.ndarray,
         out_voting_mask: Optional[np.ndarray] = None,
+        voting_mask: Optional[np.ndarray] = None,
         cuda: bool = False
     ) -> tuple[int, np.ndarray]:
         """
@@ -271,10 +305,11 @@ class Index:
         num_queries = q_arr.shape[0]
         total_records = len(self)
         
-        if out_voting_mask is None:
-            out_voting_mask = np.zeros(total_records, dtype=np.uint8)
+        mask = voting_mask if voting_mask is not None else out_voting_mask
+        if mask is None:
+            mask = np.zeros(total_records, dtype=np.uint8)
         else:
-            out_voting_mask = np.ascontiguousarray(out_voting_mask, dtype=np.uint8)
+            mask = np.ascontiguousarray(mask, dtype=np.uint8)
 
         if cuda and self._ffi._has_cuda:
             resonant_count = self._ffi.lib.vdb_cuda_query_planetary_grid(
@@ -284,7 +319,7 @@ class Index:
                 f_arr.ctypes.data_as(ctypes.c_void_p),
                 t_arr.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(num_queries),
-                out_voting_mask.ctypes.data_as(ctypes.c_void_p)
+                mask.ctypes.data_as(ctypes.c_void_p)
             )
         else:
             resonant_count = self._ffi.lib.vdb_query_planetary_grid(
@@ -294,13 +329,12 @@ class Index:
                 f_arr.ctypes.data_as(ctypes.c_void_p),
                 t_arr.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(num_queries),
-                out_voting_mask.ctypes.data_as(ctypes.c_void_p)
+                mask.ctypes.data_as(ctypes.c_void_p)
             )
             
         if resonant_count < 0:
-            raise PithosNativeError(int(resonant_count), "Planetary grid query failed.")
-            
-        return int(resonant_count), out_voting_mask
+            self._ffi.check_status(resonant_count, "query planetary grid")
+        return int(resonant_count), mask
 
     def get_tier_memory_address(self, tier_idx: int) -> tuple[int, int]:
         """Returns the raw virtual address and byte length of a tier segment for direct DMA/FPGA execution."""
@@ -316,14 +350,19 @@ class Index:
         self._ffi.check_status(status, "get tier memory address")
         return addr.value, length.value
 
+    get_tier_address = get_tier_memory_address
+
+
 class VectorDb:
     """
-    High-level Pythonic interface to the Pithos Vector Database Engine.
+    Pythonic interface to the Pithos Vector Database Engine.
     """
     def __init__(self, lib_path: Optional[str] = None):
         self._ffi = NativeBindings(lib_path)
+        self._ffi.lib.vdb_init(self._ffi.thread)
         self._indices: Dict[str, Index] = {}
         self._delta_buffers: Dict[str, DeltaBuffer] = {}
+
 
     def __enter__(self) -> VectorDb:
         return self
