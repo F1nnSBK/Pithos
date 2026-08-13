@@ -54,6 +54,8 @@ siftsmall/
 dist/
 build/
 .pytest_cache/
+.test/
+.venv/
 siftsmall.tgz
 siftsmall_*.fvecs
 siftsmall_groundtruth.ivecs
