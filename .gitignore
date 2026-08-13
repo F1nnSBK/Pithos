@@ -58,4 +58,4 @@ build/
 .venv/
 siftsmall.tgz
 siftsmall_*.fvecs
-siftsmall_groundtruth.ivecs
+siftsmall_groundtruth.ivecs*.bin
