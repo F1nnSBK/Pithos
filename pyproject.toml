@@ -4,13 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pithosdb"
-version = "1.0.1"
+version = "1.0.2"
 description = "High-performance Model-Isomorphic Vector Database Engine with Multi-Tier Quantization"
 readme = "README.md"
 authors = [
-    { name = "Finn Hertsch", email = "fhertsch235@gmail.com" }
+    { name = "Pithos Authors" }
 ]
 license = "Apache-2.0"
+
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",

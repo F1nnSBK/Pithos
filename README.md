@@ -45,11 +45,37 @@ To make the codebase easier to navigate, detailed guides and theory have been sp
 
 ---
 
-##  Precompiled Native Libraries
+## 📦 Python Quickstart
+
+Pithos is installable via `pip` or `uv`:
+
+```bash
+pip install pithosdb
+```
+
+```python
+import pithosdb
+import numpy as np
+
+# Initialize database off-heap
+with pithosdb.VectorDb() as db:
+    index = db.load_index("lunar", "path/to/lunar_index")
+    
+    # Zero-copy batch search with NumPy
+    queries = np.random.randn(10, 384).astype(np.float32)
+    results = index.search(queries, k=5)
+    
+    for q_idx, matches in enumerate(results):
+        print(f"Query {q_idx} Top Matches: {matches}")
+```
+
+---
+
+## ⚡ Precompiled Native Libraries
 
 Precompiled native libraries are automatically published as GitHub Release assets:
 
- [Download Latest Release Assets](https://github.com/F1nnSBK/lcvk/releases/latest)
+🔗 [Download Latest Release Assets](https://github.com/F1nnSBK/Pithos/releases/latest)
 
 Each release includes:
 - `libpithos-linux-x86_64.so` — Linux (x86_64)
@@ -60,32 +86,31 @@ Each release includes:
 
 ---
 
+## 🛠️ Building from Source
 
-### 1. Compile & Build (Native macOS)
-Ensure you have the workspace-bundled **GraalVM JDK 25** and **Maven** installed, then set `JAVA_HOME` and compile:
+### 1. Compile & Build (Native macOS & Linux)
+Ensure you have **GraalVM JDK 25** and **Maven** installed:
 ```bash
-export JAVA_HOME=/Users/finnhertsch/projects/lcvk/graalvm/Contents/Home
+export JAVA_HOME=/path/to/graalvm-jdk-25
 export PATH=$JAVA_HOME/bin:$PATH
 mvn clean package
 ```
-This executes all unit tests (including SVD, FWHT, compaction, and WAL recovery) and compiles `libpithos.dylib` inside `target/` and the root directory.
+This executes all unit tests (including SVD, FWHT, compaction, and WAL recovery) and compiles `libpithos.dylib` / `libpithos.so` inside `target/`.
 
-### 2. Real-Data Verification
+### 2. Verification
 ```bash
-export JAVA_HOME=/Users/finnhertsch/projects/lcvk/graalvm/Contents/Home
-export PATH=$JAVA_HOME/bin:$PATH
-.venv/bin/python benchmarks/run_real_verification.py
+python benchmarks/run_real_verification.py
 ```
 
-### 5. Building with CUDA Support (Linux)
+### 3. Building with CUDA Support (Linux)
 ```bash
-# Build manually on a CUDA-enabled system
-export JAVA_HOME=/path/to/graalvm
+export JAVA_HOME=/path/to/graalvm-jdk-25
 export PATH=$JAVA_HOME/bin:$PATH
 export CUDA_HOME=/usr/local/cuda
 export PATH=$CUDA_HOME/bin:$PATH
 mvn clean package -Pcuda -Dcuda.enabled=true
 ```
+
 
 ---
 
