@@ -9,27 +9,50 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Coordinate layer managing active multi-tier Index instances and compilation.
- */
+/// # VectorDb
+///
+/// Coordinate layer managing active multi-tier `Index` instances, LSM `DeltaBuffer` states, index compilation, and compaction.
+///
+/// ### Binary Database Layout:
+/// A compiled Pithos index consists of the following contiguous binary columnar files:
+/// 1. **`<basePath>` (64-byte Header):**
+///    - Offset 0..3: Magic ASCII bytes `'P'`, `'L'`, `'A'`, `'N'`
+///    - Offset 4: `planetId` (1 byte, e.g. 1 for Moon, 2 for Mars)
+///    - Offset 5..12: Total record count $N$ (8-byte unaligned long)
+///    - Offset 13..20: Equatorial radius $R$ in meters (8-byte unaligned long)
+///    - Offset 21..24: Vector dimension $D$ (4-byte unaligned int)
+///    - Offset 25..28: Cumulative tier count $T$ (4-byte unaligned int, $1 \le T \le 8$)
+///    - Offset 29..60: Cumulative dimension boundaries for each tier (up to 8 ints)
+///    - Offset 61: Quantization mode `qMode` (0 = 1-bit, 1 = 2-bit ternary, 2 = float32 bypass)
+/// 2. **`<basePath>_ids.bin` ($N \times 8$ bytes):** 64-bit record IDs.
+/// 3. **`<basePath>_metadata.bin` ($N \times 8$ bytes):** Bitmask flags and tombstones (bit 0 = tombstone).
+/// 4. **`<basePath>_tier_k.bin` ($N \times \text{bytesPerRecord}_k$ bytes):** Binarized columnar vectors.
+/// 5. **`<basePath>_fp16.bin` ($N \times D \times 2$ bytes, optional):** Half-precision IEEE 754 raw floats for in-engine Stage 2 reranking.
 public class VectorDb {
     private final Map<String, Index> indices;
     private final Map<String, DeltaBuffer> deltaBuffers;
     private final Map<String, String> indexPaths;
 
+    /// Initializes a new thread-safe `VectorDb` instance.
     public VectorDb() {
         this.indices = new ConcurrentHashMap<>();
         this.deltaBuffers = new ConcurrentHashMap<>();
         this.indexPaths = new ConcurrentHashMap<>();
     }
 
-    /**
-     * Maps a multi-tier index files off-heap and registers it.
-     */
+    /// Maps an existing multi-tier index off-heap and registers it under the given logical name.
+    ///
+    /// @param name logical index registration name
+    /// @param basePath base filepath of the compiled index on disk
+    /// @param weights optional projection/LoRA weights of size $D \times D_0$
+    /// @param loraDim bottleneck dimension $D_0$
+    /// @return registered `Index` instance
+    /// @throws IOException on I/O error
     public Index loadIndex(String name, String basePath, float[] weights, int loraDim) throws IOException {
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("Index name cannot be empty");
@@ -40,10 +63,15 @@ public class VectorDb {
         return index;
     }
 
+    /// Returns the registered index with the specified logical name, or `null` if not found.
     public Index getIndex(String name) {
         return indices.get(name);
     }
 
+    /// Unmaps and closes an index, freeing its off-heap memory and attached delta buffer.
+    ///
+    /// @param name logical index name
+    /// @return `true` if the index was found and dropped, `false` otherwise
     public boolean dropIndex(String name) {
         DeltaBuffer buf = deltaBuffers.remove(name);
         if (buf != null) {
@@ -61,6 +89,7 @@ public class VectorDb {
         return index != null;
     }
 
+    /// Closes all active indices and delta buffers, releasing all off-heap resources.
     public void close() {
         for (Index index : indices.values()) {
             try {
@@ -81,16 +110,12 @@ public class VectorDb {
     // Delta Buffer API (LSM layer)
     // -------------------------------------------------------------------------
 
-    /**
-     * Creates an in-memory delta buffer for the given index.
-     * The buffer enables real-time inserts without modifying the immutable base
-     * index.
-     *
-     * @param indexName      name of the base index
-     * @param flushThreshold soft limit on live entries before flush is recommended
-     * @return the new DeltaBuffer
-     * @throws IllegalArgumentException if the index does not exist
-     */
+    /// Creates an in-memory `DeltaBuffer` attached to the named index.
+    ///
+    /// @param indexName name of the registered base index
+    /// @param flushThreshold soft limit on live entries before flush is recommended
+    /// @return new `DeltaBuffer`
+    /// @throws IllegalArgumentException if the index is not registered
     public DeltaBuffer createDeltaBuffer(String indexName, int flushThreshold) {
         Index index = indices.get(indexName);
         if (index == null)
@@ -102,16 +127,17 @@ public class VectorDb {
         return buf;
     }
 
-    /** Returns the delta buffer for the given index, or null if none exists. */
+    /// Returns the active `DeltaBuffer` for the given index, or `null` if none exists.
     public DeltaBuffer getDeltaBuffer(String indexName) {
         return deltaBuffers.get(indexName);
     }
 
-    /**
-     * Inserts a vector into the delta buffer for the given index.
-     *
-     * @return true on success, false if no delta buffer is registered
-     */
+    /// Inserts a vector into the delta buffer attached to the given index.
+    ///
+    /// @param indexName name of the target index
+    /// @param id unique record ID
+    /// @param vector raw float vector
+    /// @return `true` on success, `false` if no delta buffer is registered
     public boolean insertIntoDelta(String indexName, long id, float[] vector) {
         DeltaBuffer buf = deltaBuffers.get(indexName);
         if (buf == null)
@@ -120,11 +146,11 @@ public class VectorDb {
         return true;
     }
 
-    /**
-     * Soft-deletes a record from the delta buffer (tombstone).
-     *
-     * @return true if at least one entry was tombstoned
-     */
+    /// Soft-deletes a record from the delta buffer (tombstone).
+    ///
+    /// @param indexName target index name
+    /// @param id record ID to tombstone
+    /// @return `true` if at least one entry was tombstoned
     public boolean deleteFromDelta(String indexName, long id) {
         DeltaBuffer buf = deltaBuffers.get(indexName);
         if (buf == null)
@@ -132,14 +158,12 @@ public class VectorDb {
         return buf.delete(id);
     }
 
-    /**
-     * Backs up the live entries of the delta buffer to a binary file.
-     *
-     * @param indexName name of the index whose delta buffer to back up
-     * @param path      target file path
-     * @throws IOException           on I/O failure
-     * @throws IllegalStateException if no delta buffer exists for the index
-     */
+    /// Backs up all live entries from the delta buffer to a binary file.
+    ///
+    /// @param indexName name of the index
+    /// @param path destination filepath
+    /// @throws IOException on I/O failure
+    /// @throws IllegalStateException if no delta buffer is attached
     public void backupDelta(String indexName, String path) throws IOException {
         DeltaBuffer buf = deltaBuffers.get(indexName);
         if (buf == null)
@@ -147,30 +171,24 @@ public class VectorDb {
         buf.serializeToPath(path);
     }
 
-    /**
-     * Restores a delta buffer from a previously backed-up binary file.
-     * Replaces any existing delta buffer for the index.
-     *
-     * @param indexName      name of the index
-     * @param path           path to the backup file
-     * @param flushThreshold flush threshold for the restored buffer
-     * @throws IOException on I/O failure
-     */
+    /// Restores a delta buffer from a previously serialized binary file.
+    ///
+    /// @param indexName target index name
+    /// @param path path to the backup file
+    /// @param flushThreshold flush threshold for the restored buffer
+    /// @throws IOException on I/O failure
     public void restoreDelta(String indexName, String path, int flushThreshold) throws IOException {
         DeltaBuffer buf = DeltaBuffer.deserializeFromPath(path, flushThreshold);
         deltaBuffers.put(indexName, buf);
     }
 
-    /**
-     * Performs a unified search that queries both the base index and the delta
-     * buffer,
-     * merges the results, and returns the top-K by score.
-     *
-     * @param indexName name of the index
-     * @param query     raw float query vector
-     * @param k         number of results
-     * @return merged top-K results
-     */
+    /// Performs a unified search querying both the immutable base index and the mutable `DeltaBuffer`,
+    /// merging and deduplicating results to return the combined top-$k$.
+    ///
+    /// @param indexName name of the index
+    /// @param query raw float query vector
+    /// @param k nearest neighbor count
+    /// @return merged top-$k$ search results
     public List<Index.SearchResult> searchMerged(String indexName, float[] query, int k) {
         Index index = indices.get(indexName);
         if (index == null)
@@ -186,7 +204,7 @@ public class VectorDb {
         List<Index.SearchResult> deltaResults = buf.searchKnn(query, k);
 
         // Merge and deduplicate by ID, then take top-K by score
-        java.util.Map<Long, Index.SearchResult> merged = new java.util.LinkedHashMap<>();
+        Map<Long, Index.SearchResult> merged = new LinkedHashMap<>();
         for (Index.SearchResult r : baseResults)
             merged.put(r.id(), r);
         for (Index.SearchResult r : deltaResults)
@@ -198,24 +216,29 @@ public class VectorDb {
                 .toList();
     }
 
-    /**
-     * Compiles raw float records into a multi-tier, cache-aligned database file
-     * layout.
-     */
+    /// Compiles raw float records into a multi-tier, cache-aligned database file layout (1-bit default).
     public static void compileIndexFile(String basePath, byte planetId, long planetRadius, int dimension, int[] tiers,
             List<VectorRecord> records) throws IOException {
         compileIndexFile(basePath, planetId, planetRadius, dimension, tiers, records, 0);
     }
 
-    /**
-     * Compiles raw float records into a multi-tier, cache-aligned database file
-     * layout with qMode.
-     */
+    /// Compiles raw float records into a multi-tier, cache-aligned database file layout with configurable quantization mode.
     public static void compileIndexFile(String basePath, byte planetId, long planetRadius, int dimension, int[] tiers,
             List<VectorRecord> records, int qMode) throws IOException {
         compileIndexFile(basePath, planetId, planetRadius, dimension, tiers, records, qMode, true);
     }
 
+    /// Compiles raw continuous float vector records into a multi-tier binary columnar format on disk.
+    ///
+    /// @param basePath base filepath prefix
+    /// @param planetId target planetary body identifier code
+    /// @param planetRadius equatorial radius in meters
+    /// @param dimension vector dimensionality ($D$)
+    /// @param tiers cumulative Matryoshka tier step boundaries (up to 8 tiers)
+    /// @param records input vector records
+    /// @param qMode quantization mode: 0 = 1-bit, 1 = 2-bit ternary, 2 = float32 bypass
+    /// @param writeFp16 whether to generate the `_fp16.bin` sidecar file for Stage 2 reranking
+    /// @throws IOException on I/O failure
     public static void compileIndexFile(String basePath, byte planetId, long planetRadius, int dimension, int[] tiers,
             List<VectorRecord> records, int qMode, boolean writeFp16) throws IOException {
         if (records == null || records.isEmpty()) {
@@ -264,13 +287,12 @@ public class VectorDb {
                 StandardOpenOption.TRUNCATE_EXISTING)) {
             MemorySegment mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, totalRecords * 8, Arena.global());
             for (int i = 0; i < totalRecords; i++) {
-                mapped.set(ValueLayout.JAVA_LONG, i * 8, records.get(i).id());
+                mapped.set(ValueLayout.JAVA_LONG, i * 8L, records.get(i).id());
             }
             mapped.force();
         }
 
-        // 3. Write Metadata file (tombstones & attributes, default value is 2 for
-        // all-active)
+        // 3. Write Metadata file (tombstones & attributes, default value is 2 for all-active)
         Path metadataPath = Path.of(basePath + "_metadata.bin");
         try (FileChannel channel = FileChannel.open(metadataPath,
                 StandardOpenOption.CREATE,
@@ -279,8 +301,7 @@ public class VectorDb {
                 StandardOpenOption.TRUNCATE_EXISTING)) {
             MemorySegment mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, totalRecords * 8, Arena.global());
             for (int i = 0; i < totalRecords; i++) {
-                // Set metadata to 2 (tombstone bit 0 = 0, attribute mask bit 1 = 1)
-                mapped.set(ValueLayout.JAVA_LONG, i * 8, 2L);
+                mapped.set(ValueLayout.JAVA_LONG, i * 8L, 2L);
             }
             mapped.force();
         }
@@ -329,8 +350,8 @@ public class VectorDb {
                         int count = tierLongs[k];
                         long baseOffset = i * (count * 16L);
                         for (int l = 0; l < count; l++) {
-                            tierMappeds[k].set(ValueLayout.JAVA_LONG, baseOffset + (l * 8), signPacked[longOffset + l]);
-                            tierMappeds[k].set(ValueLayout.JAVA_LONG, baseOffset + (count * 8L) + (l * 8),
+                            tierMappeds[k].set(ValueLayout.JAVA_LONG, baseOffset + (l * 8L), signPacked[longOffset + l]);
+                            tierMappeds[k].set(ValueLayout.JAVA_LONG, baseOffset + (count * 8L) + (l * 8L),
                                     maskPacked[longOffset + l]);
                         }
                         longOffset += count;
@@ -339,13 +360,13 @@ public class VectorDb {
                     float[] z = transformer.preconditionAndRotate(rec.vector());
                     int longOffset = 0;
                     for (int k = 0; k < numTiers; k++) {
-                        int count = tierLongs[k]; // here: dims in this tier
+                        int count = tierLongs[k];
                         int startDim = (k == 0) ? 0 : tiers[k - 1];
                         int width = tiers[k] - startDim;
                         long baseOffset = (long) i * width * 4;
                         for (int l = 0; l < width; l++) {
                             int raw = Float.floatToRawIntBits(z[startDim + l]);
-                            tierMappeds[k].set(ValueLayout.JAVA_INT_UNALIGNED, baseOffset + (l * 4), raw);
+                            tierMappeds[k].set(ValueLayout.JAVA_INT_UNALIGNED, baseOffset + (l * 4L), raw);
                         }
                         longOffset += count;
                     }
@@ -356,7 +377,7 @@ public class VectorDb {
                         int count = tierLongs[k];
                         long baseOffset = i * (count * 8L);
                         for (int l = 0; l < count; l++) {
-                            tierMappeds[k].set(ValueLayout.JAVA_LONG, baseOffset + (l * 8), packed[longOffset + l]);
+                            tierMappeds[k].set(ValueLayout.JAVA_LONG, baseOffset + (l * 8L), packed[longOffset + l]);
                         }
                         longOffset += count;
                     }
@@ -373,10 +394,7 @@ public class VectorDb {
             }
         }
 
-        // 5. Write FP16 sidecar: stores original (pre-rotation) vectors in IEEE 754
-        // half-precision.
-        // 2 bytes per dimension, row-major layout. Used for high-recall in-engine Stage
-        // 2 reranking.
+        // 5. Write FP16 sidecar: stores original (pre-rotation) vectors in IEEE 754 half-precision
         if (writeFp16) {
             Path fp16Path = Path.of(basePath + "_fp16.bin");
             try (FileChannel channel = FileChannel.open(fp16Path,
@@ -388,7 +406,7 @@ public class VectorDb {
                 MemorySegment fp16Mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, fp16Bytes, Arena.global());
                 for (int i = 0; i < totalRecords; i++) {
                     float[] vec = records.get(i).vector();
-                    long rowOffset = (long) i * dimension * 2;
+                    long rowOffset = (long) i * dimension * 2L;
                     for (int d = 0; d < dimension; d++) {
                         short fp16 = Float.floatToFloat16(vec[d]);
                         fp16Mapped.set(ValueLayout.JAVA_SHORT_UNALIGNED, rowOffset + d * 2L, fp16);
@@ -406,21 +424,25 @@ public class VectorDb {
     private boolean cudaEnabled = false;
     private int cudaDeviceId = 0;
 
+    /// Initializes CUDA support on the specified device.
     public int cudaInit(int deviceId) {
         this.cudaDeviceId = deviceId;
         this.cudaEnabled = true;
         return CudaDeviceManager.initialize(deviceId);
     }
 
+    /// Shuts down CUDA resources.
     public void cudaShutdown() {
         CudaDeviceManager.shutdown();
         this.cudaEnabled = false;
     }
 
+    /// Checks if CUDA is active and initialized.
     public boolean cudaIsAvailable() {
         return cudaEnabled && CudaDeviceManager.isAvailable() != 0;
     }
 
+    /// Dispatches a CUDA batch search on the named index.
     public List<Index.SearchResult>[] cudaBatchSearch(String indexName, float[][] queries, int k) {
         Index index = getIndex(indexName);
         if (index == null) {
@@ -429,6 +451,7 @@ public class VectorDb {
         return index.cudaBatchSearch(queries, k);
     }
 
+    /// Dispatches a CUDA multi-family resonant voting query on the named index.
     public long cudaQueryPlanetaryGrid(String indexName, float[][] queries, int[] families, int[] thresholds, MemorySegment votingMask) {
         Index index = getIndex(indexName);
         if (index == null) {
@@ -437,6 +460,14 @@ public class VectorDb {
         return index.cudaQueryPlanetaryGrid(queries, families, thresholds, votingMask);
     }
 
+    /// Compacts multiple compiled Pithos indices into a single consolidated index file layout.
+    ///
+    /// Validates schema compatibility ($D, \text{tiers}, \text{qMode}, \text{planetId}$) and performs zero-copy
+    /// sidecar merging via `FileChannel.transferTo`.
+    ///
+    /// @param sourcePathsJoined semicolon-separated list of source index basepaths
+    /// @param targetPath destination basepath for the consolidated index
+    /// @throws IOException on I/O error
     public static void compactIndexes(String sourcePathsJoined, String targetPath) throws IOException {
         String[] sourcePaths = sourcePathsJoined.split(";");
         if (sourcePaths.length == 0) {
@@ -543,7 +574,7 @@ public class VectorDb {
         for (int k = 0; k < firstTiersCount; k++) {
             mergeSidecarFiles(sourcePaths, targetPath, "_tier_" + k + ".bin");
         }
-        
+
         Path firstFp16Path = Path.of(sourcePaths[0] + "_fp16.bin");
         if (Files.exists(firstFp16Path)) {
             mergeSidecarFiles(sourcePaths, targetPath, "_fp16.bin");

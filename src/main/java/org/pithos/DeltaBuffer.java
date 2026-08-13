@@ -8,23 +8,30 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.PriorityQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-/**
- * Log-Structured Merge (LSM) Delta-Buffer for real-time inserts into the Pithos engine.
- *
- * <p>Newly inserted vectors land in this in-memory flat buffer. Searches query both the
- * base index and this buffer in parallel, merging results before returning. When the buffer
- * size reaches {@link #flushThreshold}, it can be serialized and merged into the base index.
- *
- * <p>Thread safety: concurrent reads and writes are supported via a ReentrantReadWriteLock.
- */
+/// # DeltaBuffer
+///
+/// Log-Structured Merge (LSM) in-memory write buffer with Write-Ahead Log (WAL) persistence for real-time inserts.
+///
+/// ### Architecture & Lifecycle:
+/// 1. **Real-time Ingestion:** Newly inserted vectors land in this in-memory flat buffer without mutating immutable base `.pithos` files.
+/// 2. **Durability (WAL):** Each insert and delete operation is appended synchronously to a binary WAL file on disk:
+///    - Insert record: `[byte type=1][long id][float[D] vector]`
+///    - Delete tombstone: `[byte type=2][long id]`
+/// 3. **Unified Hybrid Search:** Searches query both the base memory-mapped index and the `DeltaBuffer` concurrently, merging
+///    and deduplicating results.
+/// 4. **Exact $L_2$ Distance Evaluation:** Queries against the delta buffer evaluate unquantized Euclidean distance:
+///    $$d(\mathbf{q}, \mathbf{x}) = \sum_{d=0}^{D-1} (q_d - x_d)^2$$
+/// 5. **Flush & Compaction:** When `liveSize() >= flushThreshold`, the buffer can be drained and merged into the base index.
 public class DeltaBuffer {
 
-    /** A single buffered entry: record ID, original float vector, tombstone flag. */
+    /// A single buffered entry containing record ID, raw float vector, and tombstone status.
     private record BufferEntry(long id, float[] vector, boolean tombstone) {}
 
     private final int dimension;
@@ -32,18 +39,27 @@ public class DeltaBuffer {
     private final String walPath;
     private FileChannel walChannel;
 
-    /** Ordered list of inserted entries (append-only, tombstones included). */
+    /// Ordered list of inserted entries (append-only, tombstones included).
     private final List<BufferEntry> entries;
 
-    /** Count of live (non-tombstoned) entries. */
+    /// Count of live (non-tombstoned) entries.
     private final AtomicInteger liveCount = new AtomicInteger(0);
 
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
+    /// Constructs a `DeltaBuffer` without persistent WAL logging.
+    ///
+    /// @param dimension vector dimensionality ($D$)
+    /// @param flushThreshold soft limit on live entries before flush is recommended
     public DeltaBuffer(int dimension, int flushThreshold) {
         this(dimension, flushThreshold, null);
     }
 
+    /// Constructs a `DeltaBuffer` with optional Write-Ahead Log (WAL) backing.
+    ///
+    /// @param dimension vector dimensionality ($D$)
+    /// @param flushThreshold soft limit on live entries before flush is recommended
+    /// @param walPath filepath for the WAL file (or `null` for in-memory only)
     public DeltaBuffer(int dimension, int flushThreshold, String walPath) {
         this.dimension = dimension;
         this.flushThreshold = flushThreshold;
@@ -66,9 +82,10 @@ public class DeltaBuffer {
         }
     }
 
-    /**
-     * Inserts a new vector record into the delta buffer.
-     */
+    /// Inserts a new vector record into the delta buffer and appends it to the WAL.
+    ///
+    /// @param id unique 64-bit record identifier
+    /// @param vector raw continuous float vector of length `dimension`
     public void insert(long id, float[] vector) {
         if (vector.length != dimension) {
             throw new IllegalArgumentException(
@@ -88,11 +105,10 @@ public class DeltaBuffer {
         }
     }
 
-    /**
-     * Soft-deletes a record (tombstone). All entries with the given ID are marked deleted.
-     *
-     * @return true if at least one live entry was tombstoned
-     */
+    /// Soft-deletes a record by writing a tombstone.
+    ///
+    /// @param id unique record identifier
+    /// @return `true` if at least one active entry was tombstoned
     public boolean delete(long id) {
         lock.writeLock().lock();
         try {
@@ -116,24 +132,32 @@ public class DeltaBuffer {
         }
     }
 
-    /** Number of live (non-tombstoned) entries. */
-    public int liveSize() { return liveCount.get(); }
+    /// Returns the number of active (non-tombstoned) records.
+    public int liveSize() {
+        return liveCount.get();
+    }
 
-    /** Total entries including tombstones. */
-    public int totalSize() { return entries.size(); }
+    /// Returns the total entry count including tombstones.
+    public int totalSize() {
+        return entries.size();
+    }
 
-    /** Returns true if live count has reached or exceeded the flush threshold. */
-    public boolean needsFlush() { return liveCount.get() >= flushThreshold; }
+    /// Returns `true` if the live entry count has reached or exceeded the configured flush threshold.
+    public boolean needsFlush() {
+        return liveCount.get() >= flushThreshold;
+    }
 
-    /**
-     * Searches the delta buffer for the top-K nearest neighbors to the given query.
-     * Uses exact L2 distance (no quantization) on the original float vectors.
-     */
+    /// Searches the delta buffer for the top $k$ nearest neighbors to the query vector
+    /// using exact Euclidean $L_2$ distance without quantization.
+    ///
+    /// @param query raw float query vector
+    /// @param k number of neighbors to retrieve
+    /// @return list of nearest neighbors sorted ascending by score
     public List<Index.SearchResult> searchKnn(float[] query, int k) {
         if (k <= 0 || liveCount.get() == 0) {
             return List.of();
         }
-        // Max-heap of size k keyed by distance bits (for efficient eviction of worst candidate)
+        // Max-heap of size k keyed by distance bits for O(log k) eviction of worst candidate
         PriorityQueue<long[]> heap = new PriorityQueue<>(
                 (a, b) -> Long.compare(b[0], a[0]));
 
@@ -173,25 +197,28 @@ public class DeltaBuffer {
         return sum;
     }
 
-    /**
-     * Serializes all live entries to a binary file for backup or offline merge.
-     *
-     * <p>File format (big-endian):
-     * <pre>
-     *   [int]  dimension
-     *   [int]  num_live_entries
-     *   for each entry:
-     *     [long]   id
-     *     [float]  vector[0..dimension-1]
-     * </pre>
-     */
+    /// Serializes all live entries to a binary backup file.
+    ///
+    /// ### Binary Layout:
+    /// ```text
+    /// [int] dimension
+    /// [int] num_live_entries
+    /// for each entry:
+    ///   [long] id
+    ///   [float[dimension]] vector
+    /// ```
+    ///
+    /// @param path target destination filepath
+    /// @throws IOException on I/O failure
     public void serializeToPath(String path) throws IOException {
         lock.readLock().lock();
         try (DataOutputStream out = new DataOutputStream(
                 Files.newOutputStream(Path.of(path)))) {
             List<BufferEntry> snapshot = new ArrayList<>();
             for (BufferEntry e : entries) {
-                if (!e.tombstone()) snapshot.add(e);
+                if (!e.tombstone()) {
+                    snapshot.add(e);
+                }
             }
             out.writeInt(dimension);
             out.writeInt(snapshot.size());
@@ -206,9 +233,12 @@ public class DeltaBuffer {
         }
     }
 
-    /**
-     * Deserializes a DeltaBuffer from a previously serialized binary file.
-     */
+    /// Deserializes a `DeltaBuffer` from a previously serialized binary file.
+    ///
+    /// @param path path to the backup file
+    /// @param flushThreshold flush threshold for the restored buffer
+    /// @return restored `DeltaBuffer`
+    /// @throws IOException on I/O failure
     public static DeltaBuffer deserializeFromPath(String path, int flushThreshold) throws IOException {
         try (DataInputStream in = new DataInputStream(
                 Files.newInputStream(Path.of(path)))) {
@@ -227,10 +257,9 @@ public class DeltaBuffer {
         }
     }
 
-    /**
-     * Drains and returns all live entries, clearing the buffer.
-     * Should be called when merging the delta into the base index.
-     */
+    /// Drains and returns all live entries, clearing the buffer and truncating the WAL.
+    ///
+    /// @return list of live vector records
     public List<VectorRecord> drainLiveEntries() {
         lock.writeLock().lock();
         try {
@@ -319,6 +348,7 @@ public class DeltaBuffer {
         walChannel.force(false);
     }
 
+    /// Closes the delta buffer and releases any open WAL file channels.
     public void close() {
         lock.writeLock().lock();
         try {
