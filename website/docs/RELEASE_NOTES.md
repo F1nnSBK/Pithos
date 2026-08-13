@@ -6,7 +6,33 @@ sidebar_label: Release Notes
 
 # Release Notes
 
+## v1.0.6 - C/C++ Native SDK, CMake Integration & FPGA Hardware Verification
+
+**Author**: F1nnSBK
+
+### Major Features & Enhancements
+
+#### 1. Standalone C/C++ Native SDK & CMake Support
+- Released the official **Pithos C/C++ Native SDK** (`include/pithos.h`) with full C99/C++20 compatibility, GraalVM isolate lifecycle management, and zero-overhead C-API bindings.
+- Added native CMake configuration module (`cmake/PithosConfig.cmake`) enabling instant `find_package(Pithos REQUIRED)` and `target_link_libraries(... Pithos::pithos)` integration.
+- Added `pkg-config` support (`cmake/pithos.pc.in`) for direct `gcc`/`clang` and Makefile builds.
+- Automated generation of platform-specific C/C++ SDK tarballs (`pithos-c-sdk-<platform>.tar.gz`) on every GitHub release.
+
+#### 2. Bit-Exact FPGA DMA Hardware Verification Suite
+- Added dedicated hardware simulation test suite (`tests/test_fpga_co_design.py`) validating:
+  - Strict 64-byte cache-line alignment on all memory-mapped virtual off-heap buffers.
+  - Bit-for-bit, byte-for-byte exact match between simulated PCIe FPGA DMA sweeps and native Pithos search.
+  - Multi-tier Matryoshka sequential DMA channel streaming.
+- Fixed per-tier dimension and words-per-record calculation in `FpgaDescriptor`.
+
+#### 3. Modernized Multi-Language Examples (`examples/`)
+- Completely restructured and modernized all code examples across **Python** (`quickstart.py`, `fpga_offload_demo.py`), **C/C++** (`demo.c`, `fpga_dma_demo.c`), and **Java** (`PithosApiDemo.java`, `ZeroCostDemo.java`).
+- Added comprehensive [Examples Documentation](file:///Users/finnhertsch/projects/lcvk/examples/README.md).
+
+---
+
 ## v1.0.5 - Model-Isomorphic Vector Database & FPGA Co-Design
+
 
 **Author**: F1nnSBK
 

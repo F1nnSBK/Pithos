@@ -4,7 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pithosdb"
-version = "1.0.5"
+version = "1.0.6"
+
 
 
 description = "High-performance Model-Isomorphic Vector Database Engine with Multi-Tier Quantization"
