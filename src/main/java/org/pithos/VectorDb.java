@@ -23,16 +23,16 @@ import java.util.concurrent.ConcurrentHashMap;
 /// 1. **`<basePath>` (64-byte Header):**
 ///    - Offset 0..3: Magic ASCII bytes `'P'`, `'L'`, `'A'`, `'N'`
 ///    - Offset 4: `planetId` (1 byte, e.g. 1 for Moon, 2 for Mars)
-///    - Offset 5..12: Total record count $N$ (8-byte unaligned long)
-///    - Offset 13..20: Equatorial radius $R$ in meters (8-byte unaligned long)
-///    - Offset 21..24: Vector dimension $D$ (4-byte unaligned int)
-///    - Offset 25..28: Cumulative tier count $T$ (4-byte unaligned int, $1 \le T \le 8$)
+///    - Offset 5..12: Total record count N (8-byte unaligned long)
+///    - Offset 13..20: Equatorial radius R in meters (8-byte unaligned long)
+///    - Offset 21..24: Vector dimension D (4-byte unaligned int)
+///    - Offset 25..28: Cumulative tier count T (4-byte unaligned int, 1 ≤ T ≤ 8)
 ///    - Offset 29..60: Cumulative dimension boundaries for each tier (up to 8 ints)
 ///    - Offset 61: Quantization mode `qMode` (0 = 1-bit, 1 = 2-bit ternary, 2 = float32 bypass)
-/// 2. **`<basePath>_ids.bin` ($N \times 8$ bytes):** 64-bit record IDs.
-/// 3. **`<basePath>_metadata.bin` ($N \times 8$ bytes):** Bitmask flags and tombstones (bit 0 = tombstone).
-/// 4. **`<basePath>_tier_k.bin` ($N \times \text{bytesPerRecord}_k$ bytes):** Binarized columnar vectors.
-/// 5. **`<basePath>_fp16.bin` ($N \times D \times 2$ bytes, optional):** Half-precision IEEE 754 raw floats for in-engine Stage 2 reranking.
+/// 2. **`<basePath>_ids.bin` (N × 8 bytes):** 64-bit record IDs.
+/// 3. **`<basePath>_metadata.bin` (N × 8 bytes):** Bitmask flags and tombstones (bit 0 = tombstone).
+/// 4. **`<basePath>_tier_k.bin` (N × bytesPerRecord_k bytes):** Binarized columnar vectors.
+/// 5. **`<basePath>_fp16.bin` (N × D × 2 bytes, optional):** Half-precision IEEE 754 raw floats for in-engine Stage 2 reranking.
 public class VectorDb {
     private final Map<String, Index> indices;
     private final Map<String, DeltaBuffer> deltaBuffers;
@@ -49,8 +49,8 @@ public class VectorDb {
     ///
     /// @param name logical index registration name
     /// @param basePath base filepath of the compiled index on disk
-    /// @param weights optional projection/LoRA weights of size $D \times D_0$
-    /// @param loraDim bottleneck dimension $D_0$
+    /// @param weights optional projection/LoRA weights of size D × D₀
+    /// @param loraDim bottleneck dimension D₀
     /// @return registered `Index` instance
     /// @throws IOException on I/O error
     public Index loadIndex(String name, String basePath, float[] weights, int loraDim) throws IOException {
@@ -183,12 +183,12 @@ public class VectorDb {
     }
 
     /// Performs a unified search querying both the immutable base index and the mutable `DeltaBuffer`,
-    /// merging and deduplicating results to return the combined top-$k$.
+    /// merging and deduplicating results to return the combined top-k.
     ///
     /// @param indexName name of the index
     /// @param query raw float query vector
     /// @param k nearest neighbor count
-    /// @return merged top-$k$ search results
+    /// @return merged top-k search results
     public List<Index.SearchResult> searchMerged(String indexName, float[] query, int k) {
         Index index = indices.get(indexName);
         if (index == null)
@@ -233,7 +233,7 @@ public class VectorDb {
     /// @param basePath base filepath prefix
     /// @param planetId target planetary body identifier code
     /// @param planetRadius equatorial radius in meters
-    /// @param dimension vector dimensionality ($D$)
+    /// @param dimension vector dimensionality (D)
     /// @param tiers cumulative Matryoshka tier step boundaries (up to 8 tiers)
     /// @param records input vector records
     /// @param qMode quantization mode: 0 = 1-bit, 1 = 2-bit ternary, 2 = float32 bypass
@@ -241,6 +241,7 @@ public class VectorDb {
     /// @throws IOException on I/O failure
     public static void compileIndexFile(String basePath, byte planetId, long planetRadius, int dimension, int[] tiers,
             List<VectorRecord> records, int qMode, boolean writeFp16) throws IOException {
+
         if (records == null || records.isEmpty()) {
             throw new IllegalArgumentException("Records list cannot be null or empty");
         }
@@ -462,13 +463,14 @@ public class VectorDb {
 
     /// Compacts multiple compiled Pithos indices into a single consolidated index file layout.
     ///
-    /// Validates schema compatibility ($D, \text{tiers}, \text{qMode}, \text{planetId}$) and performs zero-copy
+    /// Validates schema compatibility (D, tiers, qMode, planetId) and performs zero-copy
     /// sidecar merging via `FileChannel.transferTo`.
     ///
     /// @param sourcePathsJoined semicolon-separated list of source index basepaths
     /// @param targetPath destination basepath for the consolidated index
     /// @throws IOException on I/O error
     public static void compactIndexes(String sourcePathsJoined, String targetPath) throws IOException {
+
         String[] sourcePaths = sourcePathsJoined.split(";");
         if (sourcePaths.length == 0) {
             throw new IllegalArgumentException("No source paths specified for compaction");

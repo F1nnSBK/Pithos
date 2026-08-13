@@ -29,16 +29,16 @@ import com.lmax.disruptor.dsl.ProducerType;
 /// High-performance off-heap memory-mapped multi-tier binary vector index implementing the **3-Gate Read-Path Cascade**:
 ///
 /// ### 3-Gate Read-Path Architecture:
-/// 1. **Gate 1 (Metadata & Tombstone Filter):** Reads the 64-bit metadata word $m_i$. If the tombstone bit $(m_i \ \& \ 1) == 1$,
+/// 1. **Gate 1 (Metadata & Tombstone Filter):** Reads the 64-bit metadata word m_i. If the tombstone bit `(m_i & 1) == 1`,
 ///    the record is skipped in zero cycles without accessing tier memory.
-/// 2. **Gate 2 (Matryoshka Early-Exit Hamming Scan):** Computes cumulative Hamming distance across active tiers up to $T(\tau)$:
-///    $$d_H(\mathbf{q}, \mathbf{d}) = \sum_{t=0}^{T(\tau)} \sum_{l=0}^{W_t-1} \text{popcount}(q_{t, l} \oplus d_{t, l})$$
-///    If the running distance exceeds the current top-$k$ threshold ($d_H > d_{\text{limit}}$), computation aborts early.
+/// 2. **Gate 2 (Matryoshka Early-Exit Hamming Scan):** Computes cumulative Hamming distance across active tiers up to T(τ):
+///    `d_H(q, d) = ∑_{t=0}^{T(τ)} ∑_{l=0}^{W_t-1} popcount(q_{t, l} ⊕ d_{t, l})`
+///    If the running distance exceeds the current top-k threshold (`d_H > d_limit`), computation aborts early.
 /// 3. **Gate 3 (Exact In-Engine Reranking):**
-///    - **FP16 Sidecar Path:** Exact Euclidean $L_2$ distance calculated directly from IEEE 754 half-precision floats:
-///      $$d_{L_2}^2(\mathbf{q}, \mathbf{x}) = \sum_{d=0}^{D-1} (q_d - \text{fp16ToFloat}(x_d^{\text{fp16}}))^2$$
+///    - **FP16 Sidecar Path:** Exact Euclidean L2 distance calculated directly from IEEE 754 half-precision floats:
+///      `d_L2²(q, x) = ∑_{d=0}^{D-1} (q_d - fp16ToFloat(x_d^fp16))²`
 ///    - **Asymmetric Fallback Path:** Exact continuous query against uncompressed rotated coordinates:
-///      $$d_{\text{asym}}(\mathbf{z}_q, \mathbf{b}_d) = \|\mathbf{z}_q\|_2^2 + D + 2 \sum_{j=0}^{D-1} z_{q, j} - 4 \sum_{j : b_{d, j} = 1} z_{q, j}$$
+///      `d_asym(z_q, b_d) = ||z_q||² + D + 2 · ∑_{j=0}^{D-1} z_{q, j} - 4 · ∑_{j : b_{d, j} = 1} z_{q, j}`
 ///
 /// Threading is coordinated via an **LMAX Disruptor lock-free ring buffer** with thread-local nearest-neighbor heaps.
 public class FlatIndex implements Index {
@@ -82,9 +82,10 @@ public class FlatIndex implements Index {
         this.chunkSize = chunkSize;
     }
 
-    /// Sets the target cumulative spectral energy budget $\tau \in (0, 1]$ for Matryoshka early-exit tier truncation.
+    /// Sets the target cumulative spectral energy budget τ ∈ (0, 1] for Matryoshka early-exit tier truncation.
     ///
-    /// @param tau cumulative variance budget (e.g. `0.90` captures $90\%$ of spectral variance)
+    /// @param tau cumulative variance budget (e.g. `0.90` captures 90% of spectral variance)
+
     public void setTargetEnergyBudget(double tau) {
         if (tau <= 0.0 || tau > 1.0) {
             throw new IllegalArgumentException("Energy budget tau must be in (0, 1]");

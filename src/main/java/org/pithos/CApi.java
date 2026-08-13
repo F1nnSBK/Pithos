@@ -78,16 +78,16 @@ public class CApi {
         }
     }
 
-    /// Maps an existing compiled database off-heap, supplying frozen projection/LoRA weights $W \in \mathbb{R}^{D \times D_0}$.
+    /// Maps an existing compiled database off-heap, supplying frozen projection/LoRA weights W ∈ ℝ^(D × D₀).
     ///
-    /// The model weights are used to compute SVD singular values $\sigma_i$, constructing the
-    /// Matryoshka cumulative spectral energy distribution $\Phi(k)$ to dynamically target a recall energy budget $\tau$.
+    /// The model weights are used to compute SVD singular values σᵢ, constructing the
+    /// Matryoshka cumulative spectral energy distribution Φ(k) to dynamically target a recall energy budget τ.
     ///
     /// @param thread the GraalVM isolate thread context
     /// @param name C string specifying unique logical name
     /// @param path C string specifying base filepath on disk
-    /// @param weights C float array pointer storing the weight matrix of size $D \times D_0$
-    /// @param loraDim inner bottleneck dimension $D_0$
+    /// @param weights C float array pointer storing the weight matrix of size D × D₀
+    /// @param loraDim inner bottleneck dimension D₀
     /// @return `0` on success, negative error code on failure
     @CEntryPoint(name = "vdb_load_index_with_weights")
     public static int loadIndexWithWeights(IsolateThread thread, CCharPointer name, CCharPointer path,
@@ -122,11 +122,11 @@ public class CApi {
     ///
     /// @param thread the GraalVM isolate thread context
     /// @param indexName C string identifying the target loaded index
-    /// @param outDimension output pointer for vector dimensionality ($D$)
-    /// @param outSize output pointer for record count ($N$)
+    /// @param outDimension output pointer for vector dimensionality (D)
+    /// @param outSize output pointer for record count (N)
     /// @param outPlanetId output pointer for planet ID code
     /// @param outPlanetRadius output pointer for planet radius in meters
-    /// @param outTiersCount output pointer for tier count ($T$)
+    /// @param outTiersCount output pointer for tier count (T)
     /// @return `0` on success, negative error code on failure
     @CEntryPoint(name = "vdb_get_info")
     public static int getInfo(IsolateThread thread, CCharPointer indexName,
@@ -155,15 +155,15 @@ public class CApi {
         }
     }
 
-    /// Performs a batch $k$-NN search on raw continuous float query vectors.
+    /// Performs a batch k-NN search on raw continuous float query vectors.
     ///
     /// @param thread the GraalVM isolate thread context
     /// @param indexName C string identifying target index
-    /// @param queries contiguous C float array pointer of size $\text{numQueries} \times D$
+    /// @param queries contiguous C float array pointer of size `numQueries x D`
     /// @param numQueries number of query vectors in the batch
-    /// @param k top-$k$ nearest neighbors per query
-    /// @param outIds pre-allocated C long array pointer of size $\text{numQueries} \times k$
-    /// @param outDistances pre-allocated C int array pointer of size $\text{numQueries} \times k$ (scaled by $1{,}000{,}000$)
+    /// @param k top-k nearest neighbors per query
+    /// @param outIds pre-allocated C long array pointer of size `numQueries x k`
+    /// @param outDistances pre-allocated C int array pointer of size `numQueries x k` (scaled by 1,000,000)
     /// @return `0` on success, negative error code on failure
     @CEntryPoint(name = "vdb_batch_search")
     public static int batchSearch(IsolateThread thread, CCharPointer indexName, CFloatPointer queries, int numQueries,
@@ -215,16 +215,17 @@ public class CApi {
     ///
     /// @param thread the GraalVM isolate thread context
     /// @param indexName C string identifying the index
-    /// @param queries contiguous C float array of shape $[\text{numQueries} \times D]$
-    /// @param queryFamilies C int array of semantic families ($0..7$)
+    /// @param queries contiguous C float array of shape `numQueries x D`
+    /// @param queryFamilies C int array of semantic families (0..7)
     /// @param queryThresholds C int array of Hamming distance cutoff thresholds
     /// @param numQueries number of queries in the batch
-    /// @param votingMask pre-allocated C byte array of size $N$ bytes
-    /// @return number of resonant candidate records with $\ge 5$ votes, or negative error code
+    /// @param votingMask pre-allocated C byte array of size N bytes
+    /// @return number of resonant candidate records with ≥ 5 votes, or negative error code
     @CEntryPoint(name = "vdb_query_planetary_grid")
     public static long queryPlanetaryGrid(IsolateThread thread, CCharPointer indexName, CFloatPointer queries,
             CIntPointer queryFamilies, CIntPointer queryThresholds, int numQueries,
             CCharPointer votingMask) {
+
         if (db == null) {
             return -1;
         }
@@ -322,7 +323,7 @@ public class CApi {
         }
     }
 
-    /// Returns the total record count ($N$) for a loaded index.
+    /// Returns the total record count (N) for a loaded index.
     @CEntryPoint(name = "vdb_size")
     public static long size(IsolateThread thread, CCharPointer indexName) {
         if (db == null) {
@@ -369,9 +370,10 @@ public class CApi {
         }
     }
 
-    /// Sets the dynamic target spectral energy budget threshold $\tau \in (0, 1]$ for Matryoshka early-exit tier truncation.
+    /// Sets the dynamic target spectral energy budget threshold τ ∈ (0, 1] for Matryoshka early-exit tier truncation.
     @CEntryPoint(name = "vdb_set_energy_budget")
     public static int setEnergyBudget(IsolateThread thread, CCharPointer indexName, double tau) {
+
         if (db == null) {
             return -1;
         }

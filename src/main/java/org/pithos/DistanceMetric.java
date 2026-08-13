@@ -8,9 +8,9 @@ import java.lang.foreign.ValueLayout;
 /// Dimension-agnostic Hamming distance metric calculator for binary vectors.
 ///
 /// ### Mathematical Definition:
-/// The Hamming distance between two binary vectors $\mathbf{a}, \mathbf{b} \in \{0, 1\}^D$ packed into 64-bit words is:
-/// $$d_H(\mathbf{a}, \mathbf{b}) = \sum_{w=0}^{W-1} \text{popcount}(a_w \oplus b_w)$$
-/// where $W = \lceil D / 64 \rceil$, $\oplus$ is bitwise XOR, and $\text{popcount}$ counts the number of set bits ($1$s).
+/// The Hamming distance between two binary vectors a, b ∈ {0, 1}^D packed into 64-bit words is:
+/// `d_H(a, b) = ∑_{w=0}^{W-1} popcount(a_w ⊕ b_w)`
+/// where W = ⌈D / 64⌉, ⊕ is bitwise XOR, and popcount counts the number of set bits (1s).
 public enum DistanceMetric {
 
     /// Hamming distance calculation over packed 64-bit integer words.
@@ -38,8 +38,9 @@ public enum DistanceMetric {
     /// @param query on-heap query word array
     /// @param segment off-heap memory-mapped segment
     /// @param byteOffset absolute byte offset into `segment`
-    /// @param numLongs number of 64-bit words ($W$) to scan
+    /// @param numLongs number of 64-bit words (W) to scan
     /// @return total Hamming distance
+
     public static int calculateSegment(long[] query, MemorySegment segment, long byteOffset, int numLongs) {
         int sum = 0;
         for (int i = 0; i < numLongs; i++) {

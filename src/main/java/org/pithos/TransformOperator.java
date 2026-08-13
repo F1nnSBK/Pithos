@@ -9,14 +9,14 @@ import jdk.incubator.vector.VectorOperators;
 /// # TransformOperator
 ///
 /// Handles isometric transformations and binarization for vector embeddings:
-/// 1. **Rademacher Preconditioning ($D_{\text{pre}}$):** Deterministic random sign flipping ($\pm 1$)
+/// 1. **Rademacher Preconditioning (D_pre):** Deterministic random sign flipping (±1)
 ///    to eliminate spatial burstiness and flatten peak activations across embedding dimensions.
-/// 2. **Block-Diagonal Walsh-Hadamard Transform ($H_{\text{BD}}$):** In-place fast orthogonal rotation
-///    with $O(D \log D)$ complexity, spreading embedding energy uniformly across coordinates.
-/// 3. **Kronecker Fallback ($H_u \otimes \Omega_v$):** For non-power-of-two block widths, decomposes the block
-///    into a power-of-two component $u$ and a residual component $v$ using a Discrete Cosine Transform (DCT-II) basis.
+/// 2. **Block-Diagonal Walsh-Hadamard Transform (H_BD):** In-place fast orthogonal rotation
+///    with O(D · log D) complexity, spreading embedding energy uniformly across coordinates.
+/// 3. **Kronecker Fallback (H_u ⊗ Ω_v):** For non-power-of-two block widths, decomposes the block
+///    into a power-of-two component u and a residual component v using a Discrete Cosine Transform (DCT-II) basis.
 /// 4. **Adaptive Quantization:** 1-bit sign binarization and 2-bit ternary quantization with noise thresholding.
-/// 5. **SVD Spectral Energy Profiling:** Computes the cumulative energy distribution $\Phi(k)$ from projection/LoRA weights
+/// 5. **SVD Spectral Energy Profiling:** Computes the cumulative energy distribution Φ(k) from projection/LoRA weights
 ///    using the Jacobi eigenvalue algorithm, enabling dynamic Matryoshka tier budgeting.
 ///
 /// All dense vector computations leverage the **Java Vector API (`jdk.incubator.vector`)** to compile
@@ -32,7 +32,7 @@ public final class TransformOperator {
 
     /// Constructs a `TransformOperator` using a deterministic Rademacher seed (`42`).
     ///
-    /// @param dimension the total vector dimensionality ($D$)
+    /// @param dimension the total vector dimensionality (D)
     /// @param tiers cumulative Matryoshka tier step boundaries
     public TransformOperator(int dimension, int[] tiers) {
         this.dimension = dimension;
@@ -48,7 +48,7 @@ public final class TransformOperator {
 
     /// Constructs a `TransformOperator` with explicit custom preconditioning signs.
     ///
-    /// @param dimension the total vector dimensionality ($D$)
+    /// @param dimension the total vector dimensionality (D)
     /// @param tiers cumulative Matryoshka tier step boundaries
     /// @param customSigns preconditioning sign array of length `dimension`
     public TransformOperator(int dimension, int[] tiers, float[] customSigns) {
@@ -60,20 +60,21 @@ public final class TransformOperator {
         this.signs = Arrays.copyOf(customSigns, customSigns.length);
     }
 
-    /// Computes the cumulative spectral energy distribution $\Phi(k)$ from frozen projection/LoRA weights $W \in \mathbb{R}^{D \times D_0}$.
+    /// Computes the cumulative spectral energy distribution Φ(k) from frozen projection/LoRA weights W ∈ ℝ^(D × D₀).
     ///
     /// ### Mathematical Foundation:
     /// 1. Form the symmetric Gram matrix:
-    ///    $$A = W W^T \in \mathbb{R}^{D \times D}$$
-    /// 2. Compute eigenvalues $\lambda_i$ using the Jacobi eigenvalue algorithm with SIMD vectorization.
-    /// 3. Singular values are $\sigma_i = \sqrt{\max(0, \lambda_i)}$.
-    /// 4. Sort $\sigma_i$ descending and calculate the cumulative energy ratio:
-    ///    $$\Phi(k) = \frac{\sum_{i=1}^k \sigma_i^2}{\sum_{i=1}^D \sigma_i^2}$$
+    ///    `A = W · Wᵀ ∈ ℝ^(D × D)`
+    /// 2. Compute eigenvalues λᵢ using the Jacobi eigenvalue algorithm with SIMD vectorization.
+    /// 3. Singular values are σᵢ = √(max(0, λᵢ)).
+    /// 4. Sort σᵢ descending and calculate the cumulative energy ratio:
+    ///    `Φ(k) = (∑_{i=1}^k σᵢ²) / (∑_{i=1}^D σᵢ²)`
     ///
-    /// @param flatW row-major flattened weight matrix of size $D \times D_0$
-    /// @param D output dimension (rows of $W$)
-    /// @param D0 bottleneck/LoRA rank dimension (columns of $W$)
-    /// @return cumulative energy array $\Phi$ of length $D$, where $\Phi[D-1] = 1.0$
+    /// @param flatW row-major flattened weight matrix of size D × D₀
+    /// @param D output dimension (rows of W)
+    /// @param D0 bottleneck/LoRA rank dimension (columns of W)
+    /// @return cumulative energy array Φ of length D, where Φ[D-1] = 1.0
+
     public static float[] computeCumulativeEnergy(float[] flatW, int D, int D0) {
         // Construct symmetric covariance matrix A = W * W^T
         float[][] A = new float[D][D];
@@ -127,13 +128,14 @@ public final class TransformOperator {
         return phi;
     }
 
-    /// Computes all eigenvalues of a real symmetric matrix $A \in \mathbb{R}^{n \times n}$ using Jacobi rotations.
+    /// Computes all eigenvalues of a real symmetric matrix A ∈ ℝ^(n × n) using Jacobi rotations.
     ///
-    /// At each iteration, finds the maximal off-diagonal element $A_{pq}$ and applies an orthogonal
-    /// plane rotation $R(p, q, \theta)$ parameterized by:
-    /// $$\tan(2\theta) = \frac{2 A_{pq}}{A_{qq} - A_{pp}}$$
+    /// At each iteration, finds the maximal off-diagonal element A_pq and applies an orthogonal
+    /// plane rotation R(p, q, θ) parameterized by:
+    /// `tan(2θ) = 2 · A_pq / (A_qq - A_pp)`
     /// Row updates are vectorized via `FloatVector`.
     private static float[] jacobiEigenvalues(float[][] A, int n) {
+
         int maxIterations = 100;
         for (int iter = 0; iter < maxIterations; iter++) {
             int p = 0;
@@ -213,7 +215,7 @@ public final class TransformOperator {
     /// and binarizes it into packed 64-bit words (1 bit per dimension).
     ///
     /// @param x raw input float vector of length `dimension`
-    /// @return packed 64-bit `long[]` array of length $\lceil D / 64 \rceil$
+    /// @return packed 64-bit `long[]` array of length ⌈D / 64⌉
     public long[] transformAndQuantize(float[] x) {
         if (x.length != dimension) {
             throw new IllegalArgumentException("Input vector size " + x.length + " must match dimension " + dimension);
@@ -256,7 +258,7 @@ public final class TransformOperator {
     /// Preconditions an input vector with Rademacher signs and rotates it via block-diagonal Hadamard.
     ///
     /// @param x raw input float vector of length `dimension`
-    /// @return rotated float vector $z = H_{\text{BD}} D_{\text{pre}} x$
+    /// @return rotated float vector z = H_BD · D_pre · x
     public float[] preconditionAndRotate(float[] x) {
         if (x.length != dimension) {
             throw new IllegalArgumentException("Input vector size " + x.length + " must match dimension " + dimension);
@@ -285,9 +287,9 @@ public final class TransformOperator {
         return z;
     }
 
-    /// Binarizes a rotated vector $z$ using 2-bit (ternary) quantization:
-    /// - Sign bit: $1$ if $z_j \ge 0$, $0$ if $z_j < 0$
-    /// - Mask bit: $1$ if $|z_j| \ge \text{threshold}$ (active coordinate), $0$ if $|z_j| < \text{threshold}$ (noise)
+    /// Binarizes a rotated vector z using 2-bit (ternary) quantization:
+    /// - Sign bit: 1 if z_j ≥ 0, 0 if z_j < 0
+    /// - Mask bit: 1 if |z_j| ≥ threshold (active coordinate), 0 if |z_j| < threshold (noise)
     ///
     /// @param z rotated float vector
     /// @param threshold noise suppression threshold
@@ -312,10 +314,10 @@ public final class TransformOperator {
         return new long[][]{signPacked, maskPacked};
     }
 
-    /// Calculates the percentile threshold for absolute values of $z$, used for 2-bit noise cutoff.
+    /// Calculates the percentile threshold for absolute values of z, used for 2-bit noise cutoff.
     ///
     /// @param z input vector
-    /// @param percentile cutoff percentile in $[0, 1]$ (e.g. 0.20 for bottom 20% noise)
+    /// @param percentile cutoff percentile in [0, 1] (e.g. 0.20 for bottom 20% noise)
     /// @return threshold value
     public static float calculatePercentileThreshold(float[] z, float percentile) {
         float[] absValues = new float[z.length];
@@ -333,12 +335,12 @@ public final class TransformOperator {
         return absValues[index];
     }
 
-    /// Computes the exact Euclidean $L_2$ squared distance $\|q - d\|_2^2$ between two float vectors
+    /// Computes the exact Euclidean L2 squared distance ||q - d||² between two float vectors
     /// using hardware SIMD lanes via `FloatVector`.
     ///
     /// @param query query float vector
     /// @param db database float vector
-    /// @return squared $L_2$ distance
+    /// @return squared L2 distance
     public float computeL2Float(float[] query, float[] db) {
         int n = Math.min(query.length, db.length);
         float sum = 0.0f;
@@ -359,12 +361,12 @@ public final class TransformOperator {
         return sum;
     }
 
-    /// Back-projects a transformed vector $z$ to raw input space $x$.
-    /// Since $H_{\text{BD}}$ and $D_{\text{pre}}$ are orthogonal, symmetric, and self-inverse:
-    /// $$x = D_{\text{pre}} H_{\text{BD}} z$$
+    /// Back-projects a transformed vector z to raw input space x.
+    /// Since H_BD and D_pre are orthogonal, symmetric, and self-inverse:
+    /// `x = D_pre · H_BD · z`
     ///
     /// @param z transformed vector
-    /// @return reconstructed raw vector $x$
+    /// @return reconstructed raw vector x
     public float[] backProject(float[] z) {
         if (z.length != dimension) {
             throw new IllegalArgumentException("Target vector size must match dimension: expected " + dimension);
@@ -394,7 +396,7 @@ public final class TransformOperator {
         return x;
     }
 
-    /// Dispatches block rotation: uses $O(D \log D)$ Fast Walsh-Hadamard Transform (FWHT) if
+    /// Dispatches block rotation: uses O(D · log D) Fast Walsh-Hadamard Transform (FWHT) if
     /// block width is a power of two, otherwise applies Kronecker factorized rotation.
     private void rotateBlock(float[] z, int start, int width) {
         if ((width & (width - 1)) == 0) {
@@ -410,11 +412,12 @@ public final class TransformOperator {
         }
     }
 
-    /// In-place SIMD Fast Walsh-Hadamard Transform (FWHT) normalized by $1 / \sqrt{N}$.
+    /// In-place SIMD Fast Walsh-Hadamard Transform (FWHT) normalized by 1 / √N.
     ///
     /// Evaluates the Hadamard recursive butterfly network:
-    /// $$H_{2k} = \frac{1}{\sqrt{2}} \begin{bmatrix} H_k & H_k \\ H_k & -H_k \end{bmatrix}$$
+    /// `H_{2k} = (1 / √2) · [ H_k   H_k ;  H_k  -H_k ]`
     private void fwht(float[] a, int start, int length) {
+
         for (int len = 1; len < length; len <<= 1) {
             for (int i = 0; i < length; i += (len << 1)) {
                 if (len >= SPECIES.length()) {
@@ -458,9 +461,10 @@ public final class TransformOperator {
     }
 
     /// Kronecker-factorized orthogonal rotation for non-power-of-two block widths:
-    /// $$R = H_u \otimes \Omega_v$$
-    /// where $\Omega_v \in \mathbb{R}^{v \times v}$ is an orthogonal DCT-II basis matrix and $H_u$ is a Walsh-Hadamard matrix of size $u$.
+    /// `R = H_u ⊗ Ω_v`
+    /// where Ω_v ∈ ℝ^(v × v) is an orthogonal DCT-II basis matrix and H_u is a Walsh-Hadamard matrix of size u.
     private void kroneckerRotate(float[] a, int start, int u, int v) {
+
         // Construct deterministic orthogonal matrix Omega_v using DCT basis
         float[][] omega = new float[v][v];
         for (int i = 0; i < v; i++) {

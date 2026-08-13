@@ -26,8 +26,8 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 ///    - Delete tombstone: `[byte type=2][long id]`
 /// 3. **Unified Hybrid Search:** Searches query both the base memory-mapped index and the `DeltaBuffer` concurrently, merging
 ///    and deduplicating results.
-/// 4. **Exact $L_2$ Distance Evaluation:** Queries against the delta buffer evaluate unquantized Euclidean distance:
-///    $$d(\mathbf{q}, \mathbf{x}) = \sum_{d=0}^{D-1} (q_d - x_d)^2$$
+/// 4. **Exact L2 Distance Evaluation:** Queries against the delta buffer evaluate unquantized Euclidean distance:
+///    `d(q, x) = ∑_{d=0}^{D-1} (q_d - x_d)²`
 /// 5. **Flush & Compaction:** When `liveSize() >= flushThreshold`, the buffer can be drained and merged into the base index.
 public class DeltaBuffer {
 
@@ -49,7 +49,7 @@ public class DeltaBuffer {
 
     /// Constructs a `DeltaBuffer` without persistent WAL logging.
     ///
-    /// @param dimension vector dimensionality ($D$)
+    /// @param dimension vector dimensionality (D)
     /// @param flushThreshold soft limit on live entries before flush is recommended
     public DeltaBuffer(int dimension, int flushThreshold) {
         this(dimension, flushThreshold, null);
@@ -57,9 +57,9 @@ public class DeltaBuffer {
 
     /// Constructs a `DeltaBuffer` with optional Write-Ahead Log (WAL) backing.
     ///
-    /// @param dimension vector dimensionality ($D$)
+    /// @param dimension vector dimensionality (D)
     /// @param flushThreshold soft limit on live entries before flush is recommended
-    /// @param walPath filepath for the WAL file (or `null` for in-memory only)
+    /// @param walPath path to the on-disk WAL file (or `null` for in-memory only)
     public DeltaBuffer(int dimension, int flushThreshold, String walPath) {
         this.dimension = dimension;
         this.flushThreshold = flushThreshold;
@@ -147,13 +147,15 @@ public class DeltaBuffer {
         return liveCount.get() >= flushThreshold;
     }
 
-    /// Searches the delta buffer for the top $k$ nearest neighbors to the query vector
-    /// using exact Euclidean $L_2$ distance without quantization.
+    /// Searches the delta buffer for the top k nearest neighbors to the query vector
+    /// using exact Euclidean L2 distance without quantization.
     ///
     /// @param query raw float query vector
     /// @param k number of neighbors to retrieve
     /// @return list of nearest neighbors sorted ascending by score
     public List<Index.SearchResult> searchKnn(float[] query, int k) {
+
+
         if (k <= 0 || liveCount.get() == 0) {
             return List.of();
         }

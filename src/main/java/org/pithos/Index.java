@@ -8,7 +8,7 @@ import java.util.List;
 /// Core abstraction representing a multi-tier binary vector index in Pithos.
 ///
 /// Supports:
-/// - Exact and approximate Nearest Neighbor ($k$-NN) batch queries.
+/// - Exact and approximate Nearest Neighbor (k-NN) batch queries.
 /// - Multi-family resonant voting for geospatial and planetary grid searches.
 /// - Hardware-accelerated GPU offload fallbacks.
 public interface Index extends AutoCloseable {
@@ -19,14 +19,14 @@ public interface Index extends AutoCloseable {
     /// @throws UnsupportedOperationException if the underlying index implementation is read-only
     void insert(VectorRecord record);
 
-    /// Searches for the top $k$ nearest neighbors for a single raw continuous float query vector $\mathbf{q} \in \mathbb{R}^D$.
+    /// Searches for the top k nearest neighbors for a single raw continuous float query vector q ∈ ℝ^D.
     ///
     /// @param query float query vector
     /// @param k number of closest neighbors to retrieve
     /// @return list of search results sorted ascending by distance
     List<SearchResult> search(float[] query, int k);
 
-    /// Performs a batch $k$-NN search for multiple query vectors simultaneously across worker threads.
+    /// Performs a batch k-NN search for multiple query vectors simultaneously across worker threads.
     ///
     /// @param queries 2D array of query vectors of shape `numQueries x D`
     /// @param k number of closest neighbors per query
@@ -35,14 +35,13 @@ public interface Index extends AutoCloseable {
 
     /// Performs a parallel scan over the entire index and evaluates multi-family resonant voting:
     ///
-    /// For each record $i$, evaluates queries $q \in \{0, \dots, Q-1\}$ with threshold $\theta_q$:
-    /// $$\text{mask}_i = \bigvee_{q : d_H(q, i) \le \theta_q} 2^{\text{family}(q)}$$
+    /// For each record i, evaluates queries q ∈ {0, ..., Q-1} with threshold θ_q:
+    /// `mask_i = ⋁_{q : d_H(q, i) ≤ θ_q} 2^(family(q))`
     ///
     /// @param queries query vectors of shape `numQueries x D`
     /// @param families semantic family index in range 0 to 7 for each query
-
     /// @param thresholds maximum Hamming distance cutoff for each query
-    /// @param votingMask pre-allocated off-heap memory segment of size $N$ bytes to accumulate bitmasks
+    /// @param votingMask pre-allocated off-heap memory segment of size N bytes to accumulate bitmasks
     /// @return count of highly resonant candidate records
     long queryPlanetaryGrid(float[][] queries, int[] families, int[] thresholds, MemorySegment votingMask);
 
@@ -70,10 +69,10 @@ public interface Index extends AutoCloseable {
         return queryPlanetaryGrid(queries, families, thresholds, votingMask);
     }
 
-    /// Returns the vector dimensionality ($D$).
+    /// Returns the vector dimensionality (D).
     int getDimension();
 
-    /// Returns the total record count ($N$) in the index.
+    /// Returns the total record count (N) in the index.
     long size();
 
     /// Returns the planetary target identifier code.
@@ -88,8 +87,9 @@ public interface Index extends AutoCloseable {
     /// Represents a single search result match containing the resolved record ID and distance score.
     ///
     /// @param id the unique record identifier
-    /// @param score metric distance (scaled by $1{,}000{,}000$ for float precision)
+    /// @param score metric distance (scaled by 1,000,000 for float precision)
     record SearchResult(long id, int score) {}
+
 
     @Override
     default void close() throws Exception {}
