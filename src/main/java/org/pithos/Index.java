@@ -1,82 +1,95 @@
 package org.pithos;
 
+import java.lang.foreign.MemorySegment;
 import java.util.List;
 
-/**
- * Interface representing a binary vector index.
- */
+/// # Index
+///
+/// Core abstraction representing a multi-tier binary vector index in Pithos.
+///
+/// Supports:
+/// - Exact and approximate Nearest Neighbor (k-NN) batch queries.
+/// - Multi-family resonant voting for geospatial and planetary grid searches.
+/// - Hardware-accelerated GPU offload fallbacks.
 public interface Index extends AutoCloseable {
 
-    /**
-     * Inserts a vector record into the index.
-     */
+    /// Inserts a vector record into the index.
+    ///
+    /// @param record the vector record to insert
+    /// @throws UnsupportedOperationException if the underlying index implementation is read-only
     void insert(VectorRecord record);
 
-    /**
-     * Searches for the top K closest vectors to the given query vector.
-     * Accepts a raw float query vector.
-     */
+    /// Searches for the top k nearest neighbors for a single raw continuous float query vector q ∈ ℝ^D.
+    ///
+    /// @param query float query vector
+    /// @param k number of closest neighbors to retrieve
+    /// @return list of search results sorted ascending by distance
     List<SearchResult> search(float[] query, int k);
 
-    /**
-     * Performs a batch search for multiple queries in a single pass.
-     * Accepts raw float queries.
-     */
+    /// Performs a batch k-NN search for multiple query vectors simultaneously across worker threads.
+    ///
+    /// @param queries 2D array of query vectors of shape `numQueries x D`
+    /// @param k number of closest neighbors per query
+    /// @return array of result lists, one list per query vector
     List<SearchResult>[] batchSearch(float[][] queries, int k);
 
-    /**
-     * Performs a parallel scan over the index and records resonant matches into a pre-allocated off-heap byte array.
-     * Accepts raw float queries.
-     */
-    long queryPlanetaryGrid(float[][] queries, int[] families, int[] thresholds, java.lang.foreign.MemorySegment votingMask);
+    /// Performs a parallel scan over the entire index and evaluates multi-family resonant voting:
+    ///
+    /// For each record i, evaluates queries q ∈ {0, ..., Q-1} with threshold θ_q:
+    /// `mask_i = ⋁_{q : d_H(q, i) ≤ θ_q} 2^(family(q))`
+    ///
+    /// @param queries query vectors of shape `numQueries x D`
+    /// @param families semantic family index in range 0 to 7 for each query
+    /// @param thresholds maximum Hamming distance cutoff for each query
+    /// @param votingMask pre-allocated off-heap memory segment of size N bytes to accumulate bitmasks
+    /// @return count of highly resonant candidate records
+    long queryPlanetaryGrid(float[][] queries, int[] families, int[] thresholds, MemorySegment votingMask);
 
     // =========================================================================
-    // CUDA Acceleration Methods
+    // CUDA Acceleration Fallback Methods
     // =========================================================================
 
-    /**
-     * Performs a CUDA-accelerated batch search for multiple queries.
-     */
+    /// Performs a CUDA-accelerated batch search. Defaults to CPU multi-threaded `batchSearch` if CUDA is unavailable.
+    ///
+    /// @param queries query vectors
+    /// @param k nearest neighbor count
+    /// @return search results
     default List<SearchResult>[] cudaBatchSearch(float[][] queries, int k) {
         return batchSearch(queries, k);
     }
 
-    /**
-     * Performs a CUDA-accelerated planetary grid query.
-     */
-    default long cudaQueryPlanetaryGrid(float[][] queries, int[] families, int[] thresholds, java.lang.foreign.MemorySegment votingMask) {
+    /// Performs a CUDA-accelerated planetary grid voting search. Defaults to CPU `queryPlanetaryGrid` if CUDA is unavailable.
+    ///
+    /// @param queries query vectors
+    /// @param families semantic family array
+    /// @param thresholds Hamming cutoff thresholds
+    /// @param votingMask output off-heap mask segment
+    /// @return count of resonant candidate records
+    default long cudaQueryPlanetaryGrid(float[][] queries, int[] families, int[] thresholds, MemorySegment votingMask) {
         return queryPlanetaryGrid(queries, families, thresholds, votingMask);
     }
 
-    /**
-     * Gets the vector dimension of the index.
-     */
+    /// Returns the vector dimensionality (D).
     int getDimension();
 
-    /**
-     * Gets the number of records in the index.
-     */
+    /// Returns the total record count (N) in the index.
     long size();
 
-    /**
-     * Gets the planet ID associated with this index.
-     */
+    /// Returns the planetary target identifier code.
     byte getPlanetId();
 
-    /**
-     * Gets the equatorial radius of the planet.
-     */
+    /// Returns the equatorial radius of the target planet in meters.
     long getPlanetRadius();
 
-    /**
-     * Gets the number of Matryoshka tiers in the index.
-     */
+    /// Returns the number of cumulative Matryoshka tiers.
     int getTierCount();
 
-    /**
-     * Represents a single search result match.
-     */
+    /// Represents a single search result match containing the resolved record ID and distance score.
+    ///
+    /// @param id the unique record identifier
+    /// @param score metric distance (scaled by 1,000,000 for float precision)
     record SearchResult(long id, int score) {}
+
 
     @Override
     default void close() throws Exception {}

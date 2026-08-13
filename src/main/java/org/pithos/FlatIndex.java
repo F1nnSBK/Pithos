@@ -10,11 +10,9 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.HashSet;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadFactory;
 import java.util.stream.IntStream;
@@ -26,9 +24,23 @@ import com.lmax.disruptor.WorkHandler;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
 
-/**
- * <h3>FlatIndex: Off-heap Memory-mapped Multi-Tier Vector Index</h3>
- */
+/// # FlatIndex
+///
+/// High-performance off-heap memory-mapped multi-tier binary vector index implementing the **3-Gate Read-Path Cascade**:
+///
+/// ### 3-Gate Read-Path Architecture:
+/// 1. **Gate 1 (Metadata & Tombstone Filter):** Reads the 64-bit metadata word m_i. If the tombstone bit `(m_i & 1) == 1`,
+///    the record is skipped in zero cycles without accessing tier memory.
+/// 2. **Gate 2 (Matryoshka Early-Exit Hamming Scan):** Computes cumulative Hamming distance across active tiers up to T(τ):
+///    `d_H(q, d) = ∑_{t=0}^{T(τ)} ∑_{l=0}^{W_t-1} popcount(q_{t, l} ⊕ d_{t, l})`
+///    If the running distance exceeds the current top-k threshold (`d_H > d_limit`), computation aborts early.
+/// 3. **Gate 3 (Exact In-Engine Reranking):**
+///    - **FP16 Sidecar Path:** Exact Euclidean L2 distance calculated directly from IEEE 754 half-precision floats:
+///      `d_L2²(q, x) = ∑_{d=0}^{D-1} (q_d - fp16ToFloat(x_d^fp16))²`
+///    - **Asymmetric Fallback Path:** Exact continuous query against uncompressed rotated coordinates:
+///      `d_asym(z_q, b_d) = ||z_q||² + D + 2 · ∑_{j=0}^{D-1} z_{q, j} - 4 · ∑_{j : b_{d, j} = 1} z_{q, j}`
+///
+/// Threading is coordinated via an **LMAX Disruptor lock-free ring buffer** with thread-local nearest-neighbor heaps.
 public class FlatIndex implements Index {
 
     private final MemorySegment baseSegment;
@@ -60,12 +72,19 @@ public class FlatIndex implements Index {
     private final int numWorkers;
     private volatile long chunkSize = 20000;
 
+    /// Sets the parallel chunk size for work distribution across Disruptor worker threads.
+    ///
+    /// @param chunkSize number of records processed per parallel task
     public void setChunkSize(long chunkSize) {
         if (chunkSize <= 0) {
             throw new IllegalArgumentException("Chunk size must be greater than zero");
         }
         this.chunkSize = chunkSize;
     }
+
+    /// Sets the target cumulative spectral energy budget τ ∈ (0, 1] for Matryoshka early-exit tier truncation.
+    ///
+    /// @param tau cumulative variance budget (e.g. `0.90` captures 90% of spectral variance)
 
     public void setTargetEnergyBudget(double tau) {
         if (tau <= 0.0 || tau > 1.0) {
@@ -74,6 +93,7 @@ public class FlatIndex implements Index {
         this.targetEnergyBudget = tau;
     }
 
+    /// Disruptor range event holding task state for parallel chunks.
     public static class RangeEvent {
         public long startIdx;
         public long endIdx;
@@ -166,7 +186,7 @@ public class FlatIndex implements Index {
         this.tierOffsets = new int[numTiers];
         this.tierSizes = new int[numTiers];
         this.tierVectors = new ByteBuffer[numTiers];
-        
+
         int offset = 0;
         for (int idx = 0; idx < numTiers; idx++) {
             this.tierOffsets[idx] = offset;
@@ -222,38 +242,52 @@ public class FlatIndex implements Index {
         this.ringBuffer = this.disruptor.start();
     }
 
+    /// Returns the virtual memory address of the given tier segment for zero-copy DMA/FPGA access.
     public long getTierAddress(int tierIdx) {
         if (tierIdx < 0 || tierIdx >= numTiers)
             return 0;
         return tierSegments[tierIdx].address();
     }
 
+    /// Returns the byte size of the given tier segment.
     public long getTierByteSize(int tierIdx) {
         if (tierIdx < 0 || tierIdx >= numTiers)
             return 0;
         return tierSegments[tierIdx].byteSize();
     }
 
+    /// Returns the virtual memory address of the metadata column segment.
     public long getMetadataAddress() {
         return metadataSegment.address();
     }
 
+    /// Returns the byte size of the metadata column segment.
     public long getMetadataByteSize() {
         return metadataSegment.byteSize();
     }
 
+    /// Returns the virtual memory address of the IDs column segment.
     public long getIdsAddress() {
         return idsSegment.address();
     }
 
+    /// Returns the byte size of the IDs column segment.
     public long getIdsByteSize() {
         return idsSegment.byteSize();
     }
 
+    /// Returns the `TransformOperator` configured for this index.
     public TransformOperator getTransformOperator() {
         return transformOperator;
     }
 
+    /// Maps an existing multi-tier index from disk off-heap into virtual memory.
+    ///
+    /// @param basePath filepath without suffix
+    /// @param weights optional projection weights for SVD energy calculation
+    /// @param loraDim bottleneck dimension
+    /// @return memory-mapped `FlatIndex`
+    /// @throws IOException on I/O error
     public static FlatIndex mapFile(String basePath, float[] weights, int loraDim) throws IOException {
         Path mainPath = Path.of(basePath);
         if (!mainPath.toFile().exists()) {
@@ -639,7 +673,7 @@ public class FlatIndex implements Index {
                             long qMask = bQueriesMask[q][offset + l];
                             long dbSign = dbWords[offset + l];
                             long dbMask = dbMasks[offset + l];
-                            
+
                             long mask4 = dbMask & qMask & (dbSign ^ qSign);
                             long mask1 = dbMask ^ qMask;
                             tierDist += 4 * Long.bitCount(mask4) + Long.bitCount(mask1);
@@ -850,14 +884,12 @@ public class FlatIndex implements Index {
             if ((metaVal & 1L) == 1L)
                 continue;
 
-            // Gate 2 QEG and loading Tier 0
+            // Loading Tier 0
             int numLongs0 = tierLongs[0];
             if (qMode == 1) { // 2-bit mode
                 long baseOffset0 = i * (numLongs0 * 16L);
                 long t0Sign = tier0.get(ValueLayout.JAVA_LONG, baseOffset0);
                 long t0Mask = tier0.get(ValueLayout.JAVA_LONG, baseOffset0 + (numLongs0 * 8L));
-                // Bug fix: Removed unconditional MSB filter that discarded 50% of the dataset
-                // if ((t0Mask & (1L << 63)) == 0L || (t0Sign & (1L << 63)) == 0L) continue;
 
                 dbWords[0] = t0Sign;
                 dbMasks[0] = t0Mask;
@@ -868,8 +900,6 @@ public class FlatIndex implements Index {
             } else { // 1-bit mode
                 long baseOffset0 = i * (numLongs0 * 8L);
                 long t0Val = tier0.get(ValueLayout.JAVA_LONG, baseOffset0);
-                // Bug fix: Removed unconditional MSB filter that discarded 50% of the dataset
-                // if ((t0Val & (1L << 63)) == 0L) continue;
 
                 dbWords[0] = t0Val;
                 if (numLongs0 > 1) {
@@ -912,7 +942,7 @@ public class FlatIndex implements Index {
                             long qMask = bQueriesMask[q][offset + l];
                             long dbSign = dbWords[offset + l];
                             long dbMask = dbMasks[offset + l];
-                            
+
                             long mask4 = dbMask & qMask & (dbSign ^ qSign);
                             long mask1 = dbMask ^ qMask;
                             tierDist += 4 * Long.bitCount(mask4) + Long.bitCount(mask1);
@@ -975,7 +1005,7 @@ public class FlatIndex implements Index {
     }
 
     // =========================================================================
-    // CUDA Acceleration Implementation
+    // CUDA Acceleration Implementation & CPU Fallback
     // =========================================================================
 
     private static final int GPU_BATCH_THRESHOLD = 100;
@@ -1007,20 +1037,21 @@ public class FlatIndex implements Index {
         ensureCudaInitialized();
 
         int numQueries = queries.length;
-        int numWordsPerVector = (dimension + 63) / 64;
 
-        long hostQueries = CudaMemoryManager.allocPinned(numQueries * dimension * 4);
-        long deviceQueries = CudaMemoryManager.allocDevice(numQueries * dimension * 4);
-        long hostDistances = CudaMemoryManager.allocPinned(numQueries * size * 4);
+        long hostQueries = CudaMemoryManager.allocPinned(numQueries * dimension * 4L);
+        long deviceQueries = CudaMemoryManager.allocDevice(numQueries * dimension * 4L);
+        long hostDistances = CudaMemoryManager.allocPinned(numQueries * size * 4L);
 
         ByteBuffer queryBuffer = ByteBuffer.allocateDirect(numQueries * dimension * 4);
         for (float[] query : queries) {
-            queryBuffer.putFloat(query[0]);
+            for (float val : query) {
+                queryBuffer.putFloat(val);
+            }
         }
         queryBuffer.rewind();
 
         long queryBufferPtr = CudaMemoryManager.getDirectBufferAddress(queryBuffer);
-        CudaMemoryManager.copyToDevice(deviceQueries, queryBufferPtr, numQueries * dimension * 4);
+        CudaMemoryManager.copyToDevice(deviceQueries, queryBufferPtr, numQueries * dimension * 4L);
 
         int status = pithos_cuda_launch_batch_hamming(
             deviceTierBuffers, deviceQueries, hostDistances,
@@ -1036,7 +1067,7 @@ public class FlatIndex implements Index {
 
         ByteBuffer distanceBuffer = ByteBuffer.allocateDirect(numQueries * Math.toIntExact(size) * 4);
         long distanceBufferPtr = CudaMemoryManager.getDirectBufferAddress(distanceBuffer);
-        CudaMemoryManager.copyFromDevice(distanceBufferPtr, hostDistances, numQueries * Math.toIntExact(size) * 4);
+        CudaMemoryManager.copyFromDevice(distanceBufferPtr, hostDistances, numQueries * Math.toIntExact(size) * 4L);
 
         List<SearchResult>[] results = new List[numQueries];
         for (int q = 0; q < numQueries; q++) {
@@ -1067,12 +1098,12 @@ public class FlatIndex implements Index {
         int numWordsPerVector = (dimension + 63) / 64;
         int numFamilies = families.length;
 
-        long hostQueries = CudaMemoryManager.allocPinned(numQueries * dimension * 4);
-        long deviceQueries = CudaMemoryManager.allocDevice(numQueries * dimension * 4);
-        long hostFamilies = CudaMemoryManager.allocPinned(numQueries * 4);
-        long deviceFamilies = CudaMemoryManager.allocDevice(numQueries * 4);
-        long hostThresholds = CudaMemoryManager.allocPinned(numQueries * 4);
-        long deviceThresholds = CudaMemoryManager.allocDevice(numQueries * 4);
+        long hostQueries = CudaMemoryManager.allocPinned(numQueries * dimension * 4L);
+        long deviceQueries = CudaMemoryManager.allocDevice(numQueries * dimension * 4L);
+        long hostFamilies = CudaMemoryManager.allocPinned(numQueries * 4L);
+        long deviceFamilies = CudaMemoryManager.allocDevice(numQueries * 4L);
+        long hostThresholds = CudaMemoryManager.allocPinned(numQueries * 4L);
+        long deviceThresholds = CudaMemoryManager.allocDevice(numQueries * 4L);
         long hostVotingMask = CudaMemoryManager.allocPinned(size);
         long deviceVotingMask = CudaMemoryManager.allocDevice(size);
 
@@ -1099,10 +1130,10 @@ public class FlatIndex implements Index {
         long queryBufferPtr = CudaMemoryManager.getDirectBufferAddress(queryBuffer);
         long familiesBufferPtr = CudaMemoryManager.getDirectBufferAddress(familiesBuffer);
         long thresholdsBufferPtr = CudaMemoryManager.getDirectBufferAddress(thresholdsBuffer);
-        
-        CudaMemoryManager.copyToDevice(deviceQueries, queryBufferPtr, numQueries * dimension * 4);
-        CudaMemoryManager.copyToDevice(deviceFamilies, familiesBufferPtr, numQueries * 4);
-        CudaMemoryManager.copyToDevice(deviceThresholds, thresholdsBufferPtr, numQueries * 4);
+
+        CudaMemoryManager.copyToDevice(deviceQueries, queryBufferPtr, numQueries * dimension * 4L);
+        CudaMemoryManager.copyToDevice(deviceFamilies, familiesBufferPtr, numQueries * 4L);
+        CudaMemoryManager.copyToDevice(deviceThresholds, thresholdsBufferPtr, numQueries * 4L);
 
         int status = pithos_cuda_launch_voting(
             deviceTierBuffers, deviceQueries, deviceFamilies, deviceThresholds,
@@ -1129,7 +1160,7 @@ public class FlatIndex implements Index {
         for (int i = 0; i < size; i++) {
             if (votingBuffer.get(i) != 0) {
                 count++;
-                votingMask.setAtIndex(ValueLayout.JAVA_BYTE, i, votingBuffer.get(i));
+                votingMask.set(ValueLayout.JAVA_BYTE, i, votingBuffer.get(i));
             }
         }
 

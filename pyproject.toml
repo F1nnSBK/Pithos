@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pithosdb"
+version = "1.0.3"
+description = "High-performance Model-Isomorphic Vector Database Engine with Multi-Tier Quantization"
+readme = "README.md"
+authors = [
+    { name = "F1nnSBK" }
+]
+license = "Apache-2.0"
+
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Database :: Database Engines/Servers",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+]
+keywords = ["vector-database", "vector-search", "embeddings", "simd", "quantization", "cuda"]
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=1.20.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "torch>=2.0.0",
+]
+cuda = [
+    "torch>=2.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/F1nnSBK/Pithos"
+Repository = "https://github.com/F1nnSBK/Pithos"
+Documentation = "https://github.com/F1nnSBK/Pithos/tree/main/docs"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["pithos*"]
+
+[tool.setuptools.package-data]
+pithos = [
+    "py.typed",
+    "lib/*.so",
+    "lib/*.dylib",
+    "lib/*.dll",
+]

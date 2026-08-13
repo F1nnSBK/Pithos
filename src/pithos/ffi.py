@@ -1,0 +1,211 @@
+import ctypes
+import os
+import threading
+from typing import Optional
+from .loader import find_or_fetch_native_library
+
+class GraalIsolate(ctypes.Structure):
+    pass
+
+class GraalIsolateThread(ctypes.Structure):
+    pass
+
+class PithosNativeError(RuntimeError):
+    """Raised when a Pithos C-API call returns a negative error code."""
+    ERROR_MESSAGES = {
+        -1: "Pithos database coordinator not initialized (vdb_init not called).",
+        -2: "Index not found or not mapped in database coordinator.",
+        -3: "Invalid operation or unsupported parameter for this index layout.",
+        -4: "Internal Java/GraalVM runtime exception occurred.",
+        -5: "File I/O error reading or writing index files on disk.",
+        -6: "Unsupported index structure or layout mismatch.",
+    }
+    
+    def __init__(self, code: int, message: Optional[str] = None):
+        self.code = code
+        detail = message or self.ERROR_MESSAGES.get(code, f"Unknown native error code: {code}")
+        super().__init__(f"[Pithos Native Error {code}] {detail}")
+
+class NativeBindings:
+    """Thread-safe singleton managing the GraalVM Native Image isolate lifecycle and C-API bindings."""
+    _instance = None
+    _lock = threading.Lock()
+    
+    def __new__(cls, lib_path: Optional[str] = None):
+        with cls._lock:
+            if cls._instance is None:
+                instance = super(NativeBindings, cls).__new__(cls)
+                resolved_path = find_or_fetch_native_library(lib_path)
+                instance._init_library(resolved_path)
+                cls._instance = instance
+        return cls._instance
+
+    def _init_library(self, lib_path: str):
+        self.lib_path = lib_path
+        self.lib = ctypes.CDLL(lib_path)
+        self.isolate = ctypes.POINTER(GraalIsolate)()
+        self.thread = ctypes.POINTER(GraalIsolateThread)()
+        
+        # GraalVM Isolate Management
+        self.lib.graal_create_isolate.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.POINTER(GraalIsolate)),
+            ctypes.POINTER(ctypes.POINTER(GraalIsolateThread))
+        ]
+        self.lib.graal_create_isolate.restype = ctypes.c_int
+        
+        self.lib.graal_tear_down_isolate.argtypes = [ctypes.c_void_p]
+        self.lib.graal_tear_down_isolate.restype = ctypes.c_int
+        
+        # Database Coordinator Lifecycle
+        self.lib.vdb_init.argtypes = [ctypes.c_void_p]
+        self.lib.vdb_init.restype = ctypes.c_int
+        
+        self.lib.vdb_close.argtypes = [ctypes.c_void_p]
+        self.lib.vdb_close.restype = ctypes.c_int
+
+        # Index Management
+        self.lib.vdb_load_index.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
+        self.lib.vdb_load_index.restype = ctypes.c_int
+
+        self.lib.vdb_load_index_with_weights.argtypes = [
+            ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_void_p, ctypes.c_int
+        ]
+        self.lib.vdb_load_index_with_weights.restype = ctypes.c_int
+
+        self.lib.vdb_drop_index.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+        self.lib.vdb_drop_index.restype = ctypes.c_int
+
+        self.lib.vdb_get_info.argtypes = [
+            ctypes.c_void_p, ctypes.c_char_p,
+            ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p
+        ]
+        self.lib.vdb_get_info.restype = ctypes.c_int
+
+        self.lib.vdb_size.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+        self.lib.vdb_size.restype = ctypes.c_longlong
+
+        self.lib.vdb_set_chunk_size.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_longlong]
+        self.lib.vdb_set_chunk_size.restype = ctypes.c_int
+
+        self.lib.vdb_set_energy_budget.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_double]
+        self.lib.vdb_set_energy_budget.restype = ctypes.c_int
+
+        # Search & Resonant Voting
+        self.lib.vdb_batch_search.argtypes = [
+            ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int,
+            ctypes.c_void_p, ctypes.c_void_p
+        ]
+        self.lib.vdb_batch_search.restype = ctypes.c_int
+
+        self.lib.vdb_query_planetary_grid.argtypes = [
+            ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
+            ctypes.c_int, ctypes.c_void_p
+        ]
+        self.lib.vdb_query_planetary_grid.restype = ctypes.c_longlong
+
+        # Index Compilation & Compaction
+        self.lib.vdb_compile_index_file.argtypes = [
+            ctypes.c_void_p, ctypes.c_char_p, ctypes.c_byte, ctypes.c_longlong,
+            ctypes.c_int, ctypes.c_void_p, ctypes.c_int,
+            ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int
+        ]
+        self.lib.vdb_compile_index_file.restype = ctypes.c_int
+
+        self.lib.vdb_compile_index_file_ext.argtypes = [
+            ctypes.c_void_p, ctypes.c_char_p, ctypes.c_byte, ctypes.c_longlong,
+            ctypes.c_int, ctypes.c_void_p, ctypes.c_int,
+            ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int
+        ]
+        self.lib.vdb_compile_index_file_ext.restype = ctypes.c_int
+
+        self.lib.vdb_compact_indexes.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
+        self.lib.vdb_compact_indexes.restype = ctypes.c_int
+
+        # Direct DMA / Memory Address Access
+        self.lib.vdb_get_tier_address.argtypes = [
+            ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p
+        ]
+        self.lib.vdb_get_tier_address.restype = ctypes.c_int
+
+        self.lib.vdb_get_metadata_address.argtypes = [
+            ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p, ctypes.c_void_p
+        ]
+        self.lib.vdb_get_metadata_address.restype = ctypes.c_int
+
+        self.lib.vdb_get_ids_address.argtypes = [
+            ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p, ctypes.c_void_p
+        ]
+        self.lib.vdb_get_ids_address.restype = ctypes.c_int
+
+        self.lib.vdb_transform_and_quantize.argtypes = [
+            ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p, ctypes.c_void_p
+        ]
+        self.lib.vdb_transform_and_quantize.restype = ctypes.c_int
+
+        # LSM Delta Buffer Operations
+        self.lib.vdb_create_delta_buffer.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int]
+        self.lib.vdb_create_delta_buffer.restype = ctypes.c_int
+
+        self.lib.vdb_insert.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_longlong, ctypes.c_void_p]
+        self.lib.vdb_insert.restype = ctypes.c_int
+
+        self.lib.vdb_delete_from_delta.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_longlong]
+        self.lib.vdb_delete_from_delta.restype = ctypes.c_int
+
+        self.lib.vdb_delta_size.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+        self.lib.vdb_delta_size.restype = ctypes.c_longlong
+
+        self.lib.vdb_needs_flush.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+        self.lib.vdb_needs_flush.restype = ctypes.c_int
+
+        self.lib.vdb_search_merged.argtypes = [
+            ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p, ctypes.c_int,
+            ctypes.c_void_p, ctypes.c_void_p
+        ]
+        self.lib.vdb_search_merged.restype = ctypes.c_int
+
+        self.lib.vdb_backup_delta.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
+        self.lib.vdb_backup_delta.restype = ctypes.c_int
+
+        self.lib.vdb_restore_delta.argtypes = [
+            ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int
+        ]
+        self.lib.vdb_restore_delta.restype = ctypes.c_int
+
+        # CUDA Acceleration Bindings (Optional)
+        self._has_cuda = hasattr(self.lib, "vdb_cuda_init")
+        if self._has_cuda:
+            self.lib.vdb_cuda_init.argtypes = [ctypes.c_void_p, ctypes.c_int]
+            self.lib.vdb_cuda_init.restype = ctypes.c_int
+
+            self.lib.vdb_cuda_shutdown.argtypes = [ctypes.c_void_p]
+            self.lib.vdb_cuda_shutdown.restype = ctypes.c_int
+
+            self.lib.vdb_cuda_is_available.argtypes = [ctypes.c_void_p]
+            self.lib.vdb_cuda_is_available.restype = ctypes.c_int
+
+            self.lib.vdb_cuda_batch_search.argtypes = [
+                ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int,
+                ctypes.c_void_p, ctypes.c_void_p
+            ]
+            self.lib.vdb_cuda_batch_search.restype = ctypes.c_int
+
+            self.lib.vdb_cuda_query_planetary_grid.argtypes = [
+                ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
+                ctypes.c_int, ctypes.c_void_p
+            ]
+            self.lib.vdb_cuda_query_planetary_grid.restype = ctypes.c_longlong
+
+        # Start GraalVM Isolate
+        status = self.lib.graal_create_isolate(None, ctypes.byref(self.isolate), ctypes.byref(self.thread))
+        if status != 0:
+            raise RuntimeError(f"Failed to create GraalVM Native Image isolate (status={status})")
+            
+        status = self.lib.vdb_init(self.thread)
+        if status != 0:
+            raise PithosNativeError(status, "Failed to initialize Pithos database coordinator.")
+
+    def check_status(self, status: int, action: str = "operation"):
+        if status != 0:
+            raise PithosNativeError(status, f"Failed to execute {action}.")

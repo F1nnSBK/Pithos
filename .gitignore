@@ -48,6 +48,14 @@ temp/
 
 # Datasets and download caches
 siftsmall/
+
+# Python packaging & virtual environments
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.test/
+.venv/
 siftsmall.tgz
 siftsmall_*.fvecs
 siftsmall_groundtruth.ivecs
