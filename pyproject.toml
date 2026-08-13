@@ -42,9 +42,9 @@ cuda = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/F1nnSBK/lcvk"
-Repository = "https://github.com/F1nnSBK/lcvk"
-Documentation = "https://github.com/F1nnSBK/lcvk/tree/main/docs"
+Homepage = "https://github.com/F1nnSBK/Pithos"
+Repository = "https://github.com/F1nnSBK/Pithos"
+Documentation = "https://github.com/F1nnSBK/Pithos/tree/main/docs"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
