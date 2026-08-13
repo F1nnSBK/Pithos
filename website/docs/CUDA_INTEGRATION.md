@@ -20,9 +20,9 @@ Dieser Plan beschreibt die **schrittweise Integration von NVIDIA CUDA** in Pitho
 
 ---
 
-##  Analysis: Wo CUDA Sinn macht
+## Analysis: Wo CUDA Sinn macht
 
-### ✅ **Hohe Priorität: GPU-Optimierte Operationen**
+### Hohe Priorität: GPU-Optimierte Operationen
 
 | Operation | CPU-Kosten | GPU-Beschleunigung | Komplexität | ROI |
 |-----------|------------|-------------------|-------------|-----|
@@ -33,7 +33,8 @@ Dieser Plan beschreibt die **schrittweise Integration von NVIDIA CUDA** in Pitho
 | **Multi-Family Voting** | O(N×F×Q) | **10-30x** | Mittel | ⭐⭐⭐⭐⭐ |
 | **Delta Buffer Search** | O(M×D) | **5-10x** | Niedrig | ⭐⭐⭐ |
 
-### ❌ **Nicht für GPU geeignet**
+### Nicht für GPU geeignet
+
 
 | Operation | Grund |
 |-----------|-------|
@@ -1103,7 +1104,7 @@ export PITHOS_GPU_MIN_DIMENSION=64
 
 ---
 
-## ⚠️ Risiken & Mitigationsstrategien
+## Risiken & Mitigationsstrategien
 
 ### **1. PCIe Transfer Bottleneck**
 

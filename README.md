@@ -1,4 +1,4 @@
-# ⚱️ Pithos Vector Search Engine
+# ⚱ Pithos - Model-Isomorphic Vector Database (MIDB)
 
 [![PyPI Version](https://img.shields.io/pypi/v/pithosdb?color=blue&label=pithosdb)](https://pypi.org/project/pithosdb/)
 [![Python Versions](https://img.shields.io/pypi/pyversions/pithosdb)](https://pypi.org/project/pithosdb/)
@@ -6,17 +6,20 @@
 [![Java 25](https://img.shields.io/badge/Java-25%20(Vector%20API%20%26%20FFM)-orange)](https://openjdk.org/)
 [![Native Image](https://img.shields.io/badge/GraalVM-Native%20Image-red)](https://www.graalvm.org/)
 
-**Pithos** is a high-performance, Ahead-of-Time (AOT) compiled, dimension-agnostic vector search engine optimized for **Matryoshka-structured binary embeddings** and compiled into a standalone native shared library (`.dylib` / `.so`) via **GraalVM Native Image**.
+**Pithos** is a high-performance **Model-Isomorphic Database (MIDB)** and Ahead-of-Time (AOT) compiled vector search engine designed for **Matryoshka-structured binary embeddings** at planetary scale, compiled into a standalone native shared library (`.dylib` / `.so`) via **GraalVM Native Image**.
 
-Pithos achieves extreme throughput by collapsing abstraction boundaries between language runtimes, the operating system, and hardware execution models:
+### What is a Model-Isomorphic Database (MIDB)?
+Traditional vector databases treat embeddings as generic high-dimensional arrays. A **Model-Isomorphic Database (MIDB)** structurally mirrors the latent geometry and spectral energy distribution of the neural embedding model:
+- **SVD-Driven Spectral Truncation:** Columnar tiers are allocated according to cumulative singular value energy (Φ(k)) derived from model projection/LoRA weights.
+- **Isometric Preconditioning & Rotation:** Eliminates spatial burstiness via Rademacher sign flipping and spreads embedding energy uniformly with block-diagonal Fast Walsh-Hadamard Transforms (H_BD).
+- **3-Gate Read-Path Cascade:** 1-cycle metadata filtering → Matryoshka early-exit Hamming scanning → exact FP16 in-engine reranking.
 - **Zero-GC Off-Heap Memory:** Bypasses garbage collection entirely using the **Java Foreign Function & Memory (FFM) API (Project Panama)** and POSIX memory-mapped I/O (`mmap`).
-- **3-Gate Read-Path Cascade:** 1-cycle tombstone filtering → Matryoshka early-exit Hamming scanning → exact FP16 in-engine reranking.
 - **Hardware SIMD & CUDA:** Vectorized with Java Vector API (AVX-512 / ARM NEON) and native NVIDIA CUDA kernels for batch distance computation and multi-family resonant voting.
 - **Pythonic Zero-Copy FFI:** Seamless integration with NumPy arrays via `pithosdb`.
 
 ---
 
-## 📦 Python Quickstart
+## Python Quickstart
 
 Install the official Python package:
 
@@ -55,11 +58,11 @@ with pithosdb.VectorDb() as db:
 
 ---
 
-## ⚡ Precompiled Native Binaries
+## Precompiled Native Binaries
 
 Precompiled native libraries are automatically published on GitHub Releases:
 
-🔗 **[Download Latest Release Assets](https://github.com/F1nnSBK/Pithos/releases/latest)**
+[Download Latest Release Assets](https://github.com/F1nnSBK/Pithos/releases/latest)
 
 | Artifact | Platform | Acceleration |
 | :--- | :--- | :--- |
@@ -71,7 +74,7 @@ Precompiled native libraries are automatically published on GitHub Releases:
 
 ---
 
-## 🏛️ System Architecture & Features
+## System Architecture & Features
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -104,7 +107,7 @@ Precompiled native libraries are automatically published on GitHub Releases:
 
 ---
 
-## 📖 Documentation
+## Documentation
 
 Detailed architectural guides, mathematical specifications, and C-API references:
 
@@ -114,7 +117,7 @@ Detailed architectural guides, mathematical specifications, and C-API references
 
 ---
 
-## 🛠️ Building from Source
+## Building from Source
 
 ### Prerequisites
 - **GraalVM JDK 25** (with `native-image`)
@@ -142,6 +145,6 @@ mvn clean package -Pcuda -Dcuda.enabled=true
 
 ---
 
-## 📄 License
+## License
 
 Licensed under the **[Apache License, Version 2.0](LICENSE)**.
