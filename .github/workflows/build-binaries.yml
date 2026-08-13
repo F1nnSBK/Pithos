@@ -68,7 +68,10 @@ jobs:
           python -m pip install -e .
 
       - name: Run End-to-End Python Test Suite
-        run: python tests/test_pithos_complete.py
+        run: |
+          python tests/test_pithos_complete.py
+          python tests/test_fpga_co_design.py
+
 
       - name: Run Verification Benchmarks
         run: |

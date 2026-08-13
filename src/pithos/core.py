@@ -428,14 +428,18 @@ class Index:
         meta_addr, meta_len = self.get_metadata_address()
         ids_addr, ids_len = self.get_ids_address()
         
-        # Calculate tier dimension boundary
-        tier_dim = self.dimension
-        words_per_record = (tier_dim + 63) // 64
+        num_recs = self.size()
+        if num_recs > 0 and tier_len > 0:
+            words_per_record = int(tier_len // (num_recs * 8))
+            tier_dim = words_per_record * 64
+        else:
+            tier_dim = self.dimension
+            words_per_record = (tier_dim + 63) // 64
         
         return FpgaDescriptor(
             tier_index=tier_idx,
             tier_dimension=tier_dim,
-            record_count=self.size(),
+            record_count=num_recs,
             tier_base_address=tier_addr,
             tier_byte_length=tier_len,
             metadata_base_address=meta_addr,
@@ -444,6 +448,7 @@ class Index:
             ids_byte_length=ids_len,
             words_per_record=words_per_record
         )
+
 
     def transform_and_quantize(self, vector: Union[np.ndarray, Sequence[float]]) -> np.ndarray:
         """
