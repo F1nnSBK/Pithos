@@ -1,125 +1,147 @@
-# Pithos Vector Search Engine
+# ⚱️ Pithos Vector Search Engine
 
-*(Note: This repository was formerly known as `lcvk`)*
+[![PyPI Version](https://img.shields.io/pypi/v/pithosdb?color=blue&label=pithosdb)](https://pypi.org/project/pithosdb/)
+[![Python Versions](https://img.shields.io/pypi/pyversions/pithosdb)](https://pypi.org/project/pithosdb/)
+[![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Java 25](https://img.shields.io/badge/Java-25%20(Vector%20API%20%26%20FFM)-orange)](https://openjdk.org/)
+[![Native Image](https://img.shields.io/badge/GraalVM-Native%20Image-red)](https://www.graalvm.org/)
 
-A high-performance, Ahead-of-Time (AOT) compiled, dimension-agnostic vector search engine written in **Java 25**, optimized for **Matryoshka-structured binary embeddings** at planetary scale, and compiled into a native shared library (`.dylib` / `.so`) via **GraalVM Native Image**.
+**Pithos** is a high-performance, Ahead-of-Time (AOT) compiled, dimension-agnostic vector search engine optimized for **Matryoshka-structured binary embeddings** and compiled into a standalone native shared library (`.dylib` / `.so`) via **GraalVM Native Image**.
 
-Pithos achieves its speed by collapsing abstraction boundaries between language runtimes, the operating system, and hardware execution models. It bypasses garbage collection entirely, mapping memory-bandwidth-bound datasets off-heap using the Java Foreign Function & Memory (FFM) API (Project Panama) and POSIX-aligned virtual memory mapping (`mmap`).
-
-**Now with CUDA acceleration support** for GPU-accelerated Hamming distance computation and multi-family voting, enabling massive parallel search operations on NVIDIA GPUs.
-
----
-
-##  Documentation Directory
-
-To make the codebase easier to navigate, detailed guides and theory have been split into standalone documents:
-
-- **[Architectural Principles & Core Innovations](docs/ARCHITECTURAL_PRINCIPLES.md):** Mathematical foundations, block-diagonal Walsh-Hadamard rotations, SVD-driven spectral truncation, and the 3-gate read-path cascade.
-- **[C-API Reference & Runtime Configuration](docs/C_API_REFERENCE.md):** Complete declarations of entry points (`libpithos`), FFI mappings, CUDA wrappers, and hardware co-design guidelines (FPGA/DMA offloading).
-
----
-
-##  Directory Structure
-
-```
-.
-├── pom.xml                 # Maven configuration (dimension-agnostic pithos packaging, CUDA profile)
-├── README.md               # This file
-├── test_client.c           # C verification client calling Pithos float C-API
-├── pithos.h                # C API header file
-├── graal_isolate.h         # GraalVM Native Image header
-├── docs/                   # Documentation resources
-│   ├── ARCHITECTURAL_PRINCIPLES.md # Math, theory, and system architecture
-│   ├── C_API_REFERENCE.md          # C-API declarations and tuning guidelines
-│   └── archive/                    # Archived log history
-├── benchmarks/             # Verification scripts
-│   ├── run_real_verification.py    # Lunar Pit / adapter classification pipeline
-│   ├── verify_compaction.py        # Index compaction verification script
-│   ├── verify_wal.py               # Write-Ahead Log verification script
-│   └── verify_optional_fp16.py     # FP16 vs. Non-FP16 verification script
-├── examples/               # Developer integration demos
-│   ├── cpp/demo.c                  # C integration demo linking libpithos
-│   └── java/ZeroCostDemo.java      # FFM Panama off-heap GC bypass demo
-└── src/                    # Core source tree (Java backend, CUDA kernels, JNI bindings)
-```
+Pithos achieves extreme throughput by collapsing abstraction boundaries between language runtimes, the operating system, and hardware execution models:
+- **Zero-GC Off-Heap Memory:** Bypasses garbage collection entirely using the **Java Foreign Function & Memory (FFM) API (Project Panama)** and POSIX memory-mapped I/O (`mmap`).
+- **3-Gate Read-Path Cascade:** 1-cycle tombstone filtering → Matryoshka early-exit Hamming scanning → exact FP16 in-engine reranking.
+- **Hardware SIMD & CUDA:** Vectorized with Java Vector API (AVX-512 / ARM NEON) and native NVIDIA CUDA kernels for batch distance computation and multi-family resonant voting.
+- **Pythonic Zero-Copy FFI:** Seamless integration with NumPy arrays via `pithosdb`.
 
 ---
 
 ## 📦 Python Quickstart
 
-Pithos is installable via `pip` or `uv`:
+Install the official Python package:
 
 ```bash
 pip install pithosdb
+# or with uv:
+uv pip install pithosdb
 ```
 
 ```python
 import pithosdb
 import numpy as np
 
-# Initialize database off-heap
+# 1. Open database off-heap (Zero JVM overhead)
 with pithosdb.VectorDb() as db:
-    index = db.load_index("lunar", "path/to/lunar_index")
+    # 2. Compile an index from float embeddings
+    records = np.random.randn(10_000, 384).astype(np.float32)
+    pithosdb.VectorDb.compile_index(
+        base_path="temp/lunar_index",
+        records=records,
+        tiers=[64, 128, 256, 384]
+    )
     
-    # Zero-copy batch search with NumPy
+    # 3. Memory-map index & run zero-copy batch k-NN search
+    index = db.load_index("lunar", "temp/lunar_index")
     queries = np.random.randn(10, 384).astype(np.float32)
     results = index.search(queries, k=5)
     
     for q_idx, matches in enumerate(results):
         print(f"Query {q_idx} Top Matches: {matches}")
+
+    # 4. Real-time Ingestion via LSM DeltaBuffer
+    delta = db.create_delta_buffer("lunar", flush_threshold=1000)
+    delta.insert(record_id=42, vector=np.random.randn(384).astype(np.float32))
 ```
 
 ---
 
-## ⚡ Precompiled Native Libraries
+## ⚡ Precompiled Native Binaries
 
-Precompiled native libraries are automatically published as GitHub Release assets:
+Precompiled native libraries are automatically published on GitHub Releases:
 
-🔗 [Download Latest Release Assets](https://github.com/F1nnSBK/Pithos/releases/latest)
+🔗 **[Download Latest Release Assets](https://github.com/F1nnSBK/Pithos/releases/latest)**
 
-Each release includes:
-- `libpithos-linux-x86_64.so` — Linux (x86_64)
-- `libpithos-macos-aarch64.dylib` — macOS (Apple Silicon)
-- `libpithos-linux-x86_64-cuda.so` — Linux (x86_64) with CUDA support
-- `pithos.h` — C API header
-- `graal_isolate.h` — GraalVM Native Image header
+| Artifact | Platform | Acceleration |
+| :--- | :--- | :--- |
+| `libpithos-macos-aarch64.dylib` | macOS (Apple Silicon / ARM64) | NEON SIMD |
+| `libpithos-linux-x86_64.so` | Linux (x86_64) | AVX2 / AVX-512 |
+| `libpithos-linux-aarch64.so` | Linux (ARM64 / Graviton) | NEON SIMD |
+| `libpithos-linux-cuda-x86_64.so` | Linux (x86_64) | NVIDIA CUDA GPU |
+| `pithos.h` / `graal_isolate.h` | C/C++ Headers | Standalone C-ABI |
+
+---
+
+## 🏛️ System Architecture & Features
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                 Client Layer (Python / C / C++)             │
+│            pithosdb (ctypes Zero-Copy NumPy / FFI)          │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ C-ABI (vdb_*)
+┌──────────────────────────────▼──────────────────────────────┐
+│                    Pithos Core Engine                       │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │   LMAX Disruptor Lock-Free Multi-Threaded Workers     │  │
+│  └───────────────────────────┬───────────────────────────┘  │
+│                              │                              │
+│  ┌───────────────────────────▼───────────────────────────┐  │
+│  │               3-Gate Read-Path Cascade                │  │
+│  │  Gate 1: Metadata & Tombstone Filter (1 cycle)        │  │
+│  │  Gate 2: Matryoshka Early-Exit Hamming Scan (SIMD)    │  │
+│  │  Gate 3: In-Engine FP16 / Asymmetric Reranking        │  │
+│  └───────────────────────────────────────────────────────┘  │
+│                              │                              │
+│  ┌───────────────────────────▼───────────────────────────┐  │
+│  │       Project Panama Off-Heap Storage (POSIX mmap)    │  │
+│  │       - <name> (64B Header)                           │  │
+│  │       - <name>_tier_*.bin (Packed Columnar Bits)      │  │
+│  │       - <name>_metadata.bin (Attributes & Flags)      │  │
+│  │       - <name>_fp16.bin (Half-Precision Sidecar)      │  │
+│  └───────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 📖 Documentation
+
+Detailed architectural guides, mathematical specifications, and C-API references:
+
+- **[Architectural Principles & Core Innovations](docs/ARCHITECTURAL_PRINCIPLES.md):** Mathematical foundations, block-diagonal Walsh-Hadamard rotations, SVD-driven spectral truncation, and the 3-gate read-path cascade.
+- **[C-API Reference & Runtime Configuration](docs/C_API_REFERENCE.md):** Complete declarations of entry points (`libpithos`), FFI mappings, CUDA wrappers, and hardware co-design guidelines (FPGA/DMA offloading).
+- **[CUDA GPU Acceleration Guide](docs/cuda_integration.md):** Shared memory popcount kernels, asynchronous stream pipelines, and multi-family voting.
 
 ---
 
 ## 🛠️ Building from Source
 
-### 1. Compile & Build (Native macOS & Linux)
-Ensure you have **GraalVM JDK 25** and **Maven** installed:
+### Prerequisites
+- **GraalVM JDK 25** (with `native-image`)
+- **Apache Maven 3.9+**
+- *(Optional)* **NVIDIA CUDA Toolkit 12+** for GPU kernels
+
+### 1. Compile Native Library (macOS & Linux)
 ```bash
 export JAVA_HOME=/path/to/graalvm-jdk-25
 export PATH=$JAVA_HOME/bin:$PATH
-mvn clean package
-```
-This executes all unit tests (including SVD, FWHT, compaction, and WAL recovery) and compiles `libpithos.dylib` / `libpithos.so` inside `target/`.
 
-### 2. Verification
+mvn clean package -DskipTests
+```
+The compiled shared library is generated in `target/pithos.dylib` (macOS) or `target/pithos.so` (Linux).
+
+### 2. Run Test Suite
 ```bash
-python benchmarks/run_real_verification.py
+mvn test
 ```
 
-### 3. Building with CUDA Support (Linux)
+### 3. Build with CUDA Support (Linux)
 ```bash
-export JAVA_HOME=/path/to/graalvm-jdk-25
-export PATH=$JAVA_HOME/bin:$PATH
-export CUDA_HOME=/usr/local/cuda
-export PATH=$CUDA_HOME/bin:$PATH
 mvn clean package -Pcuda -Dcuda.enabled=true
 ```
 
-
 ---
 
-## ️ Roadmap & Next Steps
+## 📄 License
 
-### 1. Distribute Search Topologies
-- **Objective**: Scale out to multi-node clusters.
-- **Concept**: Add consistent hashing rings to shard the Matryoshka columnar indexes across multiple nodes, executing query routing and remote merging in parallel.
-
-### 2. Dynamic Memory Re-alignment
-- **Objective**: Avoid restart overhead during delta-buffer flushes.
-- **Concept**: Implement dynamic pointer rotation in `vdb_load_index` to hot-swap mapped memory regions on the fly without closing active isolate threads.
+Licensed under the **[Apache License, Version 2.0](LICENSE)**.
