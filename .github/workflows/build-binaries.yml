@@ -86,18 +86,30 @@ jobs:
           python -m build --wheel --outdir build-binaries/
 
 
-      - name: Prepare Artifact
+      - name: Prepare Artifacts and C/C++ SDK
         run: |
           mkdir -p build-binaries
           cp target/${{ matrix.artifact_name }} build-binaries/${{ matrix.output_name }}
-          cp target/pithos.h build-binaries/
+          cp include/pithos.h build-binaries/
           cp target/graal_isolate.h build-binaries/
+          
+          # Create C/C++ SDK bundle
+          mkdir -p build-binaries/sdk/include build-binaries/sdk/lib build-binaries/sdk/cmake build-binaries/sdk/examples
+          cp include/pithos.h build-binaries/sdk/include/
+          cp target/graal_isolate.h build-binaries/sdk/include/
+          cp target/${{ matrix.artifact_name }} build-binaries/sdk/lib/
+          cp cmake/PithosConfig.cmake build-binaries/sdk/cmake/
+          cp cmake/pithos.pc.in build-binaries/sdk/cmake/
+          cp examples/cpp/*.c build-binaries/sdk/examples/
+          tar -czvf build-binaries/pithos-c-sdk-${{ matrix.os }}.tar.gz -C build-binaries/sdk .
+          rm -rf build-binaries/sdk
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: pithos-binaries-${{ matrix.os }}
           path: build-binaries/
+
 
   build-cuda:
     name: Build CUDA Shared Library (Docker) - ${{ matrix.arch }}

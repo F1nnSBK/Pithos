@@ -145,10 +145,31 @@ Pithos is specifically designed for hybrid CPU-FPGA/GPU acceleration workflows, 
 - **Asymmetric Vector Offloading (`vdb_transform_and_quantize`)**: A host system can quickly transform and binarize incoming query vectors on the CPU using Pithos's Rademacher preconditioning and Walsh-Hadamard rotations. The resulting query bit vectors can then be passed to the FPGA/GPU to perform low-latency binary Hamming distance sweeps directly against the raw off-heap database buffers.
 
 ### 5. CUDA GPU Acceleration
-Pithos now includes native CUDA support for GPU-accelerated operations:
+Pithos includes native CUDA support for GPU-accelerated operations:
 - **CUDA Hamming Distance Kernels**: Parallel computation of Hamming distances across thousands of threads for massive batch search operations.
 - **Multi-Family Voting Kernel**: GPU-accelerated resonant voting for planetary-scale anomaly detection.
 - **Walsh-Hadamard Transform Kernel**: GPU-accelerated transformation of query vectors.
 - **Zero-Copy Memory Mapping**: Database tiers are mapped to GPU memory via CUDA pointers, enabling direct GPU access without CPU-GPU memory transfers.
 
-To enable CUDA support, build with the `-Pcuda` Maven profile. See the [Dockerfile.cuda](Dockerfile.cuda) for a complete CUDA build environment.
+To enable CUDA support, build with the `-Pcuda` Maven profile. See [Dockerfile.cuda](https://github.com/F1nnSBK/Pithos/blob/main/Dockerfile.cuda) for a complete CUDA build environment.
+
+
+---
+
+## C / C++ SDK & CMake Integration
+
+The native C/C++ SDK tarball (`pithos-c-sdk-<platform>.tar.gz`) is automatically generated on every release:
+
+### Using CMake
+```cmake
+find_package(Pithos REQUIRED)
+
+add_executable(my_vector_app main.cpp)
+target_link_libraries(my_vector_app PRIVATE Pithos::pithos)
+```
+
+### Using pkg-config / Make
+```bash
+gcc -O3 main.c $(pkg-config --cflags --libs pithos) -o my_vector_app
+```
+

@@ -58,10 +58,11 @@ int main() {
 
     int outDim = 0;
     long long outSize = 0;
-    char outPlanetId = 0;
+    int8_t outPlanetId = 0;
     long long outPlanetRadius = 0;
     int outTiersCount = 0;
     status = vdb_get_info(thread, (char *)index_name, &outDim, &outSize, &outPlanetId, &outPlanetRadius, &outTiersCount);
+
     if (status == 0) {
         printf("[Pithos Demo] Index Attributes:\n");
         printf("  - Size      : %lld records\n", outSize);
