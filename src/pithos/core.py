@@ -115,11 +115,28 @@ class DeltaBuffer:
         )
         self._ffi.check_status(status, "restore DeltaBuffer")
 
+@dataclass(frozen=True)
+class FpgaDescriptor:
+    """
+    Hardware descriptor for direct FPGA DMA streaming and MMIO register configuration.
+    """
+    tier_index: int
+    tier_dimension: int
+    record_count: int
+    tier_base_address: int
+    tier_byte_length: int
+    metadata_base_address: int
+    metadata_byte_length: int
+    ids_base_address: int
+    ids_byte_length: int
+    words_per_record: int
+
 class Index:
     """
     Handle to an off-heap memory-mapped multi-tier vector index.
     """
     def __init__(self, db: VectorDb, name: str, base_path: str):
+
         self._db = db
         self._name = name
         self._base_path = base_path
@@ -338,6 +355,7 @@ class Index:
 
     def get_tier_memory_address(self, tier_idx: int) -> tuple[int, int]:
         """Returns the raw virtual address and byte length of a tier segment for direct DMA/FPGA execution."""
+
         addr = ctypes.c_longlong()
         length = ctypes.c_longlong()
         status = self._ffi.lib.vdb_get_tier_address(
@@ -378,6 +396,55 @@ class Index:
         self._ffi.check_status(status, "get IDs address")
         return addr.value, length.value
 
+    def get_tier_buffer(self, tier_idx: int = 0) -> np.ndarray:
+        """
+        Returns a zero-copy NumPy ndarray viewing the raw off-heap memory-mapped tier bit vectors.
+        """
+        addr, length = self.get_tier_address(tier_idx)
+        c_arr = (ctypes.c_uint8 * length).from_address(addr)
+        return np.ctypeslib.as_array(c_arr)
+
+    def get_metadata_buffer(self) -> np.ndarray:
+        """
+        Returns a zero-copy uint64 NumPy ndarray viewing the raw off-heap metadata bitmask flags.
+        """
+        addr, length = self.get_metadata_address()
+        c_arr = (ctypes.c_uint64 * (length // 8)).from_address(addr)
+        return np.ctypeslib.as_array(c_arr)
+
+    def get_ids_buffer(self) -> np.ndarray:
+        """
+        Returns a zero-copy int64 NumPy ndarray viewing the raw off-heap record IDs.
+        """
+        addr, length = self.get_ids_address()
+        c_arr = (ctypes.c_int64 * (length // 8)).from_address(addr)
+        return np.ctypeslib.as_array(c_arr)
+
+    def get_fpga_descriptor(self, tier_idx: int = 0) -> FpgaDescriptor:
+        """
+        Generates a complete hardware descriptor for FPGA DMA engines and PCIe MMIO registers.
+        """
+        tier_addr, tier_len = self.get_tier_address(tier_idx)
+        meta_addr, meta_len = self.get_metadata_address()
+        ids_addr, ids_len = self.get_ids_address()
+        
+        # Calculate tier dimension boundary
+        tier_dim = self.dimension
+        words_per_record = (tier_dim + 63) // 64
+        
+        return FpgaDescriptor(
+            tier_index=tier_idx,
+            tier_dimension=tier_dim,
+            record_count=self.size(),
+            tier_base_address=tier_addr,
+            tier_byte_length=tier_len,
+            metadata_base_address=meta_addr,
+            metadata_byte_length=meta_len,
+            ids_base_address=ids_addr,
+            ids_byte_length=ids_len,
+            words_per_record=words_per_record
+        )
+
     def transform_and_quantize(self, vector: Union[np.ndarray, Sequence[float]]) -> np.ndarray:
         """
         Transforms a continuous float vector through Rademacher sign preconditioning
@@ -399,6 +466,7 @@ class Index:
         )
         self._ffi.check_status(status, "transform and quantize vector")
         return out_packed
+
 
 
 

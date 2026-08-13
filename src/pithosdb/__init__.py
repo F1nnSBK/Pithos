@@ -9,6 +9,7 @@ from pithos import (
     SearchResult,
     IndexInfo,
     QuantizationMode,
+    FpgaDescriptor,
     PithosNativeError,
     __version__,
 )
@@ -20,6 +21,8 @@ __all__ = [
     "SearchResult",
     "IndexInfo",
     "QuantizationMode",
+    "FpgaDescriptor",
     "PithosNativeError",
     "__version__",
 ]
+

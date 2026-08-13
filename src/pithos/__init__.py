@@ -9,17 +9,21 @@ from .core import (
     SearchResult,
     IndexInfo,
     QuantizationMode,
+    FpgaDescriptor,
 )
 from .ffi import PithosNativeError
 
-__version__ = "1.0.3"
+__version__ = "1.0.4"
 __all__ = [
+
     "VectorDb",
     "Index",
     "DeltaBuffer",
     "SearchResult",
     "IndexInfo",
     "QuantizationMode",
+    "FpgaDescriptor",
     "PithosNativeError",
     "__version__",
 ]
+

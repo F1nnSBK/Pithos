@@ -108,6 +108,29 @@ class TestPithosComplete(unittest.TestCase):
             self.assertGreater(id_addr, 0)
             self.assertGreater(id_len, 0)
 
+            # Test direct off-heap zero-copy buffer views (FPGA / DMA integration)
+            tier_buf = index.get_tier_buffer(0)
+            self.assertIsInstance(tier_buf, np.ndarray)
+            self.assertEqual(tier_buf.nbytes, length)
+
+            meta_buf = index.get_metadata_buffer()
+            self.assertIsInstance(meta_buf, np.ndarray)
+            self.assertEqual(len(meta_buf), self.num_records)
+
+            ids_buf = index.get_ids_buffer()
+            self.assertIsInstance(ids_buf, np.ndarray)
+            self.assertEqual(len(ids_buf), self.num_records)
+            self.assertEqual(ids_buf[0], self.ids[0])
+
+            # Test FPGA hardware descriptor
+            fpga_desc = index.get_fpga_descriptor(0)
+            self.assertEqual(fpga_desc.record_count, self.num_records)
+            self.assertEqual(fpga_desc.tier_dimension, self.dim)
+            self.assertEqual(fpga_desc.tier_base_address, addr)
+            self.assertEqual(fpga_desc.tier_byte_length, length)
+            self.assertEqual(fpga_desc.metadata_base_address, m_addr)
+            self.assertEqual(fpga_desc.ids_base_address, id_addr)
+
             # Test vector transformation & binarization
             packed = index.transform_and_quantize(self.vectors[0])
             self.assertEqual(len(packed), (self.dim + 63) // 64)
@@ -116,6 +139,7 @@ class TestPithosComplete(unittest.TestCase):
             # Test chunk size & energy budget
             index.set_chunk_size(64)
             index.set_energy_budget(0.90)
+
 
 
     def test_04_load_with_svd_weights(self):
