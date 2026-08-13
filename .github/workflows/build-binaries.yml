@@ -50,6 +50,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
+      - name: Run Java Unit Tests
+        run: mvn test
+
       - name: Compile Native Shared Library
         run: mvn clean package -DskipTests
 
@@ -58,13 +61,30 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Install Python Dependencies & Test Suite
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy build wheel
+          python -m pip install -e .
+
+      - name: Run End-to-End Python Test Suite
+        run: python tests/test_pithos_complete.py
+
+      - name: Run Verification Benchmarks
+        run: |
+          python benchmarks/verify_wal.py
+          python benchmarks/verify_compaction.py
+          python benchmarks/verify_lsm.py
+          python benchmarks/verify_optional_fp16.py
+          python benchmarks/run_real_verification.py
+
       - name: Build Platform-Specific Python Wheel
         run: |
-          python -m pip install --upgrade build wheel
           mkdir -p src/pithos/lib
           cp target/${{ matrix.artifact_name }} src/pithos/lib/${{ matrix.output_name }}
           cp target/${{ matrix.artifact_name }} src/pithos/lib/libpithos.${{ matrix.os == 'macos-latest' && 'dylib' || 'so' }}
           python -m build --wheel --outdir build-binaries/
+
 
       - name: Prepare Artifact
         run: |

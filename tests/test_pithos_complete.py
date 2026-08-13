@@ -95,14 +95,28 @@ class TestPithosComplete(unittest.TestCase):
             self.assertEqual(info["dimension"], self.dim)
             self.assertEqual(info["planet_id"], 2)
             
-            # Test direct off-heap tier address access
+            # Test direct off-heap memory addresses
             addr, length = index.get_tier_address(0)
             self.assertGreater(addr, 0)
             self.assertGreater(length, 0)
 
+            m_addr, m_len = index.get_metadata_address()
+            self.assertGreater(m_addr, 0)
+            self.assertGreater(m_len, 0)
+
+            id_addr, id_len = index.get_ids_address()
+            self.assertGreater(id_addr, 0)
+            self.assertGreater(id_len, 0)
+
+            # Test vector transformation & binarization
+            packed = index.transform_and_quantize(self.vectors[0])
+            self.assertEqual(len(packed), (self.dim + 63) // 64)
+            self.assertIsInstance(packed, np.ndarray)
+
             # Test chunk size & energy budget
             index.set_chunk_size(64)
             index.set_energy_budget(0.90)
+
 
     def test_04_load_with_svd_weights(self):
         """Tests loading an index with SVD / LoRA projection weights for dynamic spectral truncation."""

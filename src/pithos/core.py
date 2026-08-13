@@ -352,6 +352,55 @@ class Index:
 
     get_tier_address = get_tier_memory_address
 
+    def get_metadata_address(self) -> tuple[int, int]:
+        """Returns the raw off-heap address and byte length of the metadata sidecar segment."""
+        addr = ctypes.c_longlong()
+        length = ctypes.c_longlong()
+        status = self._ffi.lib.vdb_get_metadata_address(
+            self._ffi.thread,
+            self._name.encode("utf-8"),
+            ctypes.byref(addr),
+            ctypes.byref(length)
+        )
+        self._ffi.check_status(status, "get metadata address")
+        return addr.value, length.value
+
+    def get_ids_address(self) -> tuple[int, int]:
+        """Returns the raw off-heap address and byte length of the record IDs segment."""
+        addr = ctypes.c_longlong()
+        length = ctypes.c_longlong()
+        status = self._ffi.lib.vdb_get_ids_address(
+            self._ffi.thread,
+            self._name.encode("utf-8"),
+            ctypes.byref(addr),
+            ctypes.byref(length)
+        )
+        self._ffi.check_status(status, "get IDs address")
+        return addr.value, length.value
+
+    def transform_and_quantize(self, vector: Union[np.ndarray, Sequence[float]]) -> np.ndarray:
+        """
+        Transforms a continuous float vector through Rademacher sign preconditioning
+        and block-diagonal Fast Walsh-Hadamard rotation, returning packed 64-bit uint64 words.
+        """
+        vec = np.ascontiguousarray(vector, dtype=np.float32).flatten()
+        dim = self.dimension
+        if vec.shape[0] != dim:
+            raise ValueError(f"Vector dimension {vec.shape[0]} does not match index dimension {dim}")
+        
+        words_count = (dim + 63) // 64
+        out_packed = np.zeros(words_count, dtype=np.uint64)
+        
+        status = self._ffi.lib.vdb_transform_and_quantize(
+            self._ffi.thread,
+            self._name.encode("utf-8"),
+            vec.ctypes.data_as(ctypes.c_void_p),
+            out_packed.ctypes.data_as(ctypes.c_void_p)
+        )
+        self._ffi.check_status(status, "transform and quantize vector")
+        return out_packed
+
+
 
 class VectorDb:
     """
