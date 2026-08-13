@@ -6,8 +6,9 @@
 
     <groupId>org.pithos</groupId>
     <artifactId>pithos_core</artifactId>
-    <version>1.0.1-SNAPSHOT</version>
+    <version>1.0.5</version>
     <packaging>jar</packaging>
+
 
     <name>Pithos Vector Search Engine</name>
 
