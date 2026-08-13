@@ -28,7 +28,7 @@ public interface Index extends AutoCloseable {
 
     /// Performs a batch $k$-NN search for multiple query vectors simultaneously across worker threads.
     ///
-    /// @param queries 2D array of query vectors of shape $[\text{numQueries}][D]$
+    /// @param queries 2D array of query vectors of shape `numQueries x D`
     /// @param k number of closest neighbors per query
     /// @return array of result lists, one list per query vector
     List<SearchResult>[] batchSearch(float[][] queries, int k);
@@ -38,8 +38,9 @@ public interface Index extends AutoCloseable {
     /// For each record $i$, evaluates queries $q \in \{0, \dots, Q-1\}$ with threshold $\theta_q$:
     /// $$\text{mask}_i = \bigvee_{q : d_H(q, i) \le \theta_q} 2^{\text{family}(q)}$$
     ///
-    /// @param queries query vectors of shape $[\text{numQueries}][D]$
-    /// @param families semantic family index $[0, 7]$ for each query
+    /// @param queries query vectors of shape `numQueries x D`
+    /// @param families semantic family index in range 0 to 7 for each query
+
     /// @param thresholds maximum Hamming distance cutoff for each query
     /// @param votingMask pre-allocated off-heap memory segment of size $N$ bytes to accumulate bitmasks
     /// @return count of highly resonant candidate records
