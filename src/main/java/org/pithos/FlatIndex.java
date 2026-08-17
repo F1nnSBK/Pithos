@@ -6,6 +6,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
@@ -60,6 +61,9 @@ public class FlatIndex implements Index {
     private final MemorySegment fp8Segment;
     private final MemorySegment fp4Segment;
     private final int sidecarMode;
+    private final String userMetadataJson;
+    private final MemorySegment metadataPayloadSegment;
+    private final boolean isSingleFileContainer;
 
     private final byte planetId;
     private final long planetRadius;
@@ -174,6 +178,21 @@ public class FlatIndex implements Index {
         return sidecarMode;
     }
 
+    /// Returns the embedded user metadata JSON string, or null if none.
+    public String getUserMetadataJson() {
+        return userMetadataJson;
+    }
+
+    /// Returns the raw off-heap metadata payload segment, or null if none.
+    public MemorySegment getMetadataPayloadSegment() {
+        return metadataPayloadSegment;
+    }
+
+    /// Returns true if this index was loaded from a universal single-file container.
+    public boolean isSingleFileContainer() {
+        return isSingleFileContainer;
+    }
+
     public FlatIndex(MemorySegment baseSegment, MemorySegment idsSegment, MemorySegment[] tierSegments,
             MemorySegment metadataSegment, MemorySegment fp16Segment,
             byte planetId, long planetRadius, int dimension, int numTiers, int[] tiers, long size,
@@ -187,6 +206,14 @@ public class FlatIndex implements Index {
             MemorySegment metadataSegment, MemorySegment fp16Segment, MemorySegment fp8Segment, MemorySegment fp4Segment,
             byte planetId, long planetRadius, int dimension, int numTiers, int[] tiers, long size,
             float[] cumulativeEnergy, int qMode, int sidecarMode) {
+        this(baseSegment, idsSegment, tierSegments, metadataSegment, fp16Segment, fp8Segment, fp4Segment,
+                planetId, planetRadius, dimension, numTiers, tiers, size, cumulativeEnergy, qMode, sidecarMode, null, null);
+    }
+
+    public FlatIndex(MemorySegment baseSegment, MemorySegment idsSegment, MemorySegment[] tierSegments,
+            MemorySegment metadataSegment, MemorySegment fp16Segment, MemorySegment fp8Segment, MemorySegment fp4Segment,
+            byte planetId, long planetRadius, int dimension, int numTiers, int[] tiers, long size,
+            float[] cumulativeEnergy, int qMode, int sidecarMode, String userMetadataJson, MemorySegment metadataPayloadSegment) {
         this.baseSegment = baseSegment;
         this.idsSegment = idsSegment;
         this.tierSegments = tierSegments;
@@ -203,6 +230,9 @@ public class FlatIndex implements Index {
         this.size = size;
         this.cumulativeEnergy = cumulativeEnergy;
         this.qMode = qMode;
+        this.userMetadataJson = userMetadataJson;
+        this.metadataPayloadSegment = metadataPayloadSegment;
+        this.isSingleFileContainer = (userMetadataJson != null || metadataPayloadSegment != null);
 
         this.tierLongs = new int[numTiers];
         int prevBoundVal = 0;
@@ -318,10 +348,93 @@ public class FlatIndex implements Index {
     /// @throws IOException on I/O error
     public static FlatIndex mapFile(String basePath, float[] weights, int loraDim) throws IOException {
         Path mainPath = Path.of(basePath);
-        if (!mainPath.toFile().exists()) {
+        if (!Files.exists(mainPath) && Files.exists(Path.of(basePath + ".pithos"))) {
+            mainPath = Path.of(basePath + ".pithos");
+        }
+        if (!Files.exists(mainPath)) {
             throw new IOException("Base file path does not exist: " + basePath);
         }
 
+        // 1. Check if this is a Single-File .pithos Container (DIOGENES magic)
+        if (PithosContainer.isPithosContainer(mainPath)) {
+            try (FileChannel channel = FileChannel.open(mainPath, StandardOpenOption.READ)) {
+                PithosContainer.Superblock sb = PithosContainer.readSuperblock(channel);
+                PithosContainer.validateTrailer(channel, sb.tocOffset(), sb.tocLength());
+                String tocJson = PithosContainer.readTocJson(channel, sb.tocOffset(), sb.tocLength());
+
+                long totalRecords = sb.numVectors();
+                int dimension = sb.dimension();
+                int numTiers = sb.numTiers();
+                int[] tiers = sb.tiers();
+                int qMode = sb.qMode();
+                int sidecarMode = sb.sidecarType();
+
+                MemorySegment containerSegment = channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size(), Arena.global());
+
+                long idsOffset = PithosContainer.align64(PithosContainer.SUPERBLOCK_SIZE);
+                long idsLength = totalRecords * 8L;
+                MemorySegment idsSegment = containerSegment.asSlice(idsOffset, idsLength);
+
+                MemorySegment[] tierSegments = new MemorySegment[numTiers];
+                int prevBound = 0;
+                long currentOffset = PithosContainer.align64(idsOffset + idsLength);
+                for (int k = 0; k < numTiers; k++) {
+                    int width = tiers[k] - prevBound;
+                    long bytesPerRecord = switch (qMode) {
+                        case 1 -> (width / 4);
+                        case 2 -> (width * 4L);
+                        default -> (width / 8);
+                    };
+                    long tierLen = totalRecords * bytesPerRecord;
+                    tierSegments[k] = containerSegment.asSlice(currentOffset, tierLen);
+                    currentOffset = PithosContainer.align64(currentOffset + tierLen);
+                    prevBound = tiers[k];
+                }
+
+                MemorySegment fp16Segment = null;
+                MemorySegment fp8Segment = null;
+                MemorySegment fp4Segment = null;
+                if (sidecarMode == VectorDb.SIDECAR_FP16) {
+                    long sidecarLen = totalRecords * dimension * 2L;
+                    fp16Segment = containerSegment.asSlice(currentOffset, sidecarLen);
+                    currentOffset = PithosContainer.align64(currentOffset + sidecarLen);
+                } else if (sidecarMode == VectorDb.SIDECAR_FP8) {
+                    long sidecarLen = totalRecords * dimension * 1L;
+                    fp8Segment = containerSegment.asSlice(currentOffset, sidecarLen);
+                    currentOffset = PithosContainer.align64(currentOffset + sidecarLen);
+                } else if (sidecarMode == VectorDb.SIDECAR_FP4) {
+                    int blockSize = 16;
+                    int numBlocks = (dimension + blockSize - 1) / blockSize;
+                    long sidecarLen = totalRecords * (numBlocks * 9L);
+                    fp4Segment = containerSegment.asSlice(currentOffset, sidecarLen);
+                    currentOffset = PithosContainer.align64(currentOffset + sidecarLen);
+                }
+
+                PithosContainer.Section metaSec = PithosContainer.extractMetadataSection(tocJson);
+                MemorySegment metadataPayloadSegment = null;
+                if (metaSec.offset() > 0 && metaSec.length() > 0) {
+                    metadataPayloadSegment = containerSegment.asSlice(metaSec.offset(), metaSec.length());
+                }
+
+                float[] cumulativeEnergy = new float[numTiers];
+                if (weights != null) {
+                    float[] allPhi = TransformOperator.computeCumulativeEnergy(weights, dimension, loraDim);
+                    for (int k = 0; k < numTiers; k++) {
+                        cumulativeEnergy[k] = allPhi[tiers[k] - 1];
+                    }
+                } else {
+                    for (int k = 0; k < numTiers; k++) {
+                        cumulativeEnergy[k] = (float) tiers[k] / dimension;
+                    }
+                }
+
+                return new FlatIndex(containerSegment, idsSegment, tierSegments, null, fp16Segment, fp8Segment, fp4Segment,
+                        (byte) 0, 0L, dimension, numTiers, tiers, totalRecords, cumulativeEnergy, qMode, sidecarMode,
+                        tocJson, metadataPayloadSegment);
+            }
+        }
+
+        // 2. Legacy Multi-File PLAN Layout Fallback
         MemorySegment mappedBase;
         try (FileChannel channel = FileChannel.open(mainPath, StandardOpenOption.READ)) {
             mappedBase = channel.map(FileChannel.MapMode.READ_ONLY, 0, 64, Arena.global());
@@ -332,7 +445,7 @@ public class FlatIndex implements Index {
         byte m2 = mappedBase.get(ValueLayout.JAVA_BYTE, 2);
         byte m3 = mappedBase.get(ValueLayout.JAVA_BYTE, 3);
         if (m0 != 'P' || m1 != 'L' || m2 != 'A' || m3 != 'N') {
-            throw new IllegalArgumentException("Invalid file magic: must be PLAN");
+            throw new IllegalArgumentException("Invalid file magic: must be DIOGENES or PLAN");
         }
 
         byte planetId = mappedBase.get(ValueLayout.JAVA_BYTE, 4);
@@ -644,7 +757,7 @@ public class FlatIndex implements Index {
             float[] dbFloat = new float[dimension];
             int numLongs0 = tierLongs[0];
             for (long i = startIdx; i < endIdx; i++) {
-                if ((metaSeg.get(ValueLayout.JAVA_LONG, i * 8) & 1L) == 1L)
+                if (metaSeg != null && (metaSeg.get(ValueLayout.JAVA_LONG, i * 8) & 1L) == 1L)
                     continue;
                 long baseOff = i * (numLongs0 * 8L);
                 long word = tier0.get(ValueLayout.JAVA_LONG, baseOff);
@@ -677,7 +790,7 @@ public class FlatIndex implements Index {
                 rotQueries[q] = transformOperator.preconditionAndRotate(queries[q]);
             float[] dbFloat = new float[dimension];
             for (long i = startIdx; i < endIdx; i++) {
-                if ((metaSeg.get(ValueLayout.JAVA_LONG, i * 8) & 1L) == 1L)
+                if (metaSeg != null && (metaSeg.get(ValueLayout.JAVA_LONG, i * 8) & 1L) == 1L)
                     continue;
                 int dimOffset = 0;
                 for (int tierIdx = 0; tierIdx < numTiers; tierIdx++) {
@@ -711,7 +824,7 @@ public class FlatIndex implements Index {
         long[] dbMasks = new long[totalLongs];
 
         for (long i = startIdx; i < endIdx; i++) {
-            if ((metaSeg.get(ValueLayout.JAVA_LONG, i * 8) & 1L) == 1L)
+            if (metaSeg != null && (metaSeg.get(ValueLayout.JAVA_LONG, i * 8) & 1L) == 1L)
                 continue;
 
             // Load all active tiers up to T for record i first
@@ -995,7 +1108,7 @@ public class FlatIndex implements Index {
         MemorySegment tier0 = localTiers[0];
 
         for (long i = startIdx; i < endIdx; i++) {
-            long metaVal = metaSeg.get(ValueLayout.JAVA_LONG, i * 8);
+            long metaVal = (metaSeg != null) ? metaSeg.get(ValueLayout.JAVA_LONG, i * 8) : 2L;
             if ((metaVal & 1L) == 1L)
                 continue;
 

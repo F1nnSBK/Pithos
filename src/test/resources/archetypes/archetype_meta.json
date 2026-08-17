@@ -7,7 +7,7 @@
     "latitude": -31.4121,
     "longitude": 65.6408,
     "product_id": "M187806127RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_22_Adams_B_1.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_22_Adams_B_1.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2224, grad=0.0788, coherence=23.22) [auto-centered cavity (discovery offset: +115.6s, -15.6l)]"
@@ -20,7 +20,7 @@
     "latitude": -31.5449,
     "longitude": 65.7223,
     "product_id": "M104083707LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_23_Adams_B_2.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_23_Adams_B_2.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1672, grad=0.1579, coherence=18.85) [auto-centered cavity (discovery offset: -69.7s, +94.0l)]"
@@ -33,7 +33,7 @@
     "latitude": -31.2886,
     "longitude": 65.7523,
     "product_id": "M104083707LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_24_Adams_B_3.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_24_Adams_B_3.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1428, grad=0.1633, coherence=19.54) [auto-centered cavity (calibrated offset: -50.8s, +92.6l)]"
@@ -46,7 +46,7 @@
     "latitude": 23.8889,
     "longitude": 312.3506,
     "product_id": "M109548636RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_25_Aristarchus_1.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_25_Aristarchus_1.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2832, grad=0.0824, coherence=20.35) [auto-centered cavity (discovery offset: +7.7s, -315.8l)]"
@@ -59,7 +59,7 @@
     "latitude": 23.873,
     "longitude": 312.3029,
     "product_id": "M109548636RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_26_Aristarchus_2a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_26_Aristarchus_2a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2781, grad=0.0648, coherence=19.38) [auto-centered cavity (calibrated offset: +1.2s, -315.1l)]"
@@ -72,7 +72,7 @@
     "latitude": 23.8726,
     "longitude": 312.3053,
     "product_id": "M109548636RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_27_Aristarchus_2b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_27_Aristarchus_2b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2785, grad=0.0619, coherence=18.92) [auto-centered cavity (calibrated offset: +13.9s, -317.1l)]"
@@ -85,7 +85,7 @@
     "latitude": 23.8716,
     "longitude": 312.3098,
     "product_id": "M109548636RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_28_Aristarchus_2c.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_28_Aristarchus_2c.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2980, grad=0.0735, coherence=21.07) [auto-centered cavity (calibrated offset: +12.5s, -300.4l)]"
@@ -98,7 +98,7 @@
     "latitude": 23.9331,
     "longitude": 312.4076,
     "product_id": "M109548636LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_29_Aristarchus_3a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_29_Aristarchus_3a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2689, grad=0.0771, coherence=19.30) [auto-centered cavity (discovery offset: +12.8s, -307.3l)]"
@@ -111,7 +111,7 @@
     "latitude": 23.9339,
     "longitude": 312.4084,
     "product_id": "M109548636LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_30_Aristarchus_3b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_30_Aristarchus_3b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2699, grad=0.0757, coherence=19.35) [auto-centered cavity (calibrated offset: +15.3s, -314.9l)]"
@@ -124,7 +124,7 @@
     "latitude": 23.9344,
     "longitude": 312.407,
     "product_id": "M109548636LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_31_Aristarchus_3c.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_31_Aristarchus_3c.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2694, grad=0.0650, coherence=20.01) [auto-centered cavity (calibrated offset: +20.2s, -309.5l)]"
@@ -137,7 +137,7 @@
     "latitude": 23.914,
     "longitude": 312.3913,
     "product_id": "M109548636LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_32_Aristarchus_4.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_32_Aristarchus_4.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2602, grad=0.0981, coherence=16.34) [auto-centered cavity (calibrated offset: +17.6s, -301.6l)]"
@@ -150,7 +150,7 @@
     "latitude": 23.5984,
     "longitude": 312.4196,
     "product_id": "M109548636LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_33_Aristarchus_5.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_33_Aristarchus_5.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3400, grad=0.0789, coherence=16.82) [auto-centered cavity (calibrated offset: +23.1s, -316.5l)]"
@@ -163,7 +163,7 @@
     "latitude": 23.4657,
     "longitude": 312.4235,
     "product_id": "M109548636LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_34_Aristarchus_6.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_34_Aristarchus_6.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3063, grad=0.0825, coherence=16.85) [auto-centered cavity (calibrated offset: +13.7s, -319.0l)]"
@@ -176,7 +176,7 @@
     "latitude": 23.4536,
     "longitude": 312.3967,
     "product_id": "M109548636LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_35_Aristarchus_7a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_35_Aristarchus_7a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2657, grad=0.0673, coherence=18.29) [auto-centered cavity (calibrated offset: +29.4s, -309.2l)]"
@@ -189,7 +189,7 @@
     "latitude": 23.4532,
     "longitude": 312.3957,
     "product_id": "M109548636LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_36_Aristarchus_7b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_36_Aristarchus_7b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2641, grad=0.0686, coherence=18.41) [auto-centered cavity (calibrated offset: +18.9s, -313.7l)]"
@@ -202,7 +202,7 @@
     "latitude": 23.9091,
     "longitude": 312.3992,
     "product_id": "M109548636LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_37_Aristarchus_8.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_37_Aristarchus_8.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2845, grad=0.0758, coherence=16.38) [auto-centered cavity (calibrated offset: +26.6s, -302.1l)]"
@@ -215,7 +215,7 @@
     "latitude": 23.8631,
     "longitude": 312.315,
     "product_id": "M109548636RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_38_Aristarchus_9.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_38_Aristarchus_9.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2930, grad=0.0782, coherence=17.61) [auto-centered cavity (calibrated offset: +8.5s, -327.0l)]"
@@ -228,7 +228,7 @@
     "latitude": 33.6622,
     "longitude": 0.7149,
     "product_id": "M139903791RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_39_Aristillus_1.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_39_Aristillus_1.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2681, grad=0.0805, coherence=22.84) [auto-centered cavity (discovery offset: +85.8s, -92.1l)]"
@@ -241,7 +241,7 @@
     "latitude": 33.5874,
     "longitude": 1.019,
     "product_id": "M150511688LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_40_Aristillus_2.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_40_Aristillus_2.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1297, grad=0.1296, coherence=22.39) [auto-centered cavity (discovery offset: -62.8s, +43.4l)]"
@@ -254,7 +254,7 @@
     "latitude": 33.5169,
     "longitude": 0.9128,
     "product_id": "M111592038RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_41_Aristillus_3.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_41_Aristillus_3.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1883, grad=0.0841, coherence=21.73) [auto-centered cavity (discovery offset: -100.6s, -10.5l)]"
@@ -267,7 +267,7 @@
     "latitude": 33.4981,
     "longitude": 0.9447,
     "product_id": "M111592038RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_42_Aristillus_4.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_42_Aristillus_4.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2003, grad=0.0710, coherence=22.74) [auto-centered cavity (calibrated offset: -127.7s, -25.6l)]"
@@ -280,7 +280,7 @@
     "latitude": -45.6547,
     "longitude": 271.426,
     "product_id": "M1147708008LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_43_Catal\u00e1n_B_1.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_43_Catal\u00e1n_B_1.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2171, grad=0.0949, coherence=21.33) [auto-centered cavity (discovery offset: +34.4s, +15.2l)]"
@@ -306,7 +306,7 @@
     "latitude": -0.9182,
     "longitude": 48.6595,
     "product_id": "M1105602888RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_16_Central_Mare_Fecunditatis_Pit.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_16_Central_Mare_Fecunditatis_Pit.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3282, grad=0.0728, coherence=24.74) [auto-centered cavity (discovery offset: -23.0s, -35.9l)]"
@@ -319,7 +319,7 @@
     "latitude": 9.9277,
     "longitude": 340.7455,
     "product_id": "M122339925RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_44_Copernicus_1.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_44_Copernicus_1.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2474, grad=0.0645, coherence=25.28) [auto-centered cavity (discovery offset: +33.5s, +100.7l)]"
@@ -345,7 +345,7 @@
     "latitude": 9.9726,
     "longitude": 340.7284,
     "product_id": "M122339925LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_55_Copernicus_11.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_55_Copernicus_11.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2732, grad=0.0658, coherence=23.52) [auto-centered cavity (discovery offset: +69.2s, +104.9l)]"
@@ -358,7 +358,7 @@
     "latitude": 9.5539,
     "longitude": 340.7251,
     "product_id": "M137672132LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_56_Copernicus_12.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_56_Copernicus_12.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2664, grad=0.0605, coherence=24.46) [auto-centered cavity (discovery offset: +165.2s, -108.1l)]"
@@ -371,7 +371,7 @@
     "latitude": 10.1857,
     "longitude": 339.8727,
     "product_id": "M104648293RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_57_Copernicus_13a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_57_Copernicus_13a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1844, grad=0.0876, coherence=22.89) [auto-centered cavity (discovery offset: +67.6s, -85.2l)]"
@@ -384,7 +384,7 @@
     "latitude": 10.1799,
     "longitude": 339.8811,
     "product_id": "M104648293RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_58_Copernicus_13b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_58_Copernicus_13b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1934, grad=0.0939, coherence=22.21) [auto-centered cavity (frame-calibrated offset: +70.6s, -84.1l)]"
@@ -397,7 +397,7 @@
     "latitude": 10.2215,
     "longitude": 339.9041,
     "product_id": "M104648293RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_59_Copernicus_14.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_59_Copernicus_14.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1912, grad=0.1079, coherence=23.22) [auto-centered cavity (frame-calibrated offset: +71.1s, -85.4l)]"
@@ -410,7 +410,7 @@
     "latitude": 9.4838,
     "longitude": 340.1616,
     "product_id": "M102286291RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_60_Copernicus_16.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_60_Copernicus_16.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.0804, grad=0.1159, coherence=21.86) [auto-centered cavity (discovery offset: +89.7s, -168.6l)]"
@@ -423,7 +423,7 @@
     "latitude": 10.2403,
     "longitude": 339.6013,
     "product_id": "M135317661LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_61_Copernicus_17a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_61_Copernicus_17a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1724, grad=0.0843, coherence=22.72) [auto-centered cavity (discovery offset: +136.3s, -44.0l)]"
@@ -436,7 +436,7 @@
     "latitude": 10.2401,
     "longitude": 339.6012,
     "product_id": "M135317661LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_62_Copernicus_17b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_62_Copernicus_17b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1724, grad=0.0843, coherence=22.72) [auto-centered cavity (frame-calibrated offset: +142.5s, -55.1l)]"
@@ -449,7 +449,7 @@
     "latitude": 10.2933,
     "longitude": 339.5981,
     "product_id": "M135317661LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_63_Copernicus_18.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_63_Copernicus_18.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1608, grad=0.0983, coherence=23.37) [auto-centered cavity (frame-calibrated offset: +128.9s, -42.3l)]"
@@ -462,7 +462,7 @@
     "latitude": 10.1326,
     "longitude": 339.6052,
     "product_id": "M135317661LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_64_Copernicus_19a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_64_Copernicus_19a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1724, grad=0.0981, coherence=23.45) [auto-centered cavity (frame-calibrated offset: +145.3s, -41.2l)]"
@@ -475,7 +475,7 @@
     "latitude": 10.1329,
     "longitude": 339.6055,
     "product_id": "M135317661LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_65_Copernicus_19b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_65_Copernicus_19b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1729, grad=0.0983, coherence=23.48) [auto-centered cavity (frame-calibrated offset: +134.0s, -31.4l)]"
@@ -488,7 +488,7 @@
     "latitude": 9.9308,
     "longitude": 340.7296,
     "product_id": "M122339925LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_45_Copernicus_2.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_45_Copernicus_2.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2655, grad=0.0596, coherence=25.71) [auto-centered cavity (frame-calibrated offset: +53.5s, +103.8l)]"
@@ -501,7 +501,7 @@
     "latitude": 10.3522,
     "longitude": 339.7351,
     "product_id": "M104648293LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_66_Copernicus_20.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_66_Copernicus_20.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1959, grad=0.1227, coherence=20.38) [auto-centered cavity (discovery offset: +49.9s, -55.5l)]"
@@ -514,7 +514,7 @@
     "latitude": 10.1943,
     "longitude": 339.847,
     "product_id": "M104648293RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_67_Copernicus_21.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_67_Copernicus_21.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1957, grad=0.0949, coherence=21.32) [auto-centered cavity (frame-calibrated offset: +68.0s, -77.4l)]"
@@ -527,7 +527,7 @@
     "latitude": 10.2095,
     "longitude": 339.8873,
     "product_id": "M104648293RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_68_Copernicus_22.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_68_Copernicus_22.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1923, grad=0.0719, coherence=22.77) [auto-centered cavity (frame-calibrated offset: +60.0s, -88.2l)]"
@@ -566,7 +566,7 @@
     "latitude": 9.9929,
     "longitude": 340.7149,
     "product_id": "M122339925LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_46_Copernicus_3.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_46_Copernicus_3.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2711, grad=0.0626, coherence=20.76) [auto-centered cavity (frame-calibrated offset: +46.1s, +108.3l)]"
@@ -579,7 +579,7 @@
     "latitude": 10.3288,
     "longitude": 339.6206,
     "product_id": "M104648293LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_47_Copernicus_4.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_47_Copernicus_4.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1769, grad=0.0734, coherence=21.99) [auto-centered cavity (frame-calibrated offset: +61.8s, -82.0l)]"
@@ -592,7 +592,7 @@
     "latitude": 9.0159,
     "longitude": 339.7451,
     "product_id": "M104648293LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_48_Copernicus_5.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_48_Copernicus_5.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1940, grad=0.0984, coherence=19.71) [auto-centered cavity (frame-calibrated offset: +58.9s, -61.0l)]"
@@ -735,7 +735,7 @@
     "latitude": -10.2424,
     "longitude": 194.7536,
     "product_id": "M110316458RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_76_Crookes_1.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_76_Crookes_1.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3329, grad=0.0719, coherence=18.37) [auto-centered cavity (discovery offset: -79.9s, +126.7l)]"
@@ -748,7 +748,7 @@
     "latitude": -10.1717,
     "longitude": 194.8302,
     "product_id": "M110316458LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_87_Crookes_10.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_87_Crookes_10.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3018, grad=0.0428, coherence=24.06) [auto-centered cavity (discovery offset: -17.5s, -165.1l)]"
@@ -774,7 +774,7 @@
     "latitude": -10.2372,
     "longitude": 194.7822,
     "product_id": "M1099931168RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_89_Crookes_11b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_89_Crookes_11b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3367, grad=0.0761, coherence=20.66) [auto-centered cavity (discovery offset: -19.7s, -99.2l)]"
@@ -787,7 +787,7 @@
     "latitude": -10.1275,
     "longitude": 194.7446,
     "product_id": "M115034685LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_77_Crookes_2.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_77_Crookes_2.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1405, grad=0.1617, coherence=16.19) [auto-centered cavity (frame-calibrated offset: -10.5s, +8.1l)]"
@@ -800,7 +800,7 @@
     "latitude": -10.0749,
     "longitude": 194.7337,
     "product_id": "M176353098RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_78_Crookes_3.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_78_Crookes_3.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2171, grad=0.0979, coherence=21.27) [auto-centered cavity (discovery offset: -158.6s, +114.8l)]"
@@ -813,7 +813,7 @@
     "latitude": -10.2294,
     "longitude": 194.7791,
     "product_id": "M110316458LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_79_Crookes_4.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_79_Crookes_4.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3101, grad=0.0604, coherence=21.79) [auto-centered cavity (frame-calibrated offset: +7.3s, -165.7l)]"
@@ -826,7 +826,7 @@
     "latitude": -10.6859,
     "longitude": 194.8609,
     "product_id": "M110316458LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_80_Crookes_5a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_80_Crookes_5a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2952, grad=0.0675, coherence=22.24) [auto-centered cavity (frame-calibrated offset: -19.8s, -145.7l)]"
@@ -839,7 +839,7 @@
     "latitude": -10.6825,
     "longitude": 194.8612,
     "product_id": "M176359843LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_81_Crookes_5b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_81_Crookes_5b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1855, grad=0.0988, coherence=21.89) [auto-centered cavity (discovery offset: +5.4s, +33.8l)]"
@@ -852,7 +852,7 @@
     "latitude": -10.6824,
     "longitude": 194.8646,
     "product_id": "M176359843LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_82_Crookes_5c.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_82_Crookes_5c.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1766, grad=0.1166, coherence=17.58) [auto-centered cavity (frame-calibrated offset: -0.0s, +21.2l)]"
@@ -865,7 +865,7 @@
     "latitude": -10.6824,
     "longitude": 194.8626,
     "product_id": "M110316458LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_83_Crookes_5d.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_83_Crookes_5d.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2965, grad=0.0620, coherence=18.28) [auto-centered cavity (frame-calibrated offset: -4.5s, -147.3l)]"
@@ -878,7 +878,7 @@
     "latitude": -10.0854,
     "longitude": 194.8702,
     "product_id": "M110316458LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_84_Crookes_6.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_84_Crookes_6.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3056, grad=0.0779, coherence=18.00) [auto-centered cavity (frame-calibrated offset: -17.2s, -168.9l)]"
@@ -891,7 +891,7 @@
     "latitude": -10.5592,
     "longitude": 194.823,
     "product_id": "M1097573241RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_85_Crookes_7.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_85_Crookes_7.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1884, grad=0.0999, coherence=19.56) [auto-centered cavity (discovery offset: +9.4s, -31.3l)]"
@@ -904,7 +904,7 @@
     "latitude": -10.1715,
     "longitude": 194.8375,
     "product_id": "M176353098LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_86_Crookes_9.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_86_Crookes_9.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1872, grad=0.0803, coherence=22.51) [auto-centered cavity (discovery offset: -27.4s, +13.2l)]"
@@ -917,7 +917,7 @@
     "latitude": -26.3088,
     "longitude": 223.2603,
     "product_id": "M112489524LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_90_Das_1a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_90_Das_1a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1794, grad=0.0954, coherence=23.59) [auto-centered cavity (discovery offset: +29.6s, -194.5l)]"
@@ -930,7 +930,7 @@
     "latitude": -26.3098,
     "longitude": 223.2599,
     "product_id": "M112489524LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_91_Das_1b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_91_Das_1b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1857, grad=0.0874, coherence=24.34) [auto-centered cavity (frame-calibrated offset: +24.4s, -184.3l)]"
@@ -943,7 +943,7 @@
     "latitude": -26.2518,
     "longitude": 223.0906,
     "product_id": "M173817722LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_92_Das_2.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_92_Das_2.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2212, grad=0.0602, coherence=22.39) [auto-centered cavity (discovery offset: -64.7s, -39.1l)]"
@@ -956,7 +956,7 @@
     "latitude": -26.2963,
     "longitude": 223.0729,
     "product_id": "M173817722LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_93_Das_3.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_93_Das_3.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2356, grad=0.0614, coherence=22.84) [auto-centered cavity (frame-calibrated offset: -70.7s, -47.7l)]"
@@ -969,7 +969,7 @@
     "latitude": -26.4088,
     "longitude": 222.788,
     "product_id": "M136085100RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_94_Das_4a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_94_Das_4a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1497, grad=0.0896, coherence=21.35) [auto-centered cavity (discovery offset: +65.5s, +10.7l)]"
@@ -982,7 +982,7 @@
     "latitude": -26.4148,
     "longitude": 222.7873,
     "product_id": "M136085100RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_95_Das_4b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_95_Das_4b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1510, grad=0.1097, coherence=22.34) [auto-centered cavity (frame-calibrated offset: +69.3s, +9.7l)]"
@@ -995,7 +995,7 @@
     "latitude": -26.4151,
     "longitude": 222.7864,
     "product_id": "M136085100RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_96_Das_4c.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_96_Das_4c.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1499, grad=0.1136, coherence=21.24) [auto-centered cavity (frame-calibrated offset: +73.3s, +10.5l)]"
@@ -1008,7 +1008,7 @@
     "latitude": -26.4189,
     "longitude": 222.7907,
     "product_id": "M136085100RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_97_Das_4d.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_97_Das_4d.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1557, grad=0.1045, coherence=22.31) [auto-centered cavity (frame-calibrated offset: +69.2s, +7.3l)]"
@@ -1021,7 +1021,7 @@
     "latitude": -26.4126,
     "longitude": 222.7987,
     "product_id": "M136085100RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_98_Das_4e.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_98_Das_4e.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1522, grad=0.0915, coherence=21.91) [auto-centered cavity (frame-calibrated offset: +65.0s, +9.8l)]"
@@ -1034,7 +1034,7 @@
     "latitude": -10.2737,
     "longitude": 15.7013,
     "product_id": "M188135350RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_99_Dollond_E_1a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_99_Dollond_E_1a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.5016, grad=0.1180, coherence=21.33) [auto-centered cavity (discovery offset: +52.3s, -40.3l)]"
@@ -1047,7 +1047,7 @@
     "latitude": -10.275,
     "longitude": 15.7004,
     "product_id": "M188135350RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_100_Dollond_E_1b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_100_Dollond_E_1b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.4991, grad=0.1194, coherence=21.21) [auto-centered cavity (frame-calibrated offset: +67.1s, -14.7l)]"
@@ -1060,7 +1060,7 @@
     "latitude": -10.275,
     "longitude": 15.6998,
     "product_id": "M188135350RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_101_Dollond_E_1c.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_101_Dollond_E_1c.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.4977, grad=0.1171, coherence=21.41) [auto-centered cavity (frame-calibrated offset: +65.0s, -16.4l)]"
@@ -1073,7 +1073,7 @@
     "latitude": -10.2738,
     "longitude": 15.7035,
     "product_id": "M188135350RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_102_Dollond_E_1d.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_102_Dollond_E_1d.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.5122, grad=0.1198, coherence=21.28) [auto-centered cavity (frame-calibrated offset: +67.9s, -18.0l)]"
@@ -1086,7 +1086,7 @@
     "latitude": -38.5001,
     "longitude": 58.3638,
     "product_id": "M185489982RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_103_Fraunhofer_G_1.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_103_Fraunhofer_G_1.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2256, grad=0.0740, coherence=17.49) [auto-centered cavity (discovery offset: -47.3s, -40.1l)]"
@@ -1099,7 +1099,7 @@
     "latitude": 33.2933,
     "longitude": 114.2911,
     "product_id": "M106123760RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_104_Harriot_1.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_104_Harriot_1.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2664, grad=0.1178, coherence=21.51) [auto-centered cavity (discovery offset: +2.5s, -1.9l)]"
@@ -1125,7 +1125,7 @@
     "latitude": 43.9662,
     "longitude": 23.0836,
     "product_id": "M1506454252LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_19_Highland_1.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_19_Highland_1.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2021, grad=0.0482, coherence=29.81) [auto-centered cavity (discovery offset: +30.9s, +32.7l)]"
@@ -1138,7 +1138,7 @@
     "latitude": 41.1563,
     "longitude": 18.8206,
     "product_id": "M1373958006RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_20_Highland_2.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_20_Highland_2.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2207, grad=0.0505, coherence=26.37) [auto-centered cavity (discovery offset: -2.7s, -12.2l)]"
@@ -1151,7 +1151,7 @@
     "latitude": 42.3941,
     "longitude": 320.3076,
     "product_id": "M1374337053RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_21_Highland_3.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_21_Highland_3.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2283, grad=0.0826, coherence=25.71) [auto-centered cavity (discovery offset: +44.7s, +53.8l)]"
@@ -1164,7 +1164,7 @@
     "latitude": 22.4208,
     "longitude": 196.2868,
     "product_id": "M125645661LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_106_Jackson_1a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_106_Jackson_1a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2447, grad=0.0491, coherence=21.86) [auto-centered cavity (discovery offset: +135.1s, +74.6l)]"
@@ -1177,7 +1177,7 @@
     "latitude": 22.4191,
     "longitude": 196.2828,
     "product_id": "M125645661LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_107_Jackson_1b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_107_Jackson_1b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2601, grad=0.1099, coherence=19.36) [auto-centered cavity (frame-calibrated offset: +104.9s, +74.9l)]"
@@ -1190,7 +1190,7 @@
     "latitude": 22.4214,
     "longitude": 196.2907,
     "product_id": "M125645661LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_108_Jackson_1c.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_108_Jackson_1c.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2541, grad=0.0808, coherence=19.81) [auto-centered cavity (frame-calibrated offset: +142.5s, +78.1l)]"
@@ -1203,7 +1203,7 @@
     "latitude": 22.4967,
     "longitude": 196.2814,
     "product_id": "M125645661LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_109_Jackson_2a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_109_Jackson_2a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2441, grad=0.0659, coherence=22.90) [auto-centered cavity (frame-calibrated offset: +148.9s, +55.9l)]"
@@ -1216,7 +1216,7 @@
     "latitude": 22.4967,
     "longitude": 196.2814,
     "product_id": "M125645661LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_110_Jackson_2b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_110_Jackson_2b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2441, grad=0.0659, coherence=22.90) [auto-centered cavity (frame-calibrated offset: +148.9s, +55.9l)]"
@@ -1229,7 +1229,7 @@
     "latitude": 22.1992,
     "longitude": 197.1493,
     "product_id": "M110302263LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_111_Jackson_3.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_111_Jackson_3.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2835, grad=0.0693, coherence=20.05) [auto-centered cavity (discovery offset: +47.9s, -138.0l)]"
@@ -1242,7 +1242,7 @@
     "latitude": 21.7636,
     "longitude": 197.1197,
     "product_id": "M110302263LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_112_Jackson_4.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_112_Jackson_4.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2706, grad=0.1004, coherence=19.85) [auto-centered cavity (frame-calibrated offset: +52.3s, -156.2l)]"
@@ -1255,7 +1255,7 @@
     "latitude": 22.3063,
     "longitude": 197.0853,
     "product_id": "M110302263LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_113_Jackson_5.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_113_Jackson_5.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3162, grad=0.0702, coherence=22.76) [auto-centered cavity (frame-calibrated offset: +46.3s, -139.4l)]"
@@ -1268,7 +1268,7 @@
     "latitude": 22.4434,
     "longitude": 197.2553,
     "product_id": "M171624375RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_114_Jackson_6.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_114_Jackson_6.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2538, grad=0.0667, coherence=21.86) [auto-centered cavity (discovery offset: -68.1s, -12.3l)]"
@@ -1281,7 +1281,7 @@
     "latitude": 8.2745,
     "longitude": 322.0501,
     "product_id": "M111843702RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_115_Kepler_1.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_115_Kepler_1.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3023, grad=0.0897, coherence=22.34) [auto-centered cavity (discovery offset: +85.8s, -241.3l)]"
@@ -1294,7 +1294,7 @@
     "latitude": 8.2724,
     "longitude": 322.0248,
     "product_id": "M111843702RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_116_Kepler_2.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_116_Kepler_2.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2768, grad=0.0688, coherence=21.19) [auto-centered cavity (frame-calibrated offset: +99.9s, -237.9l)]"
@@ -1307,7 +1307,7 @@
     "latitude": 8.1636,
     "longitude": 322.0449,
     "product_id": "M111843702RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_117_Kepler_3.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_117_Kepler_3.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3542, grad=0.0725, coherence=23.42) [auto-centered cavity (frame-calibrated offset: +98.5s, -238.7l)]"
@@ -1320,7 +1320,7 @@
     "latitude": 7.946,
     "longitude": 322.1363,
     "product_id": "M111843702LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_118_Kepler_4a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_118_Kepler_4a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2767, grad=0.0711, coherence=21.16) [auto-centered cavity (discovery offset: -64.1s, +10.0l)]"
@@ -1333,7 +1333,7 @@
     "latitude": 6.2504,
     "longitude": 119.5464,
     "product_id": "M121430378LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_135_King_10.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_135_King_10.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2556, grad=0.1133, coherence=22.11) [auto-centered cavity (discovery offset: +95.9s, -274.7l)]"
@@ -1346,7 +1346,7 @@
     "latitude": 6.4593,
     "longitude": 120.0017,
     "product_id": "M1120456952RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_136_King_11a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_136_King_11a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2388, grad=0.0539, coherence=20.76) [auto-centered cavity (discovery offset: -67.7s, -94.8l)]"
@@ -1359,7 +1359,7 @@
     "latitude": 6.4604,
     "longitude": 120.0023,
     "product_id": "M1120456952RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_137_King_11b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_137_King_11b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2388, grad=0.0539, coherence=20.76) [auto-centered cavity (frame-calibrated offset: -53.2s, -138.7l)]"
@@ -1372,7 +1372,7 @@
     "latitude": 6.2487,
     "longitude": 119.7506,
     "product_id": "M136762839LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_138_King_12.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_138_King_12.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2550, grad=0.1123, coherence=20.62) [auto-centered cavity (discovery offset: -28.4s, +242.9l)]"
@@ -1385,7 +1385,7 @@
     "latitude": 6.2538,
     "longitude": 119.7626,
     "product_id": "M143839277LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_139_King_13a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_139_King_13a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2528, grad=0.1168, coherence=20.90) [auto-centered cavity (discovery offset: +105.1s, +24.4l)]"
@@ -1398,7 +1398,7 @@
     "latitude": 6.2551,
     "longitude": 119.7615,
     "product_id": "M143839277LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_140_King_13b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_140_King_13b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2529, grad=0.1063, coherence=21.30) [auto-centered cavity (frame-calibrated offset: +81.5s, -11.8l)]"
@@ -1411,7 +1411,7 @@
     "latitude": 6.2784,
     "longitude": 119.7635,
     "product_id": "M136762839LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_141_King_14.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_141_King_14.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2656, grad=0.1273, coherence=22.36) [auto-centered cavity (frame-calibrated offset: -36.4s, +223.9l)]"
@@ -1424,7 +1424,7 @@
     "latitude": 6.4782,
     "longitude": 119.7847,
     "product_id": "M136762839LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_142_King_15a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_142_King_15a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2475, grad=0.1058, coherence=19.15) [auto-centered cavity (frame-calibrated offset: +0.8s, +227.6l)]"
@@ -1437,7 +1437,7 @@
     "latitude": 6.4781,
     "longitude": 119.7853,
     "product_id": "M136762839LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_143_King_15b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_143_King_15b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2475, grad=0.1058, coherence=19.15) [auto-centered cavity (frame-calibrated offset: -28.2s, +222.6l)]"
@@ -1450,7 +1450,7 @@
     "latitude": 6.3643,
     "longitude": 119.9304,
     "product_id": "M128509025RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_144_King_16.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_144_King_16.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2459, grad=0.1172, coherence=22.73) [auto-centered cavity (discovery offset: +4.9s, -14.9l)]"
@@ -1463,7 +1463,7 @@
     "latitude": 6.6252,
     "longitude": 119.9847,
     "product_id": "M128509025RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_145_King_17.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_145_King_17.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2294, grad=0.1230, coherence=18.93) [auto-centered cavity (frame-calibrated offset: +5.4s, -13.0l)]"
@@ -1476,7 +1476,7 @@
     "latitude": 6.6235,
     "longitude": 119.9894,
     "product_id": "M128509025RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_146_King_18.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_146_King_18.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2338, grad=0.1033, coherence=18.26) [auto-centered cavity (frame-calibrated offset: +4.7s, -9.3l)]"
@@ -1489,7 +1489,7 @@
     "latitude": 6.5931,
     "longitude": 119.9861,
     "product_id": "M128509025RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_147_King_19.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_147_King_19.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2370, grad=0.1043, coherence=17.65) [auto-centered cavity (frame-calibrated offset: +1.9s, -12.2l)]"
@@ -1502,7 +1502,7 @@
     "latitude": 6.2408,
     "longitude": 119.7341,
     "product_id": "M136762839LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_119_King_1a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_119_King_1a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2539, grad=0.1057, coherence=23.44) [auto-centered cavity (frame-calibrated offset: -22.5s, +234.2l)]"
@@ -1515,7 +1515,7 @@
     "latitude": 6.2402,
     "longitude": 119.7351,
     "product_id": "M143839277LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_120_King_1b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_120_King_1b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2564, grad=0.0995, coherence=21.93) [auto-centered cavity (frame-calibrated offset: +100.7s, +55.9l)]"
@@ -1528,7 +1528,7 @@
     "latitude": 6.5098,
     "longitude": 119.9269,
     "product_id": "M136756054RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_148_King_20a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_148_King_20a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2299, grad=0.1582, coherence=21.65) [auto-centered cavity (discovery offset: -21.8s, +37.2l)]"
@@ -1541,7 +1541,7 @@
     "latitude": 6.5108,
     "longitude": 119.9289,
     "product_id": "M136756054RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_149_King_20b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_149_King_20b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2277, grad=0.1755, coherence=21.39) [auto-centered cavity (frame-calibrated offset: -22.2s, +50.8l)]"
@@ -1554,7 +1554,7 @@
     "latitude": 6.513,
     "longitude": 119.9269,
     "product_id": "M128509025RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_150_King_20c.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_150_King_20c.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2407, grad=0.1386, coherence=20.87) [auto-centered cavity (frame-calibrated offset: +10.0s, -41.6l)]"
@@ -1567,7 +1567,7 @@
     "latitude": 6.5142,
     "longitude": 119.9266,
     "product_id": "M128509025RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_151_King_20d.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_151_King_20d.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2409, grad=0.1368, coherence=21.04) [auto-centered cavity (frame-calibrated offset: +0.8s, -38.8l)]"
@@ -1580,7 +1580,7 @@
     "latitude": 6.5149,
     "longitude": 119.9298,
     "product_id": "M128509025RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_152_King_20e.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_152_King_20e.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2449, grad=0.1549, coherence=20.17) [auto-centered cavity (frame-calibrated offset: +51.3s, -29.7l)]"
@@ -1593,7 +1593,7 @@
     "latitude": 6.5153,
     "longitude": 119.9282,
     "product_id": "M128509025RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_153_King_20f.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_153_King_20f.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2448, grad=0.1559, coherence=20.28) [auto-centered cavity (frame-calibrated offset: -26.6s, -48.6l)]"
@@ -1606,7 +1606,7 @@
     "latitude": 6.5165,
     "longitude": 119.9304,
     "product_id": "M136756054RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_154_King_20g.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_154_King_20g.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2306, grad=0.1541, coherence=22.09) [auto-centered cavity (frame-calibrated offset: -17.5s, +44.6l)]"
@@ -1619,7 +1619,7 @@
     "latitude": 6.5183,
     "longitude": 119.9299,
     "product_id": "M128509025RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_155_King_20h.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_155_King_20h.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2436, grad=0.1409, coherence=20.78) [auto-centered cavity (frame-calibrated offset: +26.5s, +3.7l)]"
@@ -1632,7 +1632,7 @@
     "latitude": 6.517,
     "longitude": 119.9875,
     "product_id": "M128509025RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_156_King_21.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_156_King_21.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2312, grad=0.0992, coherence=19.90) [auto-centered cavity (frame-calibrated offset: +6.3s, -8.8l)]"
@@ -1645,7 +1645,7 @@
     "latitude": 6.4835,
     "longitude": 119.9941,
     "product_id": "M128509025RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_157_King_22.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_157_King_22.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2298, grad=0.1386, coherence=19.32) [auto-centered cavity (frame-calibrated offset: -4.4s, -17.1l)]"
@@ -1658,7 +1658,7 @@
     "latitude": 6.3794,
     "longitude": 119.9019,
     "product_id": "M136762839RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_158_King_23.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_158_King_23.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2242, grad=0.1443, coherence=17.84) [auto-centered cavity (discovery offset: +5.3s, -30.7l)]"
@@ -1671,7 +1671,7 @@
     "latitude": 6.3416,
     "longitude": 119.9914,
     "product_id": "M1120456952RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_159_King_24a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_159_King_24a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2457, grad=0.0677, coherence=21.37) [auto-centered cavity (frame-calibrated offset: -36.6s, -101.9l)]"
@@ -1684,7 +1684,7 @@
     "latitude": 6.34,
     "longitude": 119.9907,
     "product_id": "M128509025RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_160_King_24b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_160_King_24b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2383, grad=0.0898, coherence=22.29) [auto-centered cavity (frame-calibrated offset: -1.8s, -12.1l)]"
@@ -1697,7 +1697,7 @@
     "latitude": 6.3389,
     "longitude": 119.9913,
     "product_id": "M128509025RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_161_King_24c.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_161_King_24c.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2341, grad=0.0998, coherence=21.79) [auto-centered cavity (frame-calibrated offset: +9.0s, -10.7l)]"
@@ -1710,7 +1710,7 @@
     "latitude": 6.2691,
     "longitude": 119.9429,
     "product_id": "M128509025RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_162_King_25.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_162_King_25.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2389, grad=0.1338, coherence=20.12) [auto-centered cavity (frame-calibrated offset: +46.5s, -8.7l)]"
@@ -1723,7 +1723,7 @@
     "latitude": 6.6385,
     "longitude": 119.82,
     "product_id": "M113168034LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_163_King_26.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_163_King_26.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2142, grad=0.1131, coherence=20.76) [auto-centered cavity (discovery offset: +29.0s, +27.5l)]"
@@ -1736,7 +1736,7 @@
     "latitude": 6.5044,
     "longitude": 119.8719,
     "product_id": "M113168034LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_164_King_27.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_164_King_27.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2212, grad=0.1254, coherence=19.59) [auto-centered cavity (frame-calibrated offset: +21.3s, +28.4l)]"
@@ -1749,7 +1749,7 @@
     "latitude": 6.3016,
     "longitude": 119.8593,
     "product_id": "M113168034LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_165_King_28.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_165_King_28.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2194, grad=0.1543, coherence=20.09) [auto-centered cavity (frame-calibrated offset: +21.5s, +57.5l)]"
@@ -1762,7 +1762,7 @@
     "latitude": 6.4827,
     "longitude": 119.8145,
     "product_id": "M136762839LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_166_King_29.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_166_King_29.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2410, grad=0.0997, coherence=19.17) [auto-centered cavity (frame-calibrated offset: -23.2s, +219.8l)]"
@@ -1775,7 +1775,7 @@
     "latitude": 6.3808,
     "longitude": 119.9992,
     "product_id": "M1181692437LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_121_King_2a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_121_King_2a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2481, grad=0.0583, coherence=23.62) [auto-centered cavity (discovery offset: -142.1s, +41.0l)]"
@@ -1788,7 +1788,7 @@
     "latitude": 6.3802,
     "longitude": 119.9972,
     "product_id": "M1316938707LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_122_King_2b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_122_King_2b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2641, grad=0.0541, coherence=23.34) [auto-centered cavity (discovery offset: -275.1s, +76.7l)]"
@@ -1801,7 +1801,7 @@
     "latitude": 6.3339,
     "longitude": 119.9937,
     "product_id": "M128509025RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_167_King_30.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_167_King_30.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2299, grad=0.0999, coherence=20.59) [auto-centered cavity (frame-calibrated offset: +1.1s, -14.0l)]"
@@ -1814,7 +1814,7 @@
     "latitude": 6.5229,
     "longitude": 119.9879,
     "product_id": "M128509025RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_168_King_31.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_168_King_31.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2300, grad=0.0594, coherence=20.47) [auto-centered cavity (frame-calibrated offset: +8.1s, -15.5l)]"
@@ -1827,7 +1827,7 @@
     "latitude": 6.3231,
     "longitude": 119.8067,
     "product_id": "M136762839LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_169_King_32.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_169_King_32.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2667, grad=0.1227, coherence=21.37) [auto-centered cavity (frame-calibrated offset: -25.2s, +214.5l)]"
@@ -1840,7 +1840,7 @@
     "latitude": 6.4873,
     "longitude": 119.6998,
     "product_id": "M121430378RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_170_King_33.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_170_King_33.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3241, grad=0.0965, coherence=21.43) [auto-centered cavity (discovery offset: +104.8s, -273.2l)]"
@@ -1853,7 +1853,7 @@
     "latitude": 6.3372,
     "longitude": 119.9975,
     "product_id": "M1135766659LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_171_King_34a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_171_King_34a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2488, grad=0.0644, coherence=21.14) [auto-centered cavity (discovery offset: +147.4s, -4.5l)]"
@@ -1866,7 +1866,7 @@
     "latitude": 6.3361,
     "longitude": 119.9972,
     "product_id": "M1135766659LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_172_King_34b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_172_King_34b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2488, grad=0.0644, coherence=21.14) [auto-centered cavity (frame-calibrated offset: +138.8s, -47.0l)]"
@@ -1879,7 +1879,7 @@
     "latitude": 6.4417,
     "longitude": 119.7252,
     "product_id": "M136762839LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_173_King_35.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_173_King_35.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2479, grad=0.1256, coherence=19.49) [auto-centered cavity (frame-calibrated offset: -38.4s, +252.5l)]"
@@ -1892,7 +1892,7 @@
     "latitude": 6.214,
     "longitude": 119.7664,
     "product_id": "M136762839LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_174_King_36.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_174_King_36.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2441, grad=0.1215, coherence=19.14) [auto-centered cavity (frame-calibrated offset: -33.6s, +236.3l)]"
@@ -1905,7 +1905,7 @@
     "latitude": 6.3814,
     "longitude": 120.0056,
     "product_id": "M128509025LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_175_King_37.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_175_King_37.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2058, grad=0.0817, coherence=22.37) [auto-centered cavity (discovery offset: +25.3s, -5.6l)]"
@@ -1918,7 +1918,7 @@
     "latitude": 6.37,
     "longitude": 119.9252,
     "product_id": "M128509025RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_176_King_38.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_176_King_38.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2503, grad=0.1137, coherence=21.20) [auto-centered cavity (frame-calibrated offset: +21.2s, -2.0l)]"
@@ -1931,7 +1931,7 @@
     "latitude": 6.6308,
     "longitude": 119.9842,
     "product_id": "M128509025RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_177_King_39.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_177_King_39.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2270, grad=0.1192, coherence=18.18) [auto-centered cavity (frame-calibrated offset: +10.4s, -13.8l)]"
@@ -1944,7 +1944,7 @@
     "latitude": 6.4082,
     "longitude": 119.8108,
     "product_id": "M136762839LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_123_King_3a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_123_King_3a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2475, grad=0.1027, coherence=20.64) [auto-centered cavity (frame-calibrated offset: -32.1s, +221.8l)]"
@@ -1957,7 +1957,7 @@
     "latitude": 6.4081,
     "longitude": 119.8105,
     "product_id": "M136762839LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_124_King_3b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_124_King_3b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2475, grad=0.1027, coherence=20.64) [auto-centered cavity (frame-calibrated offset: -17.5s, +217.2l)]"
@@ -1970,7 +1970,7 @@
     "latitude": 6.4779,
     "longitude": 119.9976,
     "product_id": "M110804868LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_178_King_40.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_178_King_40.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2642, grad=0.0622, coherence=19.28) [auto-centered cavity (discovery offset: -12.8s, -80.1l)]"
@@ -1983,7 +1983,7 @@
     "latitude": 6.6376,
     "longitude": 119.8299,
     "product_id": "M136756054LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_179_King_41.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_179_King_41.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1906, grad=0.1660, coherence=18.11) [auto-centered cavity (discovery offset: -168.5s, -26.9l)]"
@@ -1996,7 +1996,7 @@
     "latitude": 6.3321,
     "longitude": 120.0066,
     "product_id": "M128509025LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_180_King_42.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_180_King_42.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2090, grad=0.0915, coherence=23.33) [auto-centered cavity (frame-calibrated offset: +43.8s, +0.9l)]"
@@ -2009,7 +2009,7 @@
     "latitude": 6.2066,
     "longitude": 119.7815,
     "product_id": "M136762839LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_125_King_4a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_125_King_4a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2420, grad=0.1240, coherence=20.11) [auto-centered cavity (frame-calibrated offset: -39.4s, +220.8l)]"
@@ -2022,7 +2022,7 @@
     "latitude": 6.2061,
     "longitude": 119.7804,
     "product_id": "M136762839LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_126_King_4b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_126_King_4b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2445, grad=0.1201, coherence=20.45) [auto-centered cavity (frame-calibrated offset: -28.3s, +228.5l)]"
@@ -2035,7 +2035,7 @@
     "latitude": 6.3371,
     "longitude": 119.8005,
     "product_id": "M136762839LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_127_King_5.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_127_King_5.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2530, grad=0.1186, coherence=21.65) [auto-centered cavity (frame-calibrated offset: -26.6s, +222.4l)]"
@@ -2048,7 +2048,7 @@
     "latitude": 6.2776,
     "longitude": 119.7247,
     "product_id": "M136762839LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_128_King_6.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_128_King_6.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2579, grad=0.1357, coherence=20.20) [auto-centered cavity (frame-calibrated offset: -29.6s, +232.8l)]"
@@ -2061,7 +2061,7 @@
     "latitude": 6.467,
     "longitude": 119.7378,
     "product_id": "M136762839LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_129_King_7.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_129_King_7.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2515, grad=0.1170, coherence=20.37) [auto-centered cavity (frame-calibrated offset: -20.8s, +231.3l)]"
@@ -2074,7 +2074,7 @@
     "latitude": 6.4369,
     "longitude": 119.8329,
     "product_id": "M113168034LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_130_King_8a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_130_King_8a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2124, grad=0.1232, coherence=20.26) [auto-centered cavity (frame-calibrated offset: +25.6s, +30.9l)]"
@@ -2087,7 +2087,7 @@
     "latitude": 6.4365,
     "longitude": 119.8335,
     "product_id": "M113168034LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_131_King_8b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_131_King_8b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2206, grad=0.1178, coherence=20.13) [auto-centered cavity (frame-calibrated offset: +26.2s, +29.5l)]"
@@ -2100,7 +2100,7 @@
     "latitude": 6.4412,
     "longitude": 119.8331,
     "product_id": "M113168034LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_132_King_8c.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_132_King_8c.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2182, grad=0.1461, coherence=20.09) [auto-centered cavity (frame-calibrated offset: +27.3s, +27.1l)]"
@@ -2113,7 +2113,7 @@
     "latitude": 6.2281,
     "longitude": 119.5237,
     "product_id": "M121430378LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_133_King_9a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_133_King_9a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2603, grad=0.0972, coherence=21.80) [auto-centered cavity (frame-calibrated offset: +103.6s, -274.8l)]"
@@ -2126,7 +2126,7 @@
     "latitude": 6.2281,
     "longitude": 119.5214,
     "product_id": "M1457770874LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_134_King_9b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_134_King_9b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2760, grad=0.1404, coherence=19.83) [auto-centered cavity (discovery offset: -1.9s, +24.7l)]"
@@ -2139,7 +2139,7 @@
     "latitude": 38.086,
     "longitude": 216.885,
     "product_id": "M140840176RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_181_Klute_W_1.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_181_Klute_W_1.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2342, grad=0.0916, coherence=21.11) [auto-centered cavity (discovery offset: +46.3s, -69.6l)]"
@@ -2152,7 +2152,7 @@
     "latitude": 38.1157,
     "longitude": 216.8965,
     "product_id": "M140840176RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_182_Klute_W_2.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_182_Klute_W_2.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2368, grad=0.1027, coherence=20.10) [auto-centered cavity (frame-calibrated offset: +47.8s, -75.0l)]"
@@ -2165,7 +2165,7 @@
     "latitude": 38.098,
     "longitude": 216.9385,
     "product_id": "M140840176RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_183_Klute_W_3.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_183_Klute_W_3.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2324, grad=0.0870, coherence=21.03) [auto-centered cavity (frame-calibrated offset: +43.7s, -72.0l)]"
@@ -2178,7 +2178,7 @@
     "latitude": 37.8581,
     "longitude": 216.8911,
     "product_id": "M140840176RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_184_Klute_W_4.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_184_Klute_W_4.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2343, grad=0.0829, coherence=20.26) [auto-centered cavity (frame-calibrated offset: +45.3s, -78.2l)]"
@@ -2191,7 +2191,7 @@
     "latitude": 38.1018,
     "longitude": 216.9323,
     "product_id": "M171488353LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_185_Klute_W_5.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_185_Klute_W_5.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2234, grad=0.0828, coherence=21.18) [auto-centered cavity (discovery offset: +145.2s, +115.6l)]"
@@ -2204,7 +2204,7 @@
     "latitude": 38.1256,
     "longitude": 216.901,
     "product_id": "M140840176RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_186_Klute_W_6.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_186_Klute_W_6.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2379, grad=0.0866, coherence=20.60) [auto-centered cavity (frame-calibrated offset: +41.2s, -66.8l)]"
@@ -2217,7 +2217,7 @@
     "latitude": 44.9608,
     "longitude": 25.6119,
     "product_id": "M109072682RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_8_Lacus_Mortis_Pit.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_8_Lacus_Mortis_Pit.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1156, grad=0.1231, coherence=18.87) [auto-centered cavity (discovery offset: +10.3s, +112.4l)]"
@@ -2230,7 +2230,7 @@
     "latitude": -4.4579,
     "longitude": 351.4667,
     "product_id": "M1493754892RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_187_Lalande_1.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_187_Lalande_1.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1806, grad=0.1056, coherence=18.92) [auto-centered cavity (discovery offset: -137.5s, +3.6l)]"
@@ -2243,7 +2243,7 @@
     "latitude": -4.4275,
     "longitude": 351.4436,
     "product_id": "M172975608LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_193_Lalande_12.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_193_Lalande_12.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2586, grad=0.0767, coherence=16.08) [auto-centered cavity (discovery offset: +44.1s, -106.9l)]"
@@ -2256,7 +2256,7 @@
     "latitude": -4.3571,
     "longitude": 351.3054,
     "product_id": "M144680975LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_194_Lalande_13.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_194_Lalande_13.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1831, grad=0.1010, coherence=21.68) [auto-centered cavity (discovery offset: +154.3s, -44.4l)]"
@@ -2269,7 +2269,7 @@
     "latitude": -4.4949,
     "longitude": 351.4992,
     "product_id": "M1493754892LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_188_Lalande_2.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_188_Lalande_2.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2060, grad=0.1975, coherence=15.38) [auto-centered cavity (discovery offset: +258.5s, +44.3l)]"
@@ -2282,7 +2282,7 @@
     "latitude": -4.5322,
     "longitude": 351.4893,
     "product_id": "M1493754892RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_189_Lalande_3a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_189_Lalande_3a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1596, grad=0.1427, coherence=17.70) [auto-centered cavity (frame-calibrated offset: -132.9s, +11.7l)]"
@@ -2295,7 +2295,7 @@
     "latitude": -4.5328,
     "longitude": 351.4895,
     "product_id": "M1493754892RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_190_Lalande_3b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_190_Lalande_3b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1598, grad=0.1448, coherence=17.67) [auto-centered cavity (frame-calibrated offset: -145.1s, +4.4l)]"
@@ -2308,7 +2308,7 @@
     "latitude": -4.5312,
     "longitude": 351.49,
     "product_id": "M1493747880LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_191_Lalande_3c.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_191_Lalande_3c.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2336, grad=0.1484, coherence=15.76) [auto-centered cavity (discovery offset: +38.5s, -76.0l)]"
@@ -2321,7 +2321,7 @@
     "latitude": -4.3408,
     "longitude": 351.4229,
     "product_id": "M1471492731RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_192_Lalande_5a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_192_Lalande_5a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1715, grad=0.0928, coherence=18.78) [auto-centered cavity (discovery offset: -47.1s, +29.3l)]"
@@ -2334,7 +2334,7 @@
     "latitude": -35.9494,
     "longitude": 166.0559,
     "product_id": "M171835900LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_6_Mare_Ingenii_Pit.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_6_Mare_Ingenii_Pit.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2830, grad=0.1350, coherence=19.81) [auto-centered cavity (discovery offset: -11.9s, -8.6l)]"
@@ -2347,7 +2347,7 @@
     "latitude": 8.6861,
     "longitude": 330.9665,
     "product_id": "M1310860415RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_13_Mare_Insularum_Pit.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_13_Mare_Insularum_Pit.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2616, grad=0.1455, coherence=15.82) [auto-centered cavity (discovery offset: -15.2s, +47.9l)]"
@@ -2360,7 +2360,7 @@
     "latitude": 29.5025,
     "longitude": 150.4647,
     "product_id": "M1342574107RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_14_Mare_Moscoviense_Pit.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_14_Mare_Moscoviense_Pit.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2224, grad=0.1207, coherence=20.41) [auto-centered cavity (discovery offset: -84.1s, +66.3l)]"
@@ -2373,7 +2373,7 @@
     "latitude": 35.1041,
     "longitude": 17.4017,
     "product_id": "M1373972164LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_15_Mare_Serenitatis_Pit.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_15_Mare_Serenitatis_Pit.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2953, grad=0.0804, coherence=27.28) [auto-centered cavity (discovery offset: +25.1s, -50.0l)]"
@@ -2386,7 +2386,7 @@
     "latitude": 8.3355,
     "longitude": 33.222,
     "product_id": "M137332905RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_3_Mare_Tranquillitatis_Pit.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_3_Mare_Tranquillitatis_Pit.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2517, grad=0.1016, coherence=22.76) [auto-centered cavity (discovery offset: +156.7s, +93.0l)]"
@@ -2399,7 +2399,7 @@
     "latitude": 14.0917,
     "longitude": 303.2299,
     "product_id": "M122584310LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_1_Marius_Hills_Pit.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_1_Marius_Hills_Pit.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3303, grad=0.1042, coherence=23.44) [auto-centered cavity (discovery offset: -20.4s, +66.6l)]"
@@ -2412,7 +2412,7 @@
     "latitude": -2.0279,
     "longitude": 46.8995,
     "product_id": "M126622485RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_195_Messier_A_1.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_195_Messier_A_1.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3190, grad=0.0557, coherence=20.20) [auto-centered cavity (discovery offset: -131.3s, -146.7l)]"
@@ -2425,7 +2425,7 @@
     "latitude": -2.014,
     "longitude": 46.9059,
     "product_id": "M126622485RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_197_Messier_A_2a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_197_Messier_A_2a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3228, grad=0.0859, coherence=16.30) [auto-centered cavity (frame-calibrated offset: -149.2s, -154.4l)]"
@@ -2438,7 +2438,7 @@
     "latitude": -2.0166,
     "longitude": 46.9017,
     "product_id": "M126622485RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_196_Messier_A_2b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_196_Messier_A_2b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3243, grad=0.0558, coherence=20.94) [auto-centered cavity (frame-calibrated offset: -134.4s, -156.2l)]"
@@ -2451,7 +2451,7 @@
     "latitude": -2.044,
     "longitude": 46.8825,
     "product_id": "M159643869LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_198_Messier_A_4a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_198_Messier_A_4a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2275, grad=0.0914, coherence=19.59) [auto-centered cavity (discovery offset: +4.2s, -43.1l)]"
@@ -2464,7 +2464,7 @@
     "latitude": -2.0459,
     "longitude": 46.8839,
     "product_id": "M159643869LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_199_Messier_A_4b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_199_Messier_A_4b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2374, grad=0.1375, coherence=19.24) [auto-centered cavity (frame-calibrated offset: -2.7s, -52.5l)]"
@@ -2477,7 +2477,7 @@
     "latitude": 9.2642,
     "longitude": 327.9268,
     "product_id": "M1491553468RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_200_Milichius_A_1.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_200_Milichius_A_1.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3373, grad=0.0680, coherence=17.91) [auto-centered cavity (discovery offset: -190.9s, +30.6l)]"
@@ -2490,7 +2490,7 @@
     "latitude": 35.4097,
     "longitude": 314.3602,
     "product_id": "M1269844469RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_10_North_Procellarum_1_Pit.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_10_North_Procellarum_1_Pit.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2619, grad=0.1071, coherence=19.11) [auto-centered cavity (discovery offset: +17.2s, -33.0l)]"
@@ -2503,7 +2503,7 @@
     "latitude": 35.3433,
     "longitude": 314.3447,
     "product_id": "M1269844469RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_11_North_Procellarum_2_Pit.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_11_North_Procellarum_2_Pit.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2567, grad=0.1094, coherence=13.80) [auto-centered cavity (frame-calibrated offset: +20.9s, -29.5l)]"
@@ -2516,7 +2516,7 @@
     "latitude": -30.9692,
     "longitude": 158.0535,
     "product_id": "M125895771LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_201_Oday_1.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_201_Oday_1.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2121, grad=0.0840, coherence=20.48) [auto-centered cavity (discovery offset: -74.0s, -125.3l)]"
@@ -2529,7 +2529,7 @@
     "latitude": -30.9463,
     "longitude": 158.0644,
     "product_id": "M125895771LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_202_Oday_2.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_202_Oday_2.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2052, grad=0.0696, coherence=19.46) [auto-centered cavity (frame-calibrated offset: -85.1s, -122.9l)]"
@@ -2542,7 +2542,7 @@
     "latitude": 18.0805,
     "longitude": 246.3187,
     "product_id": "M125313001RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_203_Ohm_1.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_203_Ohm_1.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3531, grad=0.0629, coherence=21.94) [auto-centered cavity (discovery offset: -1.5s, +68.9l)]"
@@ -2555,7 +2555,7 @@
     "latitude": 18.6687,
     "longitude": 246.4141,
     "product_id": "M125313001LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_204_Ohm_2.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_204_Ohm_2.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3140, grad=0.0495, coherence=22.04) [auto-centered cavity (discovery offset: -0.4s, +61.7l)]"
@@ -2568,7 +2568,7 @@
     "latitude": -26.3162,
     "longitude": 68.1911,
     "product_id": "M170118311RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_205_Palitzsch_B_1.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_205_Palitzsch_B_1.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2789, grad=0.0704, coherence=24.76) [auto-centered cavity (discovery offset: -74.2s, +81.4l)]"
@@ -2581,7 +2581,7 @@
     "latitude": 72.4657,
     "longitude": 328.5804,
     "product_id": "M109452586RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_207_Philolaus_1.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_207_Philolaus_1.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1082, grad=0.1520, coherence=17.78) [auto-centered cavity (discovery offset: +97.4s, -74.3l)]"
@@ -2594,7 +2594,7 @@
     "latitude": 14.4714,
     "longitude": 54.6591,
     "product_id": "M174915509RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_206_Picard_1.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_206_Picard_1.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1870, grad=0.0423, coherence=20.02) [auto-centered cavity (discovery offset: +208.0s, +115.6l)]"
@@ -2607,7 +2607,7 @@
     "latitude": 16.2972,
     "longitude": 46.8941,
     "product_id": "M1282148421LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_208_Proclus_1a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_208_Proclus_1a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2235, grad=0.0773, coherence=22.98) [auto-centered cavity (discovery offset: +27.3s, -5.2l)]"
@@ -2620,7 +2620,7 @@
     "latitude": 16.2959,
     "longitude": 46.8916,
     "product_id": "M1282148421LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_209_Proclus_1b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_209_Proclus_1b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2180, grad=0.0831, coherence=22.23) [auto-centered cavity (frame-calibrated offset: +26.0s, -2.8l)]"
@@ -2633,7 +2633,7 @@
     "latitude": -2.7024,
     "longitude": 86.78,
     "product_id": "M1281895680RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_7_Runge_Pit.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_7_Runge_Pit.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2387, grad=0.0756, coherence=22.03) [auto-centered cavity (discovery offset: -12.3s, +20.3l)]"
@@ -2646,7 +2646,7 @@
     "latitude": -60.7788,
     "longitude": 348.1876,
     "product_id": "M109305653LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_210_Rutherfurd_1a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_210_Rutherfurd_1a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1497, grad=0.1435, coherence=15.49) [auto-centered cavity (discovery offset: +21.6s, -26.6l)]"
@@ -2659,7 +2659,7 @@
     "latitude": -60.7789,
     "longitude": 348.1862,
     "product_id": "M109305653LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_211_Rutherfurd_1b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_211_Rutherfurd_1b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1497, grad=0.1435, coherence=15.45) [auto-centered cavity (frame-calibrated offset: -18.1s, -33.2l)]"
@@ -2672,7 +2672,7 @@
     "latitude": -60.7757,
     "longitude": 348.253,
     "product_id": "M109305653LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_212_Rutherfurd_2.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_212_Rutherfurd_2.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1479, grad=0.3086, coherence=13.13) [auto-centered cavity (frame-calibrated offset: -13.2s, -48.3l)]"
@@ -2685,7 +2685,7 @@
     "latitude": -60.7751,
     "longitude": 348.2076,
     "product_id": "M168287020RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_213_Rutherfurd_3.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_213_Rutherfurd_3.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1395, grad=0.1527, coherence=17.57) [auto-centered cavity (discovery offset: +71.0s, -31.2l)]"
@@ -2698,7 +2698,7 @@
     "latitude": -5.8395,
     "longitude": 276.95,
     "product_id": "M1114710368LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_18_Schl\u00fcter_Pit.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_18_Schl\u00fcter_Pit.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1928, grad=0.0463, coherence=29.13) [auto-centered cavity (discovery offset: +51.5s, +55.0l)]"
@@ -2711,7 +2711,7 @@
     "latitude": -78.0579,
     "longitude": 25.3441,
     "product_id": "M1432755806LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_214_Schomberger_A_1.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_214_Schomberger_A_1.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.0912, grad=0.1595, coherence=16.36) [auto-centered cavity (discovery offset: -6.9s, +11.7l)]"
@@ -2724,7 +2724,7 @@
     "latitude": 12.5745,
     "longitude": 173.4036,
     "product_id": "M154100698RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_215_Sharonov_1a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_215_Sharonov_1a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3126, grad=0.0633, coherence=22.76) [auto-centered cavity (discovery offset: -27.1s, -82.7l)]"
@@ -2737,7 +2737,7 @@
     "latitude": 12.5762,
     "longitude": 173.4015,
     "product_id": "M154100698RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_216_Sharonov_1b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_216_Sharonov_1b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3126, grad=0.0633, coherence=22.76) [auto-centered cavity (discovery offset: +80.0s, -168.8l)]"
@@ -2750,7 +2750,7 @@
     "latitude": 45.623,
     "longitude": 331.189,
     "product_id": "M1506797745RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_12_Sinus_Iridum_Pit.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_12_Sinus_Iridum_Pit.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3525, grad=0.0907, coherence=22.63) [auto-centered cavity (discovery offset: +0.8s, +108.7l)]"
@@ -2763,7 +2763,7 @@
     "latitude": -6.7521,
     "longitude": 42.7595,
     "product_id": "M1391422640RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_17_Southwest_Mare_Fecunditatis_Pit.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_17_Southwest_Mare_Fecunditatis_Pit.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3750, grad=0.0618, coherence=28.10) [auto-centered cavity (discovery offset: +13.6s, +66.4l)]"
@@ -2776,7 +2776,7 @@
     "latitude": 4.1438,
     "longitude": 24.6867,
     "product_id": "M1317564208LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_5_Southwest_Mare_Tranquillitatis_B_Pit.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_5_Southwest_Mare_Tranquillitatis_B_Pit.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3171, grad=0.0824, coherence=24.19) [auto-centered cavity (discovery offset: -71.1s, +60.4l)]"
@@ -2789,7 +2789,7 @@
     "latitude": 4.1438,
     "longitude": 24.6871,
     "product_id": "M1317564208LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_4_Southwest_Mare_Tranquillitatis_Pit.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_4_Southwest_Mare_Tranquillitatis_Pit.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3171, grad=0.0824, coherence=24.19) [auto-centered cavity (frame-calibrated offset: -55.5s, +59.5l)]"
@@ -2802,7 +2802,7 @@
     "latitude": 44.537,
     "longitude": 252.0302,
     "product_id": "M158307753LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_217_Stefan_L_1.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_217_Stefan_L_1.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1436, grad=0.1191, coherence=17.27) [auto-centered cavity (discovery offset: +41.3s, -195.5l)]"
@@ -2815,7 +2815,7 @@
     "latitude": 44.4982,
     "longitude": 251.8344,
     "product_id": "M158314541RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_218_Stefan_L_2.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_218_Stefan_L_2.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1874, grad=0.0736, coherence=19.56) [auto-centered cavity (discovery offset: +153.6s, +141.1l)]"
@@ -2828,7 +2828,7 @@
     "latitude": -32.4259,
     "longitude": 54.6378,
     "product_id": "M124212055LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_219_Stevinus_1.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_219_Stevinus_1.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3329, grad=0.1189, coherence=20.72) [auto-centered cavity (discovery offset: +123.8s, -117.5l)]"
@@ -2841,7 +2841,7 @@
     "latitude": -32.9383,
     "longitude": 54.7378,
     "product_id": "M154873550RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_229_Stevinus_10.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_229_Stevinus_10.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3086, grad=0.1015, coherence=19.70) [auto-centered cavity (discovery offset: -48.2s, -60.9l)]"
@@ -2854,7 +2854,7 @@
     "latitude": -32.3302,
     "longitude": 54.7743,
     "product_id": "M154873550RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_230_Stevinus_11.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_230_Stevinus_11.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3082, grad=0.0858, coherence=21.89) [auto-centered cavity (frame-calibrated offset: -46.5s, -20.3l)]"
@@ -2867,7 +2867,7 @@
     "latitude": -32.3174,
     "longitude": 54.746,
     "product_id": "M154873550RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_231_Stevinus_12.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_231_Stevinus_12.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2840, grad=0.0925, coherence=21.53) [auto-centered cavity (frame-calibrated offset: -68.3s, -52.3l)]"
@@ -2880,7 +2880,7 @@
     "latitude": -32.449,
     "longitude": 54.6446,
     "product_id": "M154873550LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_232_Stevinus_13.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_232_Stevinus_13.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3632, grad=0.1000, coherence=19.13) [auto-centered cavity (discovery offset: -64.4s, -75.4l)]"
@@ -2893,7 +2893,7 @@
     "latitude": -32.1634,
     "longitude": 54.7124,
     "product_id": "M154873550LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_233_Stevinus_14a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_233_Stevinus_14a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3259, grad=0.1059, coherence=21.82) [auto-centered cavity (frame-calibrated offset: -52.2s, -64.5l)]"
@@ -2906,7 +2906,7 @@
     "latitude": -32.1643,
     "longitude": 54.7118,
     "product_id": "M154873550LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_234_Stevinus_14b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_234_Stevinus_14b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3215, grad=0.1042, coherence=21.86) [auto-centered cavity (frame-calibrated offset: -54.7s, -61.7l)]"
@@ -2919,7 +2919,7 @@
     "latitude": -32.3568,
     "longitude": 54.9433,
     "product_id": "M170206690LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_235_Stevinus_15.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_235_Stevinus_15.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3068, grad=0.0898, coherence=23.62) [auto-centered cavity (discovery offset: -99.1s, +54.4l)]"
@@ -2932,7 +2932,7 @@
     "latitude": -32.1817,
     "longitude": 54.5943,
     "product_id": "M1207994892LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_236_Stevinus_16.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_236_Stevinus_16.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3322, grad=0.0999, coherence=24.08) [auto-centered cavity (discovery offset: +15.9s, -277.6l)]"
@@ -2945,7 +2945,7 @@
     "latitude": -32.3695,
     "longitude": 53.6121,
     "product_id": "M1177399921LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_237_Stevinus_17.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_237_Stevinus_17.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3567, grad=0.1281, coherence=19.38) [auto-centered cavity (discovery offset: -31.2s, -50.3l)]"
@@ -2958,7 +2958,7 @@
     "latitude": -32.1226,
     "longitude": 54.8746,
     "product_id": "M1419484017RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_238_Stevinus_18.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_238_Stevinus_18.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3138, grad=0.1178, coherence=19.71) [auto-centered cavity (discovery offset: -24.1s, -25.8l)]"
@@ -2971,7 +2971,7 @@
     "latitude": -32.9337,
     "longitude": 53.7983,
     "product_id": "M185525835RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_239_Stevinus_19.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_239_Stevinus_19.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2906, grad=0.0916, coherence=23.40) [auto-centered cavity (discovery offset: -154.9s, -66.4l)]"
@@ -2984,7 +2984,7 @@
     "latitude": -32.4828,
     "longitude": 54.5722,
     "product_id": "M1207994892LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_220_Stevinus_2.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_220_Stevinus_2.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3333, grad=0.1090, coherence=21.97) [auto-centered cavity (frame-calibrated offset: +19.3s, -305.6l)]"
@@ -2997,7 +2997,7 @@
     "latitude": -32.9349,
     "longitude": 53.9595,
     "product_id": "M170213482LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_240_Stevinus_22.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_240_Stevinus_22.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2389, grad=0.0786, coherence=22.85) [auto-centered cavity (discovery offset: -182.1s, +226.6l)]"
@@ -3010,7 +3010,7 @@
     "latitude": -32.9642,
     "longitude": 54.0249,
     "product_id": "M170213482RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_241_Stevinus_23.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_241_Stevinus_23.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3070, grad=0.0872, coherence=22.98) [auto-centered cavity (discovery offset: -178.2s, +245.9l)]"
@@ -3023,7 +3023,7 @@
     "latitude": -32.7823,
     "longitude": 54.2992,
     "product_id": "M174929871LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_242_Stevinus_24.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_242_Stevinus_24.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2526, grad=0.1100, coherence=20.23) [auto-centered cavity (discovery offset: +319.0s, +89.8l)]"
@@ -3036,7 +3036,7 @@
     "latitude": -32.7393,
     "longitude": 54.2171,
     "product_id": "M1210350882LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_243_Stevinus_25.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_243_Stevinus_25.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3824, grad=0.2245, coherence=11.36) [auto-centered cavity (discovery offset: +353.1s, +47.3l)]"
@@ -3049,7 +3049,7 @@
     "latitude": -32.1328,
     "longitude": 54.865,
     "product_id": "M185518687LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_244_Stevinus_26.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_244_Stevinus_26.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2637, grad=0.0889, coherence=22.24) [auto-centered cavity (discovery offset: -98.6s, -40.8l)]"
@@ -3062,7 +3062,7 @@
     "latitude": -32.8592,
     "longitude": 54.0796,
     "product_id": "M170213482RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_221_Stevinus_3.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_221_Stevinus_3.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3323, grad=0.0774, coherence=22.89) [auto-centered cavity (frame-calibrated offset: -182.1s, +269.0l)]"
@@ -3075,7 +3075,7 @@
     "latitude": -32.7245,
     "longitude": 54.1735,
     "product_id": "M1210350882RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_222_Stevinus_4.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_222_Stevinus_4.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2926, grad=0.0966, coherence=20.86) [auto-centered cavity (discovery offset: -14.7s, -162.9l)]"
@@ -3088,7 +3088,7 @@
     "latitude": -32.4519,
     "longitude": 54.6746,
     "product_id": "M154873550LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_223_Stevinus_5.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_223_Stevinus_5.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3452, grad=0.1048, coherence=20.56) [auto-centered cavity (frame-calibrated offset: -57.0s, -59.9l)]"
@@ -3101,7 +3101,7 @@
     "latitude": -32.3828,
     "longitude": 54.6579,
     "product_id": "M154873550LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_224_Stevinus_6.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_224_Stevinus_6.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3385, grad=0.0964, coherence=21.00) [auto-centered cavity (frame-calibrated offset: -57.6s, -78.7l)]"
@@ -3114,7 +3114,7 @@
     "latitude": -32.3554,
     "longitude": 54.7126,
     "product_id": "M154873550LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_225_Stevinus_7.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_225_Stevinus_7.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3458, grad=0.0852, coherence=20.15) [auto-centered cavity (frame-calibrated offset: -44.8s, -72.7l)]"
@@ -3127,7 +3127,7 @@
     "latitude": -32.3088,
     "longitude": 54.6614,
     "product_id": "M154873550LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_226_Stevinus_8.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_226_Stevinus_8.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3497, grad=0.1100, coherence=19.52) [auto-centered cavity (frame-calibrated offset: -53.4s, -59.8l)]"
@@ -3140,7 +3140,7 @@
     "latitude": -32.9401,
     "longitude": 54.7446,
     "product_id": "M154873550RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_227_Stevinus_9a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_227_Stevinus_9a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3207, grad=0.0914, coherence=23.39) [auto-centered cavity (frame-calibrated offset: -4.8s, -62.5l)]"
@@ -3153,7 +3153,7 @@
     "latitude": -32.9401,
     "longitude": 54.7446,
     "product_id": "M154873550RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_228_Stevinus_9b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_228_Stevinus_9b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3207, grad=0.0914, coherence=23.39) [auto-centered cavity (frame-calibrated offset: -4.8s, -62.5l)]"
@@ -3166,7 +3166,7 @@
     "latitude": -30.6002,
     "longitude": 145.6809,
     "product_id": "M125977218RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_245_Tharp_1a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_245_Tharp_1a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2938, grad=0.2019, coherence=18.50) [auto-centered cavity (discovery offset: -100.6s, -147.4l)]"
@@ -3179,7 +3179,7 @@
     "latitude": -30.5999,
     "longitude": 145.6841,
     "product_id": "M125977218RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_246_Tharp_1b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_246_Tharp_1b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3009, grad=0.1938, coherence=17.54) [auto-centered cavity (frame-calibrated offset: -69.4s, -172.3l)]"
@@ -3192,7 +3192,7 @@
     "latitude": -30.5395,
     "longitude": 145.5548,
     "product_id": "M108278624LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_247_Tharp_2.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_247_Tharp_2.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3108, grad=0.2476, coherence=15.33) [auto-centered cavity (discovery offset: +34.6s, -12.4l)]"
@@ -3205,7 +3205,7 @@
     "latitude": -30.5713,
     "longitude": 145.6634,
     "product_id": "M125977218RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_248_Tharp_3.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_248_Tharp_3.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3039, grad=0.1984, coherence=15.94) [auto-centered cavity (frame-calibrated offset: -68.9s, -173.8l)]"
@@ -3218,7 +3218,7 @@
     "latitude": -30.6063,
     "longitude": 145.7057,
     "product_id": "M125977218RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_249_Tharp_4.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_249_Tharp_4.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.3095, grad=0.1492, coherence=16.19) [auto-centered cavity (frame-calibrated offset: -90.7s, -188.4l)]"
@@ -3231,7 +3231,7 @@
     "latitude": -30.6106,
     "longitude": 145.7199,
     "product_id": "M125977218LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_250_Tharp_5.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_250_Tharp_5.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2424, grad=0.1427, coherence=16.08) [auto-centered cavity (discovery offset: -62.5s, -175.7l)]"
@@ -3244,7 +3244,7 @@
     "latitude": -43.2169,
     "longitude": 349.5787,
     "product_id": "M139973084LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_262_Tycho_12.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_262_Tycho_12.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2473, grad=0.1134, coherence=19.83) [auto-centered cavity (discovery offset: -145.2s, -122.9l)]"
@@ -3257,7 +3257,7 @@
     "latitude": -43.1399,
     "longitude": 348.2689,
     "product_id": "M170641394RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_263_Tycho_13.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_263_Tycho_13.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2419, grad=0.0704, coherence=18.57) [auto-centered cavity (discovery offset: -175.0s, -143.7l)]"
@@ -3270,7 +3270,7 @@
     "latitude": -43.1467,
     "longitude": 349.0718,
     "product_id": "M1210772651LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_264_Tycho_14.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_264_Tycho_14.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2737, grad=0.1422, coherence=18.50) [auto-centered cavity (discovery offset: -8.2s, +54.7l)]"
@@ -3283,7 +3283,7 @@
     "latitude": -43.1445,
     "longitude": 349.6332,
     "product_id": "M139973084LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_265_Tycho_15a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_265_Tycho_15a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2612, grad=0.1283, coherence=19.11) [auto-centered cavity (frame-calibrated offset: -152.4s, -117.6l)]"
@@ -3296,7 +3296,7 @@
     "latitude": -43.1456,
     "longitude": 349.6325,
     "product_id": "M139973084LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_266_Tycho_15b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_266_Tycho_15b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2742, grad=0.1214, coherence=19.58) [auto-centered cavity (frame-calibrated offset: -151.7s, -119.9l)]"
@@ -3309,7 +3309,7 @@
     "latitude": -43.102,
     "longitude": 347.7799,
     "product_id": "M1343671693RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_267_Tycho_16.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_267_Tycho_16.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2524, grad=0.0880, coherence=20.35) [auto-centered cavity (discovery offset: -14.8s, -37.0l)]"
@@ -3322,7 +3322,7 @@
     "latitude": -43.0855,
     "longitude": 348.2422,
     "product_id": "M170641394RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_268_Tycho_17a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_268_Tycho_17a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2481, grad=0.1253, coherence=17.76) [auto-centered cavity (frame-calibrated offset: -161.9s, -123.0l)]"
@@ -3335,7 +3335,7 @@
     "latitude": -43.0794,
     "longitude": 348.2427,
     "product_id": "M1118950329RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_269_Tycho_17b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_269_Tycho_17b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2203, grad=0.1031, coherence=18.86) [auto-centered cavity (discovery offset: +49.8s, -17.8l)]"
@@ -3348,7 +3348,7 @@
     "latitude": -43.2779,
     "longitude": 347.8259,
     "product_id": "M1343671693RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_270_Tycho_18.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_270_Tycho_18.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2307, grad=0.1463, coherence=18.41) [auto-centered cavity (frame-calibrated offset: -44.9s, -25.2l)]"
@@ -3361,7 +3361,7 @@
     "latitude": -43.0996,
     "longitude": 349.4182,
     "product_id": "M1131922380RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_271_Tycho_19.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_271_Tycho_19.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2308, grad=0.1854, coherence=16.36) [auto-centered cavity (discovery offset: +19.0s, +36.9l)]"
@@ -3374,7 +3374,7 @@
     "latitude": -42.5978,
     "longitude": 347.8196,
     "product_id": "M1300153813RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_251_Tycho_2.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_251_Tycho_2.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2143, grad=0.0629, coherence=18.11) [auto-centered cavity (discovery offset: +99.8s, +17.8l)]"
@@ -3387,7 +3387,7 @@
     "latitude": -42.8468,
     "longitude": 348.5424,
     "product_id": "M139979870LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_272_Tycho_29a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_272_Tycho_29a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2651, grad=0.1718, coherence=16.34) [auto-centered cavity (discovery offset: +10.2s, +35.2l)]"
@@ -3400,7 +3400,7 @@
     "latitude": -42.8473,
     "longitude": 348.5415,
     "product_id": "M139979870LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_273_Tycho_29b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_273_Tycho_29b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2608, grad=0.1852, coherence=16.50) [auto-centered cavity (frame-calibrated offset: +13.8s, +41.6l)]"
@@ -3413,7 +3413,7 @@
     "latitude": -42.8478,
     "longitude": 348.5405,
     "product_id": "M139979870LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_274_Tycho_29c.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_274_Tycho_29c.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2611, grad=0.2058, coherence=16.81) [auto-centered cavity (frame-calibrated offset: +17.7s, +35.2l)]"
@@ -3426,7 +3426,7 @@
     "latitude": -42.9449,
     "longitude": 347.7857,
     "product_id": "M1343671693RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_252_Tycho_3.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_252_Tycho_3.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2524, grad=0.1320, coherence=19.96) [auto-centered cavity (frame-calibrated offset: -44.1s, -31.0l)]"
@@ -3439,7 +3439,7 @@
     "latitude": -42.6199,
     "longitude": 348.6332,
     "product_id": "M139979870RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_253_Tycho_5a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_253_Tycho_5a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2604, grad=0.1020, coherence=19.95) [auto-centered cavity (discovery offset: +20.1s, -44.8l)]"
@@ -3452,7 +3452,7 @@
     "latitude": -42.6179,
     "longitude": 348.6363,
     "product_id": "M139979870RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_254_Tycho_5b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_254_Tycho_5b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2635, grad=0.1252, coherence=19.77) [auto-centered cavity (frame-calibrated offset: +0.7s, -31.7l)]"
@@ -3465,7 +3465,7 @@
     "latitude": -42.6152,
     "longitude": 348.6417,
     "product_id": "M1195510086RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_255_Tycho_5c.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_255_Tycho_5c.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2423, grad=0.1340, coherence=18.59) [auto-centered cavity (discovery offset: -1.1s, -109.5l)]"
@@ -3478,7 +3478,7 @@
     "latitude": -42.612,
     "longitude": 348.6483,
     "product_id": "M139979870RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_256_Tycho_5d.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_256_Tycho_5d.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2628, grad=0.0969, coherence=16.15) [auto-centered cavity (frame-calibrated offset: +44.4s, -6.6l)]"
@@ -3491,7 +3491,7 @@
     "latitude": -42.6218,
     "longitude": 348.6372,
     "product_id": "M139979870RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_257_Tycho_5e.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_257_Tycho_5e.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2436, grad=0.1139, coherence=16.04) [auto-centered cavity (frame-calibrated offset: +51.2s, -18.8l)]"
@@ -3504,7 +3504,7 @@
     "latitude": -42.8894,
     "longitude": 349.3296,
     "product_id": "M1131922380LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_258_Tycho_6.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_258_Tycho_6.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2457, grad=0.1275, coherence=16.55) [auto-centered cavity (discovery offset: +32.1s, -3.5l)]"
@@ -3517,7 +3517,7 @@
     "latitude": -42.8468,
     "longitude": 348.5347,
     "product_id": "M139979870LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_259_Tycho_7.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_259_Tycho_7.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2633, grad=0.1264, coherence=17.64) [auto-centered cavity (frame-calibrated offset: +4.9s, +51.1l)]"
@@ -3530,7 +3530,7 @@
     "latitude": -42.7882,
     "longitude": 348.7741,
     "product_id": "M1195510086LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_260_Tycho_8.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_260_Tycho_8.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2590, grad=0.1289, coherence=18.35) [auto-centered cavity (discovery offset: +74.1s, -115.3l)]"
@@ -3543,7 +3543,7 @@
     "latitude": -42.6506,
     "longitude": 349.5415,
     "product_id": "M1208416642LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_261_Tycho_9.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_261_Tycho_9.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2571, grad=0.1544, coherence=16.80) [auto-centered cavity (discovery offset: +9.2s, +52.3l)]"
@@ -3556,7 +3556,7 @@
     "latitude": 15.7946,
     "longitude": 177.2069,
     "product_id": "M158795840LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_275_Virtanen_F_1.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_275_Virtanen_F_1.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2966, grad=0.0939, coherence=18.74) [auto-centered cavity (discovery offset: +1.5s, +84.8l)]"
@@ -3569,7 +3569,7 @@
     "latitude": 41.0722,
     "longitude": 149.9284,
     "product_id": "M125944637RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_276_Weiner_F_1.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_276_Weiner_F_1.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1958, grad=0.2050, coherence=16.43) [auto-centered cavity (discovery offset: +13.5s, -35.0l)]"
@@ -3582,7 +3582,7 @@
     "latitude": 13.5507,
     "longitude": 301.8267,
     "product_id": "M1318098123RC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_2_West_Marius_Hills_Pit.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_2_West_Marius_Hills_Pit.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.2640, grad=0.0788, coherence=23.14) [auto-centered cavity (discovery offset: -112.3s, -20.4l)]"
@@ -3595,7 +3595,7 @@
     "latitude": 43.8876,
     "longitude": 235.754,
     "product_id": "M143072142LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_277_Wood_T_1a.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_277_Wood_T_1a.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1966, grad=0.0839, coherence=19.96) [auto-centered cavity (discovery offset: +52.9s, -81.2l)]"
@@ -3608,7 +3608,7 @@
     "latitude": 43.8862,
     "longitude": 235.7613,
     "product_id": "M143072142LC",
-    "crop_png": "/Users/finnhertsch/projects/luna_pit_detection/data/query_pits/crop_lpa_278_Wood_T_1b.png",
+    "crop_png": "/Users/finnhertsch/projects/archetype_detection/data/query_vectors/crop_lpa_278_Wood_T_1b.png",
     "vector_dim": 384,
     "method": "NASA SPICE Ray-Tracing Projection with 3-Stage Astronomical Filter",
     "quality_status": "passed all checks (signal=0.1932, grad=0.0880, coherence=19.96) [auto-centered cavity (frame-calibrated offset: +42.2s, -89.8l)]"

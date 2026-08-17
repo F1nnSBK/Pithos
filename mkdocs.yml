@@ -92,6 +92,7 @@ extra_javascript:
 nav:
   - Overview: index.md
   - Architecture: architecture.md
+  - Container Format: container_format.md
   - GPU Acceleration: cuda_integration.md
   - C-API Reference: c_api_reference.md
   - Mathematical Theory: math_theory.md

@@ -35,8 +35,14 @@ int vdb_get_info(graal_isolatethead_t* thread, char* indexName, int* outDimensio
 // Compiles raw float records into a multi-tier database file layout with configurable quantization (qMode: 0=1-bit, 1=2-bit, 2=FP32 bypass)
 int vdb_compile_index_file(graal_isolatethead_t* thread, char* path, char planetId, long long planetRadius, int dimension, int* tiers, int numTiers, long long* ids, float* vectors, int numRecords, int qMode);
 
-// Compiles raw float records into a multi-tier database file layout with optional FP16 sidecar (writeFp16: 1=true, 0=false)
-int vdb_compile_index_file_ext(graal_isolatethead_t* thread, char* path, char planetId, long long planetRadius, int dimension, int* tiers, int numTiers, long long* ids, float* vectors, int numRecords, int qMode, int writeFp16);
+// Compiles raw float records into a multi-tier database file layout with optional FP16/FP8 sidecar
+int vdb_compile_index_file_ext(graal_isolatethead_t* thread, char* path, char planetId, long long planetRadius, int dimension, int* tiers, int numTiers, long long* ids, float* vectors, int numRecords, int qMode, int sidecarMode);
+
+// Compiles raw float records into a universal schema-agnostic single-file .pithos container (DIOGENES format)
+int vdb_compile_container(graal_isolatethread_t *thread, const char *path, int32_t dimension, const int32_t *tiers, int32_t num_tiers, const int64_t *ids, const float *vectors, int32_t num_records, int32_t metric_type, int32_t q_mode, int32_t sidecar_mode, const char *metadata_payload, int32_t metadata_len, const char *metadata_format, const char *user_metadata_json);
+
+// Retrieves the user metadata JSON string embedded in a loaded single-file .pithos container
+int vdb_get_user_metadata(graal_isolatethread_t *thread, const char *name, char *out_buf, int32_t max_len);
 
 // Compacts multiple compiled indexes into a single consolidated index
 int vdb_compact_indexes(graal_isolatethead_t* thread, char* sourcePathsJoined, char* targetPath);

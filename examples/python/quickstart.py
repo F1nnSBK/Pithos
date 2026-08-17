@@ -44,7 +44,7 @@ def main():
         records=vectors,
         ids=ids,
         tiers=tiers,
-        planet_id=1,        # Moon ID
+        planet_id=1,        # Domain tag
         planet_radius=1737400,
         q_mode=vdb.QuantizationMode.ONE_BIT,
         write_fp16=True

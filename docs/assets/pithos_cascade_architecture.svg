@@ -87,7 +87,7 @@
       <rect width="195" height="85" class="sidecar-rect"/>
       <text x="12" y="20" class="sidecar-title">FP8 (E4M3)</text>
       <text x="183" y="20" class="accent-badge">1.0 B/dim</text>
-      <text x="12" y="42" class="sidecar-sub">1.19 TB Lunar Atlas</text>
+      <text x="12" y="42" class="sidecar-sub">1.19 TB (2.72B Index)</text>
       <text x="12" y="58" class="sidecar-sub">100.0% Recall@1</text>
       <text x="12" y="74" class="sidecar-sub" style="fill: #34d399;">Recommended</text>
     </g>
@@ -97,9 +97,9 @@
       <rect width="195" height="85" class="sidecar-rect"/>
       <text x="12" y="20" class="sidecar-title">NVFP4 (E2M1)</text>
       <text x="183" y="20" class="sidecar-metric">0.56 B/dim</text>
-      <text x="12" y="42" class="sidecar-sub">668 GB Lunar Atlas</text>
+      <text x="12" y="42" class="sidecar-sub">668 GB (2.72B Index)</text>
       <text x="12" y="58" class="sidecar-sub">96.8% Recall@1</text>
-      <text x="12" y="74" class="sidecar-sub">32,000 tiles/s (4x QPS)</text>
+      <text x="12" y="74" class="sidecar-sub">32,000 vectors/s (4x)</text>
     </g>
 
     <!-- Sidecar Option 3: FP16 -->
@@ -107,7 +107,7 @@
       <rect width="195" height="85" class="sidecar-rect"/>
       <text x="12" y="20" class="sidecar-title">FP16 (IEEE 754)</text>
       <text x="183" y="20" class="sidecar-metric">2.0 B/dim</text>
-      <text x="12" y="42" class="sidecar-sub">2.23 TB Lunar Atlas</text>
+      <text x="12" y="42" class="sidecar-sub">2.23 TB (2.72B Index)</text>
       <text x="12" y="58" class="sidecar-sub">100.0% Recall@1</text>
       <text x="12" y="74" class="sidecar-sub">Baseline Precision</text>
     </g>

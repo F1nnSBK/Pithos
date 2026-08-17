@@ -6,7 +6,7 @@ import argparse
 import numpy as np
 from benchmark import PithosMIDB
 
-DB_FILE = "temp/benchmark_data/lunar_real_data"
+DB_FILE = "temp/benchmark_data/real_data"
 DIMENSION = 384
 TIERS = np.array([64, 128, 256, 384], dtype=np.int32)
 
@@ -172,12 +172,12 @@ def main():
     print("\n" + "="*80)
     print("                 PITHOS HAMMING DISTANCE DISTRIBUTION REPORT            ")
     print("========================================================================")
-    print(f" Target Class (Lunar Pit/Cave Entrance):")
+    print(f" Target Class (Positive Archetypes):")
     print(f"  - Mean Distance           : {mean_pits:.2f} bits")
     print(f"  - Std Dev                 : {std_pits:.2f} bits")
     print(f"  - Range (Min / Max)       : {min_pits} / {max_pits} bits")
     print("------------------------------------------------------------------------")
-    print(f" Background Class (Flat Mondgelände/Terrain):")
+    print(f" Background Class (Distractors/Negative):")
     print(f"  - Mean Distance           : {mean_others:.2f} bits")
     print(f"  - Std Dev                 : {std_others:.2f} bits")
     print(f"  - Range (Min / Max)       : {min_others} / {max_others} bits")
@@ -216,7 +216,7 @@ def main():
     engine = PithosMIDB()
     
     # Load index supplying the weights matrix for SVD energy calculation
-    status = engine.load_index("lunar_real", DB_FILE, weights, DIMENSION)
+    status = engine.load_index("dataset_real", DB_FILE, weights, DIMENSION)
     if status != 0:
         print(f"[Error] Failed to load index. Code: {status}")
         sys.exit(1)
@@ -224,7 +224,7 @@ def main():
     if trace_data is not None:
         trace_data["p2_native_load_index"] = time.perf_counter() - t_engine_start
         
-    total_records = engine.size("lunar_real")
+    total_records = engine.size("dataset_real")
     voting_mask = np.zeros(total_records, dtype=np.uint8)
     
     # Update thresholds to the suggested value
@@ -232,7 +232,7 @@ def main():
     thresholds = np.full(queries.shape[0], best_threshold, dtype=np.int32)
     
     t_vote_start = time.perf_counter()
-    resonant_count = engine.query_planetary_grid("lunar_real", queries, families, thresholds, voting_mask)
+    resonant_count = engine.query_planetary_grid("dataset_real", queries, families, thresholds, voting_mask)
     t_vote_sec = time.perf_counter() - t_vote_start
     t_vote_ms = t_vote_sec * 1000.0
     
@@ -265,9 +265,9 @@ def main():
     print("\n" + "="*80)
     print("                 PITHOS REAL-DATA CLASSIFICATION METRICS                ")
     print("========================================================================")
-    print(f" Target Class               : Lunar Pit/Cave Entrance Anchor")
+    print(f" Target Class               : Positive Archetype Anchor")
     print(f" Total Database Records     : {total_records:,}")
-    print(f" Actual Target Count (Pits) : {np.sum(is_pit):,}")
+    print(f" Actual Target Count        : {np.sum(is_pit):,}")
     print(f" Resonant Matches (Found)   : {resonant_count:,}")
     print("------------------------------------------------------------------------")
     print(f" Confusion Matrix")

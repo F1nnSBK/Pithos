@@ -26,6 +26,43 @@ class PithosNativeError(RuntimeError):
         detail = message or self.ERROR_MESSAGES.get(code, f"Unknown native error code: {code}")
         super().__init__(f"[Pithos Native Error {code}] {detail}")
 
+def _preload_cuda_runtime():
+    """Attempts to locate and pre-load libcudart.so into the process with RTLD_GLOBAL."""
+    search_dirs = [
+        "/usr/local/cuda/lib64",
+        "/usr/local/cuda/lib",
+        "/usr/local/lib/ollama/cuda_v12",
+        "/usr/local/lib/ollama/cuda_v11",
+        "/usr/lib/aarch64-linux-gnu",
+        "/usr/lib/x86_64-linux-gnu",
+    ]
+    try:
+        import torch
+        torch_lib = os.path.join(os.path.dirname(torch.__file__), "lib")
+        if os.path.exists(torch_lib):
+            search_dirs.insert(0, torch_lib)
+    except Exception:
+        pass
+
+    try:
+        import nvidia.cuda_runtime.lib as nvcuda
+        nvcuda_dir = os.path.dirname(nvcuda.__file__)
+        if os.path.exists(nvcuda_dir):
+            search_dirs.insert(0, nvcuda_dir)
+    except Exception:
+        pass
+
+    for s_dir in search_dirs:
+        if os.path.isdir(s_dir):
+            for candidate in ["libcudart.so.12", "libcudart.so.11", "libcudart.so"]:
+                cand_path = os.path.join(s_dir, candidate)
+                if os.path.exists(cand_path):
+                    try:
+                        ctypes.CDLL(cand_path, mode=ctypes.RTLD_GLOBAL)
+                        return
+                    except Exception:
+                        pass
+
 class NativeBindings:
     """Thread-safe singleton managing the GraalVM Native Image isolate lifecycle and C-API bindings."""
     _instance = None
@@ -35,6 +72,7 @@ class NativeBindings:
         with cls._lock:
             if cls._instance is None:
                 instance = super(NativeBindings, cls).__new__(cls)
+                _preload_cuda_runtime()
                 resolved_path = find_or_fetch_native_library(lib_path)
                 instance._init_library(resolved_path)
                 cls._instance = instance
@@ -122,6 +160,22 @@ class NativeBindings:
             ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int
         ]
         self.lib.vdb_compile_index_file_ext.restype = ctypes.c_int
+
+        if hasattr(self.lib, "vdb_compile_container"):
+            self.lib.vdb_compile_container.argtypes = [
+                ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int,
+                ctypes.c_void_p, ctypes.c_int,
+                ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int,
+                ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p
+            ]
+            self.lib.vdb_compile_container.restype = ctypes.c_int
+
+        if hasattr(self.lib, "vdb_get_user_metadata"):
+            self.lib.vdb_get_user_metadata.argtypes = [
+                ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int
+            ]
+            self.lib.vdb_get_user_metadata.restype = ctypes.c_int
 
         self.lib.vdb_compact_indexes.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
         self.lib.vdb_compact_indexes.restype = ctypes.c_int

@@ -38,13 +38,13 @@ with pithosdb.VectorDb() as db:
     # 2. Compile an index from float embeddings
     records = np.random.randn(10_000, 384).astype(np.float32)
     pithosdb.VectorDb.compile_index(
-        base_path="temp/lunar_index",
+        base_path="temp/sample_index",
         records=records,
         tiers=[64, 128, 256, 384]
     )
     
     # 3. Memory-map index & run zero-copy batch k-NN search
-    index = db.load_index("lunar", "temp/lunar_index")
+    index = db.load_index("sample", "temp/sample_index")
     queries = np.random.randn(10, 384).astype(np.float32)
     results = index.search(queries, k=5)
     
@@ -52,7 +52,7 @@ with pithosdb.VectorDb() as db:
         print(f"Query {q_idx} Top Matches: {matches}")
 
     # 4. Real-time Ingestion via LSM DeltaBuffer
-    delta = db.create_delta_buffer("lunar", flush_threshold=1000)
+    delta = db.create_delta_buffer("sample", flush_threshold=1000)
     delta.insert(record_id=42, vector=np.random.randn(384).astype(np.float32))
 ```
 

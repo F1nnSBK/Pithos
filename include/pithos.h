@@ -297,6 +297,42 @@ int vdb_compile_index_file_ext(graal_isolatethread_t *thread, const char *path, 
                                int32_t num_records, int32_t q_mode, int32_t write_fp16);
 
 /**
+ * Compiles raw float records into a universal schema-agnostic single-file .pithos container (DIOGENES format).
+ * @param thread GraalVM isolate thread context.
+ * @param path Destination container filepath (e.g. "dataset.pithos").
+ * @param dimension Vector dimensionality D.
+ * @param tiers Matryoshka cumulative step boundaries array.
+ * @param num_tiers Number of tiers (1 to 8).
+ * @param ids Vector 64-bit unique IDs array.
+ * @param vectors Contiguous float array (num_records * D).
+ * @param num_records Total record count N.
+ * @param metric_type Distance metric (0=Cosine, 1=L2, 2=DotProduct).
+ * @param q_mode Quantization mode (0=1-bit, 1=2-bit QJL, 2=FP32 bypass).
+ * @param sidecar_mode Precision sidecar (0=None, 1=FP16, 2=FP8 E4M3, 3=NVFP4).
+ * @param metadata_payload Raw bytes of generic metadata (e.g. JSONL / Arrow IPC / binary blobs) or NULL.
+ * @param metadata_len Byte length of metadata_payload or 0.
+ * @param metadata_format Format descriptor string ("jsonl", "arrow", "raw") or NULL.
+ * @param user_metadata_json Arbitrary key-value JSON dictionary string or NULL.
+ * @return 0 on success, negative error code on failure.
+ */
+int vdb_compile_container(graal_isolatethread_t *thread, const char *path, int32_t dimension,
+                          const int32_t *tiers, int32_t num_tiers,
+                          const int64_t *ids, const float *vectors, int32_t num_records,
+                          int32_t metric_type, int32_t q_mode, int32_t sidecar_mode,
+                          const char *metadata_payload, int32_t metadata_len,
+                          const char *metadata_format, const char *user_metadata_json);
+
+/**
+ * Retrieves the user metadata JSON string embedded in a loaded single-file .pithos container.
+ * @param thread GraalVM isolate thread context.
+ * @param name Unique logical name identifier.
+ * @param out_buf Pre-allocated char buffer to receive UTF-8 JSON.
+ * @param max_len Maximum capacity of out_buf.
+ * @return Total bytes written, 0 if no user metadata, negative on error.
+ */
+int vdb_get_user_metadata(graal_isolatethread_t *thread, const char *name, char *out_buf, int32_t max_len);
+
+/**
  * Compacts multiple compiled Pithos indices into a consolidated index file layout.
  * @param source_paths_joined Semicolon-delimited basepaths ("path1;path2;path3").
  * @param target_path Destination basepath for the consolidated index.

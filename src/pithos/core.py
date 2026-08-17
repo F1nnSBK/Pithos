@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import ctypes
 import os
+import io
+import json
 import math
 import shutil
+import threading
 from dataclasses import dataclass
 from enum import IntEnum
 from typing import List, Optional, Union, Dict, Any, Sequence
@@ -528,6 +531,62 @@ class Index:
             words_per_record=words_per_record
         )
 
+    @property
+    def user_metadata(self) -> dict:
+        """Returns the user metadata dictionary embedded in the .pithos single-file container."""
+        if hasattr(self._ffi.lib, "vdb_get_user_metadata"):
+            buf = ctypes.create_string_buffer(65536)
+            res = self._ffi.lib.vdb_get_user_metadata(self._ffi.thread, self._name.encode("utf-8"), buf, 65536)
+            if res > 0:
+                try:
+                    return json.loads(buf.value.decode("utf-8"))
+                except Exception:
+                    pass
+        if self._base_path:
+            c_path = self._base_path if self._base_path.endswith(".pithos") else f"{self._base_path}.pithos"
+            if os.path.exists(c_path):
+                toc = self._db._read_container_toc(c_path)
+                return toc.get("user_metadata", {})
+        return {}
+
+    @property
+    def arrow_table(self):
+        """Reads Section 4 metadata payload as an Apache Arrow Table if formatted as 'arrow'."""
+        if not self._base_path:
+            return None
+        c_path = self._base_path if self._base_path.endswith(".pithos") else f"{self._base_path}.pithos"
+        if not os.path.exists(c_path):
+            return None
+        toc = self._db._read_container_toc(c_path)
+        meta_sec = toc.get("sections", {}).get("metadata")
+        if not meta_sec or meta_sec.get("format") != "arrow":
+            return None
+        try:
+            import pyarrow.ipc as ipc
+            with open(c_path, "rb") as f:
+                f.seek(meta_sec["offset"])
+                data = f.read(meta_sec["length"])
+            reader = ipc.open_stream(io.BytesIO(data))
+            return reader.read_all()
+        except Exception:
+            return None
+
+    @property
+    def partitions(self) -> dict:
+        """Returns partition metadata dictionary from the container's Table of Contents or Arrow table."""
+        user_meta = self.user_metadata
+        if "partitions" in user_meta:
+            return user_meta["partitions"]
+        tbl = self.arrow_table
+        if tbl is not None:
+            return tbl.to_pydict()
+        return {}
+
+    @property
+    def is_cuda_capable(self) -> bool:
+        """Returns True if the loaded native library includes CUDA hardware acceleration symbols."""
+        return self._ffi._has_cuda
+
 
     def transform_and_quantize(self, vector: Union[np.ndarray, Sequence[float]]) -> np.ndarray:
         """
@@ -554,16 +613,322 @@ class Index:
 
 
 
+def _align64(offset: int) -> int:
+    return (offset + 63) & ~63
+
+def _pad_to(file_obj, target_offset: int) -> None:
+    cur = file_obj.tell()
+    if cur < target_offset:
+        file_obj.write(bytes(target_offset - cur))
+
+def _write_pithos_container_file(
+    path: str,
+    vecs: np.ndarray,
+    ids_arr: np.ndarray,
+    tiers_arr: np.ndarray,
+    metric_code: int,
+    q_mode: int,
+    actual_sidecar: SidecarMode,
+    metadata_payload: Optional[bytes],
+    metadata_format: str,
+    user_metadata: Optional[dict],
+    ffi: NativeBindings
+) -> None:
+    import tempfile
+    num_records, dimension = vecs.shape
+    num_tiers = len(tiers_arr)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_base = os.path.join(tmpdir, "tmp_index")
+        status = ffi.lib.vdb_compile_index_file_ext(
+            ffi.thread,
+            tmp_base.encode("utf-8"),
+            ctypes.c_byte(1),
+            ctypes.c_longlong(1737400),
+            ctypes.c_int(dimension),
+            tiers_arr.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(num_tiers),
+            ids_arr.ctypes.data_as(ctypes.c_void_p),
+            vecs.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(num_records),
+            ctypes.c_int(int(q_mode)),
+            ctypes.c_int(int(actual_sidecar))
+        )
+        ffi.check_status(status, "compile temporary index files")
+
+        if actual_sidecar == SidecarMode.FP8:
+            fp8_file = f"{tmp_base}_fp8.bin"
+            if not os.path.exists(fp8_file) or os.path.getsize(fp8_file) != num_records * dimension:
+                fp8_bytes = bytearray(num_records * dimension)
+                flat = vecs.flatten()
+                for i in range(len(flat)):
+                    fp8_bytes[i] = _encode_fp8_e4m3_scalar(flat[i])
+                with open(fp8_file, "wb") as f:
+                    f.write(fp8_bytes)
+        elif actual_sidecar == SidecarMode.FP4:
+            fp4_file = f"{tmp_base}_fp4.bin"
+            num_blocks = (dimension + 15) // 16
+            bytes_per_rec = num_blocks * 9
+            fp4_bytes = bytearray(num_records * bytes_per_rec)
+            for r in range(num_records):
+                row = vecs[r]
+                rec_offset = r * bytes_per_rec
+                for b in range(num_blocks):
+                    block_start = b * 16
+                    block = row[block_start : min(block_start + 16, dimension)]
+                    max_val = float(np.max(np.abs(block))) if len(block) > 0 else 0.0
+                    scale = max_val / 6.0 if max_val > 0.0 else 1.0
+                    fp8_scale = _encode_fp8_e4m3_scalar(scale)
+                    actual_scale = _decode_fp8_e4m3_scalar(fp8_scale)
+                    if actual_scale == 0.0:
+                        actual_scale = 1.0
+                    block_offset = rec_offset + b * 9
+                    fp4_bytes[block_offset] = fp8_scale
+                    for j in range(8):
+                        d0 = block_start + j * 2
+                        d1 = block_start + j * 2 + 1
+                        n0 = _encode_fp4_nibble(row[d0] / actual_scale) if d0 < dimension else 0
+                        n1 = _encode_fp4_nibble(row[d1] / actual_scale) if d1 < dimension else 0
+                        fp4_bytes[block_offset + 1 + j] = (n0 & 0x0F) | ((n1 & 0x0F) << 4)
+            with open(fp4_file, "wb") as f:
+                f.write(fp4_bytes)
+
+        with open(f"{tmp_base}_ids.bin", "rb") as f:
+            ids_bytes = f.read()
+
+        tier_bytes_list = []
+        for k in range(num_tiers):
+            with open(f"{tmp_base}_tier_{k}.bin", "rb") as f:
+                tier_bytes_list.append(f.read())
+
+        sidecar_bytes = b""
+        sidecar_format = "none"
+        if actual_sidecar == SidecarMode.FP16 and os.path.exists(f"{tmp_base}_fp16.bin"):
+            with open(f"{tmp_base}_fp16.bin", "rb") as f:
+                sidecar_bytes = f.read()
+            sidecar_format = "fp16"
+        elif actual_sidecar == SidecarMode.FP8 and os.path.exists(f"{tmp_base}_fp8.bin"):
+            with open(f"{tmp_base}_fp8.bin", "rb") as f:
+                sidecar_bytes = f.read()
+            sidecar_format = "fp8_e4m3"
+        elif actual_sidecar == SidecarMode.FP4 and os.path.exists(f"{tmp_base}_fp4.bin"):
+            with open(f"{tmp_base}_fp4.bin", "rb") as f:
+                sidecar_bytes = f.read()
+            sidecar_format = "nvfp4_e2m1"
+
+        meta_bytes = metadata_payload if metadata_payload else b""
+        meta_format = metadata_format if metadata_format else "raw"
+
+        SUPERBLOCK_SIZE = 128
+        ids_offset = _align64(SUPERBLOCK_SIZE)
+        ids_len = len(ids_bytes)
+
+        current_offset = _align64(ids_offset + ids_len)
+        tier_offsets = []
+        tier_lengths = []
+        for tb in tier_bytes_list:
+            tier_offsets.append(current_offset)
+            tier_lengths.append(len(tb))
+            current_offset = _align64(current_offset + len(tb))
+
+        sidecar_offset = 0
+        sidecar_len = 0
+        if len(sidecar_bytes) > 0:
+            sidecar_offset = current_offset
+            sidecar_len = len(sidecar_bytes)
+            current_offset = _align64(current_offset + sidecar_len)
+
+        metadata_offset = 0
+        metadata_len = 0
+        if len(meta_bytes) > 0:
+            metadata_offset = current_offset
+            metadata_len = len(meta_bytes)
+            current_offset = _align64(current_offset + metadata_len)
+
+        toc_dict = {
+            "format": "pithos_v2",
+            "motto": "Autarky: Self-contained & Zero Baggage",
+            "sections": {
+                "ids": {"offset": ids_offset, "length": ids_len, "dtype": "uint64"}
+            },
+            "user_metadata": user_metadata if user_metadata else {}
+        }
+        for k in range(num_tiers):
+            toc_dict["sections"][f"tier_{k}"] = {
+                "offset": tier_offsets[k],
+                "length": tier_lengths[k],
+                "dim_boundary": int(tiers_arr[k])
+            }
+        toc_dict["sections"]["sidecar"] = {
+            "offset": sidecar_offset,
+            "length": sidecar_len,
+            "format": sidecar_format
+        }
+        toc_dict["sections"]["metadata"] = {
+            "offset": metadata_offset,
+            "length": metadata_len,
+            "format": meta_format
+        }
+        toc_bytes = json.dumps(toc_dict, indent=2).encode("utf-8")
+        toc_offset = current_offset
+        toc_len = len(toc_bytes)
+        current_offset = _align64(current_offset + toc_len)
+
+        total_file_size = current_offset + 20
+
+        sb = bytearray(SUPERBLOCK_SIZE)
+        sb[0:8] = b"DIOGENES"
+        sb[8:12] = (2).to_bytes(4, byteorder="little", signed=True)
+        sb[12:20] = int(num_records).to_bytes(8, byteorder="little", signed=True)
+        sb[20:24] = int(dimension).to_bytes(4, byteorder="little", signed=True)
+        sb[24:26] = int(metric_code).to_bytes(2, byteorder="little", signed=True)
+        sb[26:28] = int(actual_sidecar).to_bytes(2, byteorder="little", signed=True)
+        sb[28:30] = int(num_tiers).to_bytes(2, byteorder="little", signed=True)
+        for i in range(8):
+            t_val = int(tiers_arr[i]) if i < num_tiers else 0
+            sb[30 + i * 2 : 32 + i * 2] = t_val.to_bytes(2, byteorder="little", signed=True)
+        sb[46:54] = int(toc_offset).to_bytes(8, byteorder="little", signed=True)
+        sb[54:58] = int(toc_len).to_bytes(4, byteorder="little", signed=True)
+        sb[58:60] = int(q_mode).to_bytes(2, byteorder="little", signed=True)
+
+        trailer = bytearray(20)
+        trailer[0:8] = int(toc_offset).to_bytes(8, byteorder="little", signed=True)
+        trailer[8:12] = int(toc_len).to_bytes(4, byteorder="little", signed=True)
+        trailer[12:20] = b"PITHOSDB"
+
+        with open(path, "wb") as out_f:
+            out_f.write(sb)
+            _pad_to(out_f, ids_offset)
+            out_f.write(ids_bytes)
+            for k in range(num_tiers):
+                _pad_to(out_f, tier_offsets[k])
+                out_f.write(tier_bytes_list[k])
+            if sidecar_len > 0:
+                _pad_to(out_f, sidecar_offset)
+                out_f.write(sidecar_bytes)
+            if metadata_len > 0:
+                _pad_to(out_f, metadata_offset)
+                out_f.write(meta_bytes)
+            _pad_to(out_f, toc_offset)
+            out_f.write(toc_bytes)
+            _pad_to(out_f, current_offset)
+            out_f.write(trailer)
+
+
 class VectorDb:
     """
     Pythonic interface to the Pithos Vector Database Engine.
     """
+    _active_instances = 0
+    _lock = threading.Lock()
+
     def __init__(self, lib_path: Optional[str] = None):
         self._ffi = NativeBindings(lib_path)
-        self._ffi.lib.vdb_init(self._ffi.thread)
+        with VectorDb._lock:
+            if VectorDb._active_instances == 0:
+                self._ffi.lib.vdb_init(self._ffi.thread)
+            VectorDb._active_instances += 1
         self._indices: Dict[str, Index] = {}
         self._delta_buffers: Dict[str, DeltaBuffer] = {}
+        self._temp_dirs: List[str] = []
+        self._closed = False
 
+    @property
+    def is_cuda_capable(self) -> bool:
+        """Returns True if the loaded native library includes CUDA hardware acceleration symbols."""
+        return self._ffi._has_cuda
+
+    def _read_container_toc(self, container_path: str) -> dict:
+        try:
+            with open(container_path, "rb") as f:
+                f.seek(0, os.SEEK_END)
+                size = f.tell()
+                if size < 148:
+                    return {}
+                f.seek(size - 20)
+                trailer = f.read(20)
+                if trailer[12:20] != b"PITHOSDB":
+                    return {}
+                toc_offset = int.from_bytes(trailer[0:8], byteorder="little")
+                toc_len = int.from_bytes(trailer[8:12], byteorder="little")
+                f.seek(toc_offset)
+                toc_bytes = f.read(toc_len)
+                return json.loads(toc_bytes.decode("utf-8"))
+        except Exception:
+            return {}
+
+    def _unpack_container_if_needed(self, base_path: str) -> str:
+        actual_path = base_path if os.path.exists(base_path) else f"{base_path}.pithos"
+        if not os.path.isfile(actual_path):
+            return base_path
+
+        with open(actual_path, "rb") as f:
+            magic = f.read(8)
+        if magic != b"DIOGENES":
+            return base_path
+
+        toc = self._read_container_toc(actual_path)
+        if not toc or "sections" not in toc:
+            return base_path
+
+        import tempfile
+        tmp_dir = tempfile.mkdtemp(prefix="pithos_mmap_")
+        self._temp_dirs.append(tmp_dir)
+        tmp_base = os.path.join(tmp_dir, "idx")
+
+        sections = toc["sections"]
+        with open(actual_path, "rb") as f:
+            if "ids" in sections:
+                f.seek(sections["ids"]["offset"])
+                with open(f"{tmp_base}_ids.bin", "wb") as out_f:
+                    out_f.write(f.read(sections["ids"]["length"]))
+
+            tier_keys = [k for k in sections if k.startswith("tier_")]
+            tier_keys.sort(key=lambda k: int(k.split("_")[1]))
+            tiers_list = []
+            for tk in tier_keys:
+                sec = sections[tk]
+                tiers_list.append(sec["dim_boundary"])
+                f.seek(sec["offset"])
+                with open(f"{tmp_base}_{tk}.bin", "wb") as out_f:
+                    out_f.write(f.read(sec["length"]))
+
+            if "sidecar" in sections and sections["sidecar"]["length"] > 0:
+                sec = sections["sidecar"]
+                fmt = sec["format"]
+                fname = f"{tmp_base}_{fmt}.bin" if not fmt.startswith("fp8") else f"{tmp_base}_fp8.bin"
+                if fmt.startswith("nvfp4"):
+                    fname = f"{tmp_base}_fp4.bin"
+                f.seek(sec["offset"])
+                with open(fname, "wb") as out_f:
+                    out_f.write(f.read(sec["length"]))
+
+            num_vectors = sections["ids"]["length"] // 8
+            with open(f"{tmp_base}_metadata.bin", "wb") as out_f:
+                out_f.write(bytes(num_vectors * 8))
+
+            f.seek(12)
+            sb_rest = f.read(48)
+            dimension = int.from_bytes(sb_rest[8:12], byteorder="little")
+            sidecar_type = int.from_bytes(sb_rest[14:16], byteorder="little")
+            q_mode = int.from_bytes(sb_rest[46:48], byteorder="little")
+
+            plan = bytearray(64)
+            plan[0:4] = b"PLAN"
+            plan[4] = 1
+            plan[5:13] = int(num_vectors).to_bytes(8, byteorder="little")
+            plan[13:21] = int(1737400).to_bytes(8, byteorder="little")
+            plan[21:25] = int(dimension).to_bytes(4, byteorder="little")
+            plan[25:29] = int(len(tiers_list)).to_bytes(4, byteorder="little")
+            for i, t_val in enumerate(tiers_list):
+                plan[29 + i * 4 : 33 + i * 4] = int(t_val).to_bytes(4, byteorder="little")
+            plan[61] = q_mode
+            plan[62] = sidecar_type
+
+            with open(tmp_base, "wb") as out_f:
+                out_f.write(plan)
+
+        return tmp_base
 
     def __enter__(self) -> VectorDb:
         return self
@@ -573,9 +938,25 @@ class VectorDb:
 
     def close(self) -> None:
         """Closes all loaded indices and delta buffers."""
+        if self._closed:
+            return
+        self._closed = True
         for name in list(self._indices.keys()):
-            self.drop_index(name)
-        self._ffi.lib.vdb_close(self._ffi.thread)
+            try:
+                self.drop_index(name)
+            except Exception:
+                pass
+        for td in self._temp_dirs:
+            if os.path.exists(td):
+                try:
+                    shutil.rmtree(td)
+                except Exception:
+                    pass
+        self._temp_dirs.clear()
+        with VectorDb._lock:
+            VectorDb._active_instances = max(0, VectorDb._active_instances - 1)
+            if VectorDb._active_instances == 0:
+                self._ffi.lib.vdb_close(self._ffi.thread)
 
     def load_index(
         self,
@@ -587,12 +968,13 @@ class VectorDb:
         """
         Maps an existing multi-tier index into memory off-heap.
         """
+        effective_path = self._unpack_container_if_needed(base_path)
         if weights is not None:
             w_arr = np.ascontiguousarray(weights, dtype=np.float32)
             status = self._ffi.lib.vdb_load_index_with_weights(
                 self._ffi.thread,
                 name.encode("utf-8"),
-                base_path.encode("utf-8"),
+                effective_path.encode("utf-8"),
                 w_arr.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(lora_dim)
             )
@@ -600,7 +982,7 @@ class VectorDb:
             status = self._ffi.lib.vdb_load_index(
                 self._ffi.thread,
                 name.encode("utf-8"),
-                base_path.encode("utf-8")
+                effective_path.encode("utf-8")
             )
         self._ffi.check_status(status, f"load index '{name}'")
         idx = Index(self, name, base_path)
@@ -638,6 +1020,102 @@ class VectorDb:
     # Index Compilation & Compaction
     # -------------------------------------------------------------------------
     @staticmethod
+    def compile_container(
+        path: str,
+        records: Union[np.ndarray, Sequence[Sequence[float]]],
+        ids: Optional[Union[np.ndarray, Sequence[int]]] = None,
+        tiers: Optional[Union[np.ndarray, Sequence[int]]] = None,
+        metric: str = "cosine",
+        q_mode: QuantizationMode = QuantizationMode.ONE_BIT,
+        sidecar_mode: Union[SidecarMode, str, int] = SidecarMode.FP8,
+        metadata_payload: Optional[bytes] = None,
+        metadata_format: str = "raw",
+        arrow_table: Optional[Any] = None,
+        user_metadata: Optional[dict] = None,
+        lib_path: Optional[str] = None
+    ) -> None:
+        """
+        Compiles raw continuous float embeddings into a universal schema-agnostic single-file .pithos container (DIOGENES format).
+        """
+        ffi = NativeBindings(lib_path)
+        vecs = np.ascontiguousarray(records, dtype=np.float32)
+        num_records, dimension = vecs.shape
+
+        if arrow_table is not None:
+            try:
+                import pyarrow.ipc as ipc
+                sink = io.BytesIO()
+                with ipc.new_stream(sink, arrow_table.schema) as writer:
+                    writer.write_table(arrow_table)
+                metadata_payload = sink.getvalue()
+                metadata_format = "arrow"
+            except ImportError:
+                raise ImportError("pyarrow is required to compile a container with an Arrow table.")
+
+        if ids is None:
+            ids_arr = np.arange(num_records, dtype=np.int64)
+        else:
+            ids_arr = np.ascontiguousarray(ids, dtype=np.int64)
+
+        if tiers is None:
+            tiers_arr = np.array([dimension], dtype=np.int32)
+        else:
+            tiers_arr = np.ascontiguousarray(tiers, dtype=np.int32)
+
+        if isinstance(sidecar_mode, str):
+            sidecar_map = {
+                "none": SidecarMode.NONE,
+                "fp16": SidecarMode.FP16,
+                "fp8": SidecarMode.FP8,
+                "fp4": SidecarMode.FP4
+            }
+            actual_sidecar = sidecar_map.get(sidecar_mode.lower(), SidecarMode.FP8)
+        else:
+            actual_sidecar = SidecarMode(int(sidecar_mode))
+
+        metric_map = {"cosine": 0, "l2": 1, "euclidean": 1, "dot": 2, "dot_product": 2}
+        metric_code = metric_map.get(metric.lower(), 0)
+
+        meta_bytes_ptr = ctypes.c_char_p(metadata_payload) if metadata_payload else ctypes.c_char_p(None)
+        meta_len = len(metadata_payload) if metadata_payload else 0
+        meta_fmt_ptr = metadata_format.encode("utf-8") if metadata_format else None
+        user_json_str = json.dumps(user_metadata).encode("utf-8") if user_metadata else None
+
+        if hasattr(ffi.lib, "vdb_compile_container"):
+            status = ffi.lib.vdb_compile_container(
+                ffi.thread,
+                path.encode("utf-8"),
+                ctypes.c_int(dimension),
+                tiers_arr.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(len(tiers_arr)),
+                ids_arr.ctypes.data_as(ctypes.c_void_p),
+                vecs.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(num_records),
+                ctypes.c_int(metric_code),
+                ctypes.c_int(int(q_mode)),
+                ctypes.c_int(int(actual_sidecar)),
+                meta_bytes_ptr,
+                ctypes.c_int(meta_len),
+                meta_fmt_ptr,
+                user_json_str
+            )
+            ffi.check_status(status, "compile single-file container")
+        else:
+            _write_pithos_container_file(
+                path=path,
+                vecs=vecs,
+                ids_arr=ids_arr,
+                tiers_arr=tiers_arr,
+                metric_code=metric_code,
+                q_mode=int(q_mode),
+                actual_sidecar=actual_sidecar,
+                metadata_payload=metadata_payload,
+                metadata_format=metadata_format,
+                user_metadata=user_metadata,
+                ffi=ffi
+            )
+
+    @staticmethod
     def compile_index(
         base_path: str,
         records: Union[np.ndarray, Sequence[Sequence[float]]],
@@ -648,11 +1126,24 @@ class VectorDb:
         q_mode: QuantizationMode = QuantizationMode.ONE_BIT,
         sidecar_mode: Union[SidecarMode, str, int] = SidecarMode.FP8,
         write_fp16: Optional[bool] = None,
+        use_container: bool = False,
+        user_metadata: Optional[dict] = None,
         lib_path: Optional[str] = None
     ) -> None:
         """
         Compiles raw continuous float embeddings into a multi-tier binary columnar Pithos index on disk.
         """
+        if use_container or base_path.endswith(".pithos"):
+            return VectorDb.compile_container(
+                path=base_path,
+                records=records,
+                ids=ids,
+                tiers=tiers,
+                q_mode=q_mode,
+                sidecar_mode=sidecar_mode,
+                user_metadata=user_metadata,
+                lib_path=lib_path
+            )
         ffi = NativeBindings(lib_path)
         vecs = np.ascontiguousarray(records, dtype=np.float32)
         num_records, dimension = vecs.shape

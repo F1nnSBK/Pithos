@@ -36,7 +36,7 @@
 === "Asymmetric Search (ADC)"
     - **Continuous FP32 Fidelity:** Queries are evaluated in 100% continuous 32-bit floating point precision against compressed database records.
     - **Precomputed Query LUTs (Hebel 1):** Zero floating-point multiplication during Gate 3 candidate reranking.
-    - **100% Recall@1 on Lunar DINOv3 Benchmarks.**
+    - **100% Recall@1 on High-Dimensional Foundation Model Benchmarks.**
 
 ---
 
@@ -117,9 +117,9 @@ int main() {
 
 ---
 
-## Benchmark Summary (Lunar DINOv3 Dataset, D=384)
+## Benchmark Summary (High-Dimensional Foundation Embeddings, D=384)
 
-| Index Mode | Storage (B/dim) | 2.72B Atlas Size | Recall@1 | Recall@10 | Search Latency |
+| Index Mode | Storage (B/dim) | 2.72B Dataset Size | Recall@1 | Recall@10 | Search Latency |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **FP16 Sidecar** | 2.00 B/dim | 2.23 TB | 100.00% | 94.40% | 196.1 µs |
 | **FP8 Sidecar (E4M3)** | **1.00 B/dim** | **1.19 TB (-44%)** | **100.00%** | **94.40%** | **185.8 µs** |

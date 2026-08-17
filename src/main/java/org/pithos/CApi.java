@@ -323,6 +323,64 @@ public class CApi {
         }
     }
 
+    /// Compiles raw continuous float records into a universal schema-agnostic single-file .pithos container (DIOGENES format).
+    @CEntryPoint(name = "vdb_compile_container")
+    public static int compileContainer(IsolateThread thread, CCharPointer path, int dimension, CIntPointer tiers, int numTiers,
+            CLongPointer ids, CFloatPointer vectors, int numRecords, int metricType, int qMode, int sidecarMode,
+            CCharPointer metadataPayload, int metadataLen, CCharPointer metadataFormat, CCharPointer userMetadataJson) {
+        try {
+            String filePath = CTypeConversion.toJavaString(path);
+            int[] javaTiers = new int[numTiers];
+            for (int i = 0; i < numTiers; i++) {
+                javaTiers[i] = tiers.read(i);
+            }
+
+            List<VectorRecord> records = new ArrayList<>(numRecords);
+            for (int i = 0; i < numRecords; i++) {
+                long id = ids.read(i);
+                float[] vector = new float[dimension];
+                for (int j = 0; j < dimension; j++) {
+                    vector[j] = vectors.read(i * dimension + j);
+                }
+                records.add(new VectorRecord(id, vector));
+            }
+
+            byte[] metaBytes = null;
+            if (metadataPayload.isNonNull() && metadataLen > 0) {
+                metaBytes = new byte[metadataLen];
+                for (int i = 0; i < metadataLen; i++) {
+                    metaBytes[i] = metadataPayload.read(i);
+                }
+            }
+
+            String metaFormat = metadataFormat.isNonNull() ? CTypeConversion.toJavaString(metadataFormat) : "raw";
+            String userJson = userMetadataJson.isNonNull() ? CTypeConversion.toJavaString(userMetadataJson) : null;
+
+            VectorDb.compileContainer(filePath, dimension, javaTiers, records, metricType, qMode, sidecarMode,
+                    metaBytes, metaFormat, userJson);
+            return 0;
+        } catch (Throwable t) {
+            t.printStackTrace();
+            return -4;
+        }
+    }
+
+    /// Copies user metadata JSON string into buffer. Returns length of JSON string or -1 on error.
+    @CEntryPoint(name = "vdb_get_user_metadata")
+    public static int getUserMetadata(IsolateThread thread, CCharPointer indexName, CCharPointer outBuf, int maxLen) {
+        if (db == null) return -1;
+        String idxName = CTypeConversion.toJavaString(indexName);
+        String metaJson = db.getUserMetadata(idxName);
+        if (metaJson == null) return 0;
+        byte[] bytes = metaJson.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        int copyLen = Math.min(bytes.length, maxLen - 1);
+        for (int i = 0; i < copyLen; i++) {
+            outBuf.write(i, (byte) bytes[i]);
+        }
+        outBuf.write(copyLen, (byte) 0);
+        return bytes.length;
+    }
+
     /// Returns the sidecar format mode (0=None, 1=FP16, 2=FP8, 3=FP4) for a loaded index.
     @CEntryPoint(name = "vdb_get_sidecar_mode")
     public static int getSidecarMode(IsolateThread thread, CCharPointer indexName) {

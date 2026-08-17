@@ -22,9 +22,9 @@ import java.util.concurrent.ConcurrentHashMap;
 /// A compiled Pithos index consists of the following contiguous binary columnar files:
 /// 1. **`<basePath>` (64-byte Header):**
 ///    - Offset 0..3: Magic ASCII bytes `'P'`, `'L'`, `'A'`, `'N'`
-///    - Offset 4: `planetId` (1 byte, e.g. 1 for Moon, 2 for Mars)
+///    - Offset 4: `domainId` (1 byte domain tag)
 ///    - Offset 5..12: Total record count N (8-byte unaligned long)
-///    - Offset 13..20: Equatorial radius R in meters (8-byte unaligned long)
+///    - Offset 13..20: Reference radius R in meters (8-byte unaligned long)
 ///    - Offset 21..24: Vector dimension D (4-byte unaligned int)
 ///    - Offset 25..28: Cumulative tier count T (4-byte unaligned int, 1 ≤ T ≤ 8)
 ///    - Offset 29..60: Cumulative dimension boundaries for each tier (up to 8 ints)
@@ -351,6 +351,39 @@ public class VectorDb {
     public static void compileIndexFile(String basePath, byte planetId, long planetRadius, int dimension, int[] tiers,
             List<VectorRecord> records, int qMode, boolean writeFp16) throws IOException {
         compileIndexFile(basePath, planetId, planetRadius, dimension, tiers, records, qMode, writeFp16 ? SIDECAR_FP16 : SIDECAR_NONE);
+    }
+
+    /// Compiles raw continuous float vector records into a universal schema-agnostic single-file .pithos container.
+    public static void compileContainer(String filePath, int dimension, int[] tiers, List<VectorRecord> records,
+            int metricType, int qMode, int sidecarMode, byte[] metadataPayload, String metadataFormat, String userMetadataJson)
+            throws IOException {
+        Path path = Path.of(filePath.endsWith(".pithos") ? filePath : filePath + ".pithos");
+        PithosContainer.writeContainer(path, dimension, tiers, records, metricType, qMode, sidecarMode,
+                metadataPayload, metadataFormat, userMetadataJson);
+    }
+
+    /// Overload for compiling single-file container with default metadata.
+    public static void compileContainer(String filePath, int dimension, int[] tiers, List<VectorRecord> records,
+            int qMode, int sidecarMode) throws IOException {
+        compileContainer(filePath, dimension, tiers, records, PithosContainer.METRIC_COSINE, qMode, sidecarMode, null, null, null);
+    }
+
+    /// Returns the user metadata JSON string for a registered index, or null if not available.
+    public String getUserMetadata(String indexName) {
+        Index index = getIndex(indexName);
+        if (index instanceof FlatIndex flat) {
+            return flat.getUserMetadataJson();
+        }
+        return null;
+    }
+
+    /// Returns the raw off-heap metadata payload segment for a registered index, or null if not available.
+    public MemorySegment getMetadataPayload(String indexName) {
+        Index index = getIndex(indexName);
+        if (index instanceof FlatIndex flat) {
+            return flat.getMetadataPayloadSegment();
+        }
+        return null;
     }
 
     /// Compiles raw continuous float vector records into a multi-tier binary columnar format on disk.

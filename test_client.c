@@ -70,7 +70,7 @@ int main() {
 
     printf("[C Client] Compiling test binary vector file 'pithos_test.bin'...\n");
     clock_gettime(CLOCK_MONOTONIC, &start);
-    // Planet ID = 1 (Moon), Radius = 1737400 meters
+    // Domain ID = 1, Radius = 1737400 meters
     status = vdb_compile_index_file(thread, "pithos_test.bin", (char)1, 1737400LL, dimension, tiers, num_tiers, ids, vectors, num_records, 0);
     if (status != 0) {
         fprintf(stderr, "[C Client] Index compilation failed (code: %d)\n", status);
@@ -84,9 +84,9 @@ int main() {
     free(vectors);
 
     // 2. Load the compiled index using off-heap memory mapping
-    printf("[C Client] Loading memory-mapped index 'lunar_index' from 'pithos_test.bin'...\n");
+    printf("[C Client] Loading memory-mapped index 'test_index' from 'pithos_test.bin'...\n");
     clock_gettime(CLOCK_MONOTONIC, &start);
-    status = vdb_load_index(thread, "lunar_index", "pithos_test.bin");
+    status = vdb_load_index(thread, "test_index", "pithos_test.bin");
     if (status != 0) {
         fprintf(stderr, "[C Client] Failed to load index (code: %d)\n", status);
         graal_tear_down_isolate(thread);
@@ -102,7 +102,7 @@ int main() {
     char outPlanetId = 0;
     long long outPlanetRadius = 0;
     int outTiersCount = 0;
-    status = vdb_get_info(thread, "lunar_index", &outDimension, &outSize, &outPlanetId, &outPlanetRadius, &outTiersCount);
+    status = vdb_get_info(thread, "test_index", &outDimension, &outSize, &outPlanetId, &outPlanetRadius, &outTiersCount);
     if (status != 0) {
         fprintf(stderr, "[C Client] Failed to get index info (code: %d)\n", status);
     } else {
@@ -110,8 +110,8 @@ int main() {
         printf("[C Client] Pithos Index Metadata Attributes:\n");
         printf("  - Dimension         : %d\n", outDimension);
         printf("  - Size (Records)    : %lld\n", outSize);
-        printf("  - Planet ID         : %d\n", (int)outPlanetId);
-        printf("  - Planet Radius (m) : %lld\n", outPlanetRadius);
+        printf("  - Domain ID         : %d\n", (int)outPlanetId);
+        printf("  - Reference Radius  : %lld\n", outPlanetRadius);
         printf("  - Tiers Count       : %d\n", outTiersCount);
         printf("========================================================================\n\n");
     }
@@ -134,7 +134,7 @@ int main() {
     int out_distances[4];
 
     clock_gettime(CLOCK_MONOTONIC, &start);
-    status = vdb_batch_search(thread, "lunar_index", knn_queries, num_queries, k, out_ids, out_distances);
+    status = vdb_batch_search(thread, "test_index", knn_queries, num_queries, k, out_ids, out_distances);
     clock_gettime(CLOCK_MONOTONIC, &end);
     t_knn_search = get_elapsed_us(start, end);
     free(knn_queries);
@@ -171,7 +171,7 @@ int main() {
 
     clock_gettime(CLOCK_MONOTONIC, &start);
     long long resonant_count = vdb_query_planetary_grid(
-        thread, "lunar_index", voting_queries, voting_families, voting_thresholds, num_voting_queries, voting_mask
+        thread, "test_index", voting_queries, voting_families, voting_thresholds, num_voting_queries, voting_mask
     );
     clock_gettime(CLOCK_MONOTONIC, &end);
     t_voting_search = get_elapsed_us(start, end);
