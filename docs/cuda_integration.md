@@ -34,7 +34,7 @@ This document details the architecture and implementation of **NVIDIA CUDA GPU a
 | :--- | :--- |
 | **Single-Query KNN** | PCIe transfer latency exceeds raw GPU computation time |
 | **Index Compilation** | One-time asynchronous operation; CPU with multi-threading is optimal |
-| **Metadata & Spatial Bounding Box** | Instant 0-cycle Morton code bit-checks in Gate 1 on CPU |
+| **Metadata & Validity Bitmask** | Instant 0-cycle bitmask checks in Gate 1 on CPU |
 | **Liveliness & Tombstone Checks** | Direct 64-bit mask evaluation on host without VRAM staging |
 | **SVD Jacobi Solver** | One-time $O(D^3)$ initialization during model weight loading |
 
@@ -59,8 +59,8 @@ graph TD
     D4 --> D5[Candidate Top-K Bitonic Sort]:::darkBox
     D5 --> D6[Asynchronous D2H DMA Stream]:::darkBox
     
-    C --> C1[Gate 1: Liveliness & Morton Gate]:::darkBox
-    C1 --> C2[Gate 2: QEG Flat Terrain Check]:::darkBox
+    C --> C1[Gate 1: Liveliness & Saliency Gate]:::darkBox
+    C1 --> C2[Gate 2: QEG Entropy Check]:::darkBox
     C2 --> C3[Gate 3: XOR-Popcount Cascade]:::darkBox
     
     D6 --> E[Merged Result Set]:::accentBox

@@ -27,21 +27,21 @@ Pithos v1.1.0 introduces hardware-native compressed float sidecars for in-engine
   - **Storage:** Compresses the full index to **668 GB (-65%)**.
   - **Throughput:** Delivers **32,000 vectors/s (4x)** throughput on NVIDIA DGX Spark.
 
-### 2. Hebel 1: Asymmetric Precomputed Query Lookup-Tables (Lookup-Codebooks)
+### 2. Lever 1: Asymmetric Precomputed Query Lookup-Tables (Lookup-Codebooks)
 Eliminates all runtime floating-point subtractions and multiplications in Gate 3 candidate reranking on CPU:
 - For each continuous query $\mathbf{q} \in \mathbb{R}^D$, Pithos precalculates a compact $D \times 256$ table:
   $$\text{QueryLUT}[d][b] = \left(q_d - \text{LUT}_{\text{FP8}}[b]\right)^2$$
 - Candidate distance evaluation simplifies to direct byte-indexed lookups and SIMD integer additions:
   $$\text{dist}(\mathbf{q}, \mathbf{x}^{(i)}) = \sum_{d=0}^{D-1} \text{QueryLUT}[d]\left[x_d^{(i)}\right]$$
-- **Performance Gain:** **4x to 6x speedup** in exact candidate reranking across the 20 ARM Cortex-X925 cores.
+- **Performance Gain:** **4x to 6x speedup** in exact candidate reranking across ARM Cortex-X925 / Graviton4 cores.
 
-### 3. Hebel 2: Hierarchical Spherical Pruning in `queryPlanetaryGrid`
+### 3. Lever 2: Hierarchical Query Pruning in Multi-Archetype Consensus
 Accelerates multi-family resonant sweeps (e.g., 278 anchor queries across 8 morphological families):
 - Computes transformed centroid $\mathbf{c}_j$ and conservative bounding radius $R_j$ for each family $F_j$.
-- If the Hamming distance from a candidate vector to the family centroid exceeds $R_j$, **all 35 individual query anchors in that family are bypassed in a single SIMD check** via the triangle inequality.
+- If the Hamming distance from a candidate vector to the family centroid exceeds $R_j$, **all individual query anchors in that family are bypassed in a single SIMD check** via the triangle inequality.
 - **Performance Gain:** **5x to 8x throughput speedup** during global multi-query sweeps.
 
-### 4. Hebel 3: QJL-Residual Quantization (TurboQuant Principles)
+### 4. Lever 3: QJL-Residual Quantization (TurboQuant Principles)
 Introduces optimal 2-bit orthogonal residual quantization:
 - Transformed vector $\mathbf{z} = \mathbf{H} \mathbf{D}_{\pm} \mathbf{x}$ is decomposed into:
   1. Base Bit Layer: $\mathbf{b}_1 = \text{sign}(\mathbf{z})$ (48 bytes for $D=384$)
@@ -49,12 +49,12 @@ Introduces optimal 2-bit orthogonal residual quantization:
 - Asymmetric inner product estimation $\langle \mathbf{q}, \mathbf{z} \rangle \approx \alpha \langle \mathbf{q}, \mathbf{b}_1 \rangle + \beta \langle \mathbf{q}, \mathbf{b}_2 \rangle$ runs via two fused register popcounts.
 - **Scientific Impact:** Pure bit-only recall (with **zero sidecar**, 96 B/vector) jumps from **~79.5% to >96.0%**.
 
-### 5. Hebel 4: Geodetic Spatial Gating in 64-Bit Metadata Word ($m_i$)
-Unifies vector search with spatial coordinate indexing:
-- Encodes a 48-bit geodetic Morton code / S2 cell index into the upper 48 bits of the 64-bit metadata word $m_i$ (preserving bit 0 for tombstones and bits 1..15 for domain saliency).
-- Spatial bounding boxes ($[\text{lat}_{\min}, \text{lat}_{\max}] \times [\text{lon}_{\min}, \text{lon}_{\max}]$) evaluate in **0 clock cycles in Gate 1** before touching tier or sidecar memory.
+### 5. Lever 4: Zero-Cycle Metadata & Saliency Gating in 64-Bit Word ($m_i$)
+Unifies vector search with instant partition and metadata filtering:
+- Encodes a 48-bit partition index and 15-bit saliency score into the 64-bit metadata word $m_i$ (preserving bit 0 for tombstones).
+- Partition and saliency filters evaluate in **0 clock cycles in Gate 1** before touching tier or sidecar memory.
 
-### 6. Hebel 5: Zero-Copy IPC Shared Memory Arena (Panama FFM & NVLink-C2C)
+### 6. Lever 5: Zero-Copy IPC Shared Memory Arena (Panama FFM & NVLink-C2C)
 Exploits the 128 GB unified LPDDR5X memory architecture on Grace Blackwell:
 - PyTorch / TensorRT writes continuous foundation model embeddings into POSIX shared memory (`/dev/shm`).
 - Java maps the buffer via `Arena.ofShared()` into an off-heap `MemorySegment`.
@@ -71,13 +71,13 @@ Named after the *pithos* (storage jar) of **Diogenes of Sinope**, embodying abso
 
 ## Technical Comparison with Existing Vector Databases
 
-| Feature | Milvus / Qdrant / Pinecone | FAISS (IVF-PQ) | USearch / HNSWLib | **Pithos v1.1.0** |
+| Feature | Milvus / Qdrant / Pinecone | FAISS (IVF-PQ) | USearch / HNSWLib | **Pithos v1.2.0** |
 | :--- | :--- | :--- | :--- | :--- |
 | **Indexing Paradigm** | Graph / HNSW clustering | Voronoi IVF partitions | HNSW graphs | **Model-Isomorphic Spectral Quantization** |
 | **Precision Sidecar** | Uncompressed FP32/FP16 | Float reconstruction table | Float vector array | **Blackwell FP8 (E4M3) / NVFP4 (E2M1)** |
 | **Candidate Reranking** | Floating-point FLOPs | Vectorized float multiply | FP32 Distance | **QueryLUT Integer Additions (Zero FLOPs)** |
-| **Spatial / Metadata Filter** | Separate Bitsets / B-Trees | Secondary Payload Index | Post-filtering | **Gate 1 Zero-Cycle Morton Code in $m_i$** |
-| **Multi-Query Sweep** | $M \times N$ sequential scans | Brute-force / Graph hops | Clustered scan | **Hierarchical Spherical Early-Exit** |
+| **Spatial / Metadata Filter** | Separate Bitsets / B-Trees | Secondary Payload Index | Post-filtering | **Gate 1 Zero-Cycle Saliency & Metadata in $m_i$** |
+| **Multi-Query Sweep** | $M \times N$ sequential scans | Brute-force / Graph hops | Clustered scan | **Hierarchical Centroid Early-Exit** |
 | **Hardware Co-Design** | GPU or CPU (No FPGA DMA) | CPU / GPU (Heap Allocs) | CPU SIMD | **Zero-GC Panama FFM + FPGA Direct DMA** |
 
 ---
@@ -109,12 +109,12 @@ Offset 25..28  : tier count T (4-byte unaligned int, 1 <= T <= 8)
 Offset 29..60  : cumulative tier boundaries (up to 8 x 4-byte ints)
 Offset 61      : qMode (1 byte: 0=1-bit, 1=2-bit QJL Residuals, 2=Float32 bypass)
 Offset 62      : sidecarMode (1 byte: 0=None, 1=FP16, 2=FP8 E4M3, 3=FP4 NVFP4)  <-- [NEW in v1.1.0]
-Offset 63      : flags / reserved (1 byte: bit 0 = Geodetic Morton enabled)      <-- [NEW in v1.1.0]
+Offset 63      : flags / reserved (1 byte)                                      <-- [NEW in v1.1.0]
 ```
 
 ### Sidecar Columnar Files
 - **`<basePath>_ids.bin`**: $N \times 8$ bytes (64-bit record IDs).
-- **`<basePath>_metadata.bin`**: $N \times 8$ bytes (48-bit Morton code + 15-bit Saliency + 1-bit Tombstone).
+- **`<basePath>_metadata.bin`**: $N \times 8$ bytes (48-bit Partition / Metadata tag + 15-bit Saliency + 1-bit Tombstone).
 - **`<basePath>_tier_k.bin`**: $N \times \text{bytesPerRecord}_k$ (binarized / QJL residual columnar tiers).
 - **`<basePath>_fp16.bin`** (`sidecarMode = 1`): $N \times D \times 2$ bytes.
 - **`<basePath>_fp8.bin`** (`sidecarMode = 2`): $N \times D \times 1$ byte.
@@ -133,25 +133,20 @@ with pithosdb.VectorDb() as db:
     records = np.random.randn(50_000, 384).astype(np.float32)
     
     # 1. Compile index with native FP8 (E4M3) sidecar
-    pithosdb.VectorDb.compile_index(
-        base_path="temp/fp8_dataset",
+    pithosdb.VectorDb.compile_container(
+        path="temp/fp8_dataset.pithos",
         records=records,
         tiers=[64, 128, 256, 384],
-        sidecar_mode=pithosdb.SidecarMode.FP8  # or "fp8", "fp4", "fp16", "none"
+        sidecar_mode=pithosdb.SidecarMode.FP8,
+        user_metadata={"dataset": "foundation_embeddings", "curator": "Diogenes"}
     )
     
     # 2. Memory-map index & run search with precomputed query LUT reranking
-    index = db.load_index("dataset", "temp/fp8_dataset")
+    index = db.load_index("dataset", "temp/fp8_dataset.pithos")
     queries = np.random.randn(10, 384).astype(np.float32)
     results = index.search(queries, k=10)
-    
-    # 3. Spatial Bounding Box Filter (Gate 1 Geodetic Morton Gating)
-    spatial_results = index.search_spatial(
-        queries,
-        lat_range=(8.0, 10.0),
-        lon_range=(30.0, 32.0),
-        k=10
-    )
+    for res in results:
+        print(f"Match ID: {res.id}, Distance: {res.distance:.4f}")
 ```
 
 ### C/C++ Native SDK (`pithos.h`)
@@ -177,7 +172,7 @@ vdb_compile_index_file_ext(
 
 ## Verification & Test Suite
 
-Pithos v1.1.0 includes an exhaustive test and verification suite:
+Pithos includes an exhaustive test and verification suite:
 
 ```bash
 # 1. Execute Java Core Unit & Bit-Exact Precision Tests
@@ -194,4 +189,4 @@ python3 benchmarks/verify_fp8_sidecar.py --dim 384 --records 50000 --benchmark-l
 
 ## License & Attribution
 Pithos is licensed under the **Apache 2.0 License**.  
-Developed by the Pithos Database team for high-throughput foundation model retrieval and planetary-scale applications.
+Developed by the Pithos Database team for high-throughput foundation model retrieval and multi-billion scale datasets.

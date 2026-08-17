@@ -44,7 +44,7 @@ graph TD
     
     F --> H
     G --> I
-    I -- "Early Exit (Flat Terrain)" --> K[Skip Record]:::output
+    I -- "Early Exit (Low Saliency)" --> K[Skip Record]:::output
     I -- "Pass" --> J
     J -- "Distance > Threshold" --> L[Skip / Prune Record]:::output
     J -- "Distance <= Threshold" --> M[Multi-Family Resonant Voting]:::transform
@@ -124,11 +124,11 @@ where $\text{Base}_k$ is the memory segment offset for tier $k$.
 Query vectors are binarized as $b(q) = \text{sign}(z(q)) \in \{0, 1\}^D$ and cascaded through registration gates to prevent unneeded memory-bus transfers:
 
 - **Gate 1 (Liveliness):** Skips record if the tombstone bit is set ($T_i = 1$) or the attribute validity bit is missing ($M_i = 0$).
-- **Gate 2 (Quantization Entropy Gate — QEG):** Evaluates macro-topography in the first tier (Tier 0). Specifically, if the most significant bit (MSB, bit 63) of the first 64-bit word of Tier 0 of the record is 0:
+- **Gate 2 (Quantization Entropy Gate — QEG):** Evaluates macro-saliency in the primary tier (Tier 0). Specifically, if the most significant bit (MSB, bit 63) of the first 64-bit word of Tier 0 of the record is 0:
 
 $$\text{MSB}(t_i^{(0)}) = 0$$
 
-the record is classified as flat terrain and the search early-terminates.
+the record is classified as low-entropy background and the search early-terminates.
 
 - **Gate 3 (XOR-Popcount Cascade):** Computes partial Hamming distance tier-by-tier up to active tier $T$:
 
@@ -140,7 +140,7 @@ If at any tier $k \le T$, the accumulated distance $\mathcal{D}_H^{(k)}$ exceeds
 
 ## 5. Multi-Family Resonant Voting
 
-For planetary-scale anomaly verification, Pithos implements a lock-free multi-family resonant voting schema. Given a set of queries $Q = \{q_1, \dots, q_M\}$ split into $F$ families (each query $q_j$ assigned family $f_j \in \{0, \dots, F-1\}$ and threshold $T_j$):
+For multi-archetype consensus verification and high-confidence anomaly filtering, Pithos implements a lock-free multi-family resonant voting schema. Given a set of queries $Q = \{q_1, \dots, q_M\}$ split into $F$ families (each query $q_j$ assigned family $f_j \in \{0, \dots, F-1\}$ and threshold $T_j$):
 
 - Each worker thread builds a thread-local bitmask of resonant family votes $V_i$ for record $i$:
 

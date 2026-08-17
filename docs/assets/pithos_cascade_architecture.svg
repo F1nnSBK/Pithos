@@ -55,9 +55,9 @@
   <!-- 2. Gate 1 Node -->
   <g transform="translate(100, 140)">
     <rect width="600" height="60" class="node-rect"/>
-    <text x="20" y="24" class="header-text">Gate 1: Geodetic Spatial &amp; Saliency Filtering</text>
+    <text x="20" y="24" class="header-text">Gate 1: Liveliness, Saliency &amp; Metadata Filter</text>
     <text x="580" y="24" class="accent-badge">0 Clock Cycles</text>
-    <text x="20" y="44" class="desc-text">48-Bit Morton Code in Metadata Word m_i • Instant Bounding Box Pruning</text>
+    <text x="20" y="44" class="desc-text">64-Bit Metadata Word m_i • Instant Partition &amp; Tombstone Pruning</text>
   </g>
 
   <!-- Flow Arrow: Gate 1 -> Gate 2 -->

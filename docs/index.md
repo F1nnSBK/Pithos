@@ -1,7 +1,7 @@
 # ⚱ Pithos — Model-Isomorphic Vector Database
 
 <p align="center">
-  <strong>Ultra-low latency, model-isomorphic vector database engine for planetary-scale datasets.</strong>
+  <strong>Ultra-low latency, model-isomorphic vector database engine for multi-billion scale datasets.</strong>
 </p>
 
 <p align="center">
@@ -29,13 +29,14 @@
     - **NVIDIA GPU Acceleration:** Direct CUDA kernel dispatch for batch Hamming distance, multi-family voting, and Fast Walsh-Hadamard Transforms.
 
 === "Model-Isomorphic Storage"
+    - **Universal Single-File Container (`.pithos`):** Schema-agnostic, zero-copy single-file database format with Apache Arrow IPC partition embedding.
     - **Off-Heap Virtual Memory:** Direct POSIX-aligned columnar mapping via Java Panama FFM (Foreign Function & Memory API) and C-API shared memory.
     - **Matryoshka Spectral Decomposition:** Energy-budgeted tiered binary indexing that prunes up to 99% of search space in Gate 1.
     - **LSM-Tree Delta Buffer:** Real-time lock-free insertions and tombstone soft-deletes with zero-cost snapshots.
 
 === "Asymmetric Search (ADC)"
     - **Continuous FP32 Fidelity:** Queries are evaluated in 100% continuous 32-bit floating point precision against compressed database records.
-    - **Precomputed Query LUTs (Hebel 1):** Zero floating-point multiplication during Gate 3 candidate reranking.
+    - **Precomputed Query LUTs (Lever 1):** Zero floating-point multiplication during Gate 3 candidate reranking.
     - **100% Recall@1 on High-Dimensional Foundation Model Benchmarks.**
 
 ---
@@ -50,69 +51,29 @@ pip install pithosdb numpy
 
 ```python
 import numpy as np
-import pithos
+from pithos import VectorDb, SidecarMode
 
-# 1. Initialize Pithos Model-Isomorphic Database singleton
-db = pithos.PithosMIDB()
-
-# 2. Compile an index from float vectors with FP8 sidecar
 dim = 384
 num_vectors = 50_000
 vectors = np.random.randn(num_vectors, dim).astype(np.float32)
-# Normalize to unit hypersphere
 vectors /= np.linalg.norm(vectors, axis=1, keepdims=True)
 
-db.compile_index(
-    output_path="dataset_index",
-    vectors=vectors,
+# 1. Compile into self-contained .pithos container with FP8 precision sidecar
+VectorDb.compile_container(
+    path="dataset.pithos",
+    records=vectors,
     tiers=[64, 128, 256, 384],
-    sidecar_mode=pithos.SidecarMode.FP8
+    sidecar_mode=SidecarMode.FP8,
+    user_metadata={"dataset": "foundation_embeddings", "curator": "Diogenes"}
 )
 
-# 3. Load memory-mapped index
-index = db.load_index("dataset_index")
-
-# 4. Perform Asymmetric Top-K Nearest Neighbor Search
-query = np.random.randn(1, dim).astype(np.float32)
-query /= np.linalg.norm(query)
-
-result_ids, result_dists = index.batch_search(query, k=10)
-print("Nearest Neighbor IDs:", result_ids[0])
-print("Euclidean Distances:", result_dists[0])
-```
-
-### C / C++ SDK Integration
-
-```c
-#include <stdio.h>
-#include "pithos.h"
-
-int main() {
-    pithos_isolate_t* isolate = NULL;
-    if (pithos_create_isolate(NULL, &isolate) != 0) {
-        fprintf(stderr, "Failed to initialize GraalVM isolate\n");
-        return 1;
-    }
-
-    // Load memory-mapped index
-    pithos_index_t* index = pithos_load_index(isolate, "dataset_index");
-    if (!index) {
-        fprintf(stderr, "Failed to map index\n");
-        return 1;
-    }
-
-    float query[384];
-    // Fill query...
-    long result_ids[10];
-    int result_distances[10];
-
-    int count = pithos_search(isolate, index, query, 10, result_ids, result_distances);
-    printf("Found %d neighbors. Top ID: %ld\n", count, result_ids[0]);
-
-    pithos_close_index(isolate, index);
-    pithos_tear_down_isolate(isolate);
-    return 0;
-}
+# 2. Memory-map index & run search
+with VectorDb() as db:
+    index = db.load_index("dataset", "dataset.pithos")
+    query = vectors[0]
+    results = index.search(query, k=10)
+    for res in results:
+        print(f"Match ID: {res.id}, Distance: {res.distance:.4f}")
 ```
 
 ---
@@ -130,9 +91,10 @@ int main() {
 
 ## Documentation Sections
 
+- [**Universal Single-File Container (.pithos)**](container_format.md): Technical specification of the schema-agnostic DIOGENES container format.
 - [**Architectural Principles**](architecture.md): Deep dive into off-heap virtual memory, memory layouts, and LMAX Disruptor parallelism.
 - [**CUDA GPU Acceleration**](cuda_integration.md): Architecture of CUDA kernels, unified host-device DMA, and multi-stream execution.
 - [**C-API Reference**](c_api_reference.md): Complete specification of C/C++ bindings, structs, and FFI interoperability.
 - [**Mathematical Foundations**](math_theory.md): SVD spectral energy decay, Sylvester-Hadamard isometric rotations, and spherical pruning.
-- [**Release Notes**](release_notes.md): Detailed changelog for Pithos v1.1.0 and previous releases.
+- [**Release Notes**](release_notes.md): Detailed changelog for Pithos v1.2.0 and previous releases.
 - [**Roadmap & Next Steps**](next_steps.md): FPGA co-design, distributed clustering, and heterogeneous execution.

@@ -153,7 +153,7 @@ Pithos is specifically designed for hybrid CPU-FPGA/GPU acceleration workflows, 
 ### 5. CUDA GPU Acceleration
 Pithos includes native CUDA support for GPU-accelerated operations:
 - **CUDA Hamming Distance Kernels**: Parallel computation of Hamming distances across thousands of threads for massive batch search operations.
-- **Multi-Family Voting Kernel**: GPU-accelerated resonant voting for planetary-scale anomaly detection.
+- **Multi-Family Voting Kernel**: GPU-accelerated resonant voting for multi-archetype consensus & anomaly detection.
 - **Walsh-Hadamard Transform Kernel**: GPU-accelerated transformation of query vectors.
 - **Zero-Copy Memory Mapping**: Database tiers are mapped to GPU memory via CUDA pointers, enabling direct GPU access without CPU-GPU memory transfers.
 
