@@ -1,3 +1,5 @@
+#include <stdint.h>
+#include <stddef.h>
 #include "pithos_kernels.h"
 
 __global__ void batch_hamming_distance_kernel(

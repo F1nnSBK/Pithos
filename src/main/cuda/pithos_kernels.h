@@ -1,13 +1,14 @@
 #ifndef PITHOS_KERNELS_H
 #define PITHOS_KERNELS_H
 
+#include <stdint.h>
+#include <stddef.h>
+
 #if defined(__CUDACC__) || defined(__NVCC__)
 #include <cuda_runtime.h>
 #include <cuda_runtime_api.h>
 #include <device_launch_parameters.h>
 #else
-#include <stdint.h>
-#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 

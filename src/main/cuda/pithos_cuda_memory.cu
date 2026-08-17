@@ -1,5 +1,7 @@
-#include "pithos_kernels.h"
+#include <stdint.h>
+#include <stddef.h>
 #include <stdio.h>
+#include "pithos_kernels.h"
 
 static cudaStream_t pithos_default_stream = 0;
 static bool cuda_initialized = false;

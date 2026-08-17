@@ -18,7 +18,8 @@ dependency-reduced-pom.xml
 *.so
 *.dylib
 *.dll
-*.h
+!include/**/*.h
+!src/main/cuda/**/*.h
 
 # Docker/Build cache
 .docker-cache/
@@ -34,6 +35,7 @@ data/
 
 # Binary databases and NumPy arrays
 *.bin
+!src/test/resources/**
 *.npy
 lunar_real_data
 pithos_scale_test
