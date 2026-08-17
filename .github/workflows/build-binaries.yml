@@ -154,6 +154,9 @@ jobs:
     if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -185,6 +188,6 @@ jobs:
             if gh release view "${TAG_NAME}" >/dev/null 2>&1; then
               gh release upload "${TAG_NAME}" release-assets/* --clobber
             else
-              gh release create "${TAG_NAME}" release-assets/* --title "${RELEASE_TITLE}" --generate-notes
+              gh release create "${TAG_NAME}" release-assets/* --title "${RELEASE_TITLE}" --notes "Release ${RELEASE_TITLE} with Universal Single-File Container (.pithos) format, Blackwell FP8 / NVFP4 sidecars, and Apache Arrow IPC integration."
             fi
           fi
