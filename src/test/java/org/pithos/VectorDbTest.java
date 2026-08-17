@@ -338,4 +338,203 @@ class VectorDbTest {
 
         db.close();
     }
+
+    @Test
+    void testFP8EncodingDecoding() {
+        float[] testValues = {0.0f, -0.0f, 1.0f, -1.0f, 0.5f, -0.5f, 0.001953125f, 448.0f, -448.0f, 500.0f, -600.0f};
+        for (float val : testValues) {
+            byte encoded = VectorDb.encodeFP8_E4M3(val);
+            float decoded = VectorDb.decodeFP8_E4M3(encoded);
+            if (val == 0.0f) {
+                assertEquals(0.0f, decoded, 1e-6f);
+            } else if (Math.abs(val) > 448.0f) {
+                assertEquals(Math.signum(val) * 448.0f, decoded, 1e-3f);
+            } else {
+                float relErr = Math.abs(val - decoded) / Math.abs(val);
+                assertTrue(relErr < 0.15f, "Rel error too high for " + val + ": decoded=" + decoded);
+            }
+        }
+    }
+
+    @Test
+    void testFP8LookupTableExactness() {
+        for (int i = 0; i < 256; i++) {
+            byte b = (byte) i;
+            float fromMethod = VectorDb.decodeFP8_E4M3(b);
+            float fromLut = FlatIndex.FP8_E4M3_LUT[i];
+            assertEquals(fromMethod, fromLut, 1e-6f);
+        }
+    }
+
+    @Test
+    void testFP4EncodingDecoding() {
+        for (int nibble = 0; nibble < 16; nibble++) {
+            float decoded = VectorDb.decodeFP4_E2M1_Nibble(nibble);
+            byte reEncoded = VectorDb.encodeFP4_E2M1_Nibble(decoded);
+            assertEquals(nibble, reEncoded & 0x0F);
+        }
+    }
+
+    @Test
+    void testGeodeticMortonEncoding() {
+        long mortonEquator = VectorDb.encodeGeodeticMorton(0.0, 0.0);
+        long mortonNorthPole = VectorDb.encodeGeodeticMorton(90.0, 0.0);
+        long mortonSouthPole = VectorDb.encodeGeodeticMorton(-90.0, 0.0);
+
+        assertTrue(mortonEquator > 0L);
+        assertTrue(mortonNorthPole > 0L);
+        assertNotEquals(mortonEquator, mortonNorthPole);
+        assertNotEquals(mortonEquator, mortonSouthPole);
+    }
+
+    @Test
+    void testCompileAndQueryFP8SidecarIndex(@TempDir Path tempDir) throws IOException {
+        int D = 128;
+        int[] tiers = {64, 128};
+        TransformOperator transformer = new TransformOperator(D, tiers);
+
+        float[] vec0 = new float[D];
+        java.util.Arrays.fill(vec0, 0.5f);
+        float[] targetZ0 = transformer.preconditionAndRotate(vec0);
+        targetZ0[63] = 1.0f;
+        vec0 = transformer.backProject(targetZ0);
+
+        float[] vec1 = new float[D];
+        java.util.Arrays.fill(vec1, -0.5f);
+        float[] targetZ1 = transformer.preconditionAndRotate(vec1);
+        targetZ1[63] = 1.0f;
+        vec1 = transformer.backProject(targetZ1);
+
+        Path dbPath = tempDir.resolve("db_fp8");
+        VectorDb.compileIndexFile(dbPath.toString(), (byte) 1, 1000L, D, tiers, List.of(
+            new VectorRecord(0, vec0),
+            new VectorRecord(1, vec1)
+        ), 0, VectorDb.SIDECAR_FP8);
+
+        // Verify _fp8.bin exists and has size 2 * 128 * 1 = 256 bytes
+        Path fp8Path = tempDir.resolve("db_fp8_fp8.bin");
+        assertTrue(Files.exists(fp8Path));
+        assertEquals(2L * D * 1L, Files.size(fp8Path));
+
+        VectorDb db = new VectorDb();
+        Index index = db.loadIndex("fp8_idx", dbPath.toString(), null, 0);
+
+        assertNotNull(index);
+        assertEquals(2, index.size());
+        assertEquals(VectorDb.SIDECAR_FP8, index.getSidecarMode());
+
+        List<Index.SearchResult> results = index.search(vec0, 2);
+        assertEquals(2, results.size());
+        assertEquals(0, results.get(0).id()); // Nearest neighbor is ID 0
+
+        db.close();
+    }
+
+    @Test
+    void testCompileAndQueryFP4SidecarIndex(@TempDir Path tempDir) throws IOException {
+        int D = 128;
+        int[] tiers = {64, 128};
+        TransformOperator transformer = new TransformOperator(D, tiers);
+
+        float[] vec0 = new float[D];
+        java.util.Arrays.fill(vec0, 0.5f);
+        float[] targetZ0 = transformer.preconditionAndRotate(vec0);
+        targetZ0[63] = 1.0f;
+        vec0 = transformer.backProject(targetZ0);
+
+        float[] vec1 = new float[D];
+        java.util.Arrays.fill(vec1, -0.5f);
+        float[] targetZ1 = transformer.preconditionAndRotate(vec1);
+        targetZ1[63] = 1.0f;
+        vec1 = transformer.backProject(targetZ1);
+
+        Path dbPath = tempDir.resolve("db_fp4");
+        VectorDb.compileIndexFile(dbPath.toString(), (byte) 1, 1000L, D, tiers, List.of(
+            new VectorRecord(0, vec0),
+            new VectorRecord(1, vec1)
+        ), 0, VectorDb.SIDECAR_FP4);
+
+        // Verify _fp4.bin exists and has size 2 * (128/16 * 9) = 2 * 72 = 144 bytes
+        Path fp4Path = tempDir.resolve("db_fp4_fp4.bin");
+        assertTrue(Files.exists(fp4Path));
+        int numBlocks = (D + 15) / 16;
+        assertEquals(2L * numBlocks * 9L, Files.size(fp4Path));
+
+        VectorDb db = new VectorDb();
+        Index index = db.loadIndex("fp4_idx", dbPath.toString(), null, 0);
+
+        assertNotNull(index);
+        assertEquals(2, index.size());
+        assertEquals(VectorDb.SIDECAR_FP4, index.getSidecarMode());
+
+        List<Index.SearchResult> results = index.search(vec0, 2);
+        assertEquals(2, results.size());
+        assertEquals(0, results.get(0).id());
+
+        db.close();
+    }
+
+    @Test
+    void testFP8Compaction(@TempDir Path tempDir) throws IOException {
+        int D = 128;
+        int[] tiers = {64, 128};
+        TransformOperator transformer = new TransformOperator(D, tiers);
+
+        float[] vec0 = new float[D];
+        java.util.Arrays.fill(vec0, 0.5f);
+        float[] targetZ0 = transformer.preconditionAndRotate(vec0);
+        targetZ0[63] = 1.0f;
+        vec0 = transformer.backProject(targetZ0);
+
+        float[] vec1 = new float[D];
+        java.util.Arrays.fill(vec1, -0.5f);
+        float[] targetZ1 = transformer.preconditionAndRotate(vec1);
+        targetZ1[63] = 1.0f;
+        vec1 = transformer.backProject(targetZ1);
+
+        Path dbPath1 = tempDir.resolve("fp8_db1");
+        VectorDb.compileIndexFile(dbPath1.toString(), (byte) 1, 1000L, D, tiers, List.of(
+            new VectorRecord(0, vec0),
+            new VectorRecord(1, vec1)
+        ), 0, VectorDb.SIDECAR_FP8);
+
+        float[] vec2 = new float[D];
+        java.util.Arrays.fill(vec2, 0.2f);
+        float[] targetZ2 = transformer.preconditionAndRotate(vec2);
+        targetZ2[63] = 1.0f;
+        vec2 = transformer.backProject(targetZ2);
+
+        float[] vec3 = new float[D];
+        java.util.Arrays.fill(vec3, -0.2f);
+        float[] targetZ3 = transformer.preconditionAndRotate(vec3);
+        targetZ3[63] = 1.0f;
+        vec3 = transformer.backProject(targetZ3);
+
+        Path dbPath2 = tempDir.resolve("fp8_db2");
+        VectorDb.compileIndexFile(dbPath2.toString(), (byte) 1, 1000L, D, tiers, List.of(
+            new VectorRecord(2, vec2),
+            new VectorRecord(3, vec3)
+        ), 0, VectorDb.SIDECAR_FP8);
+
+        Path dbCompactedPath = tempDir.resolve("fp8_db_compacted");
+        String sourcePaths = dbPath1.toString() + ";" + dbPath2.toString();
+        VectorDb.compactIndexes(sourcePaths, dbCompactedPath.toString());
+
+        Path fp8CompactedPath = tempDir.resolve("fp8_db_compacted_fp8.bin");
+        assertTrue(Files.exists(fp8CompactedPath));
+        assertEquals(4L * D * 1L, Files.size(fp8CompactedPath));
+
+        VectorDb db = new VectorDb();
+        Index index = db.loadIndex("fp8_compacted", dbCompactedPath.toString(), null, 0);
+
+        assertNotNull(index);
+        assertEquals(4, index.size());
+        assertEquals(VectorDb.SIDECAR_FP8, index.getSidecarMode());
+
+        List<Index.SearchResult> results = index.search(vec0, 4);
+        assertEquals(4, results.size());
+        assertEquals(0, results.get(0).id());
+
+        db.close();
+    }
 }

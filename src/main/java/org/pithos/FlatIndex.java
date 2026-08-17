@@ -43,11 +43,23 @@ import com.lmax.disruptor.dsl.ProducerType;
 /// Threading is coordinated via an **LMAX Disruptor lock-free ring buffer** with thread-local nearest-neighbor heaps.
 public class FlatIndex implements Index {
 
+    public static final float[] FP8_E4M3_LUT = new float[256];
+    public static final float[] FP4_E2M1_LUT = VectorDb.FP4_E2M1_TABLE;
+
+    static {
+        for (int i = 0; i < 256; i++) {
+            FP8_E4M3_LUT[i] = VectorDb.decodeFP8_E4M3((byte) i);
+        }
+    }
+
     private final MemorySegment baseSegment;
     private final MemorySegment idsSegment;
     private final MemorySegment[] tierSegments;
     private final MemorySegment metadataSegment;
     private final MemorySegment fp16Segment;
+    private final MemorySegment fp8Segment;
+    private final MemorySegment fp4Segment;
+    private final int sidecarMode;
 
     private final byte planetId;
     private final long planetRadius;
@@ -85,7 +97,6 @@ public class FlatIndex implements Index {
     /// Sets the target cumulative spectral energy budget τ ∈ (0, 1] for Matryoshka early-exit tier truncation.
     ///
     /// @param tau cumulative variance budget (e.g. `0.90` captures 90% of spectral variance)
-
     public void setTargetEnergyBudget(double tau) {
         if (tau <= 0.0 || tau > 1.0) {
             throw new IllegalArgumentException("Energy budget tau must be in (0, 1]");
@@ -158,15 +169,32 @@ public class FlatIndex implements Index {
         }
     }
 
+    /// Returns the active sidecar storage format mode.
+    public int getSidecarMode() {
+        return sidecarMode;
+    }
+
     public FlatIndex(MemorySegment baseSegment, MemorySegment idsSegment, MemorySegment[] tierSegments,
             MemorySegment metadataSegment, MemorySegment fp16Segment,
             byte planetId, long planetRadius, int dimension, int numTiers, int[] tiers, long size,
             float[] cumulativeEnergy, int qMode) {
+        this(baseSegment, idsSegment, tierSegments, metadataSegment, fp16Segment, null, null,
+                planetId, planetRadius, dimension, numTiers, tiers, size, cumulativeEnergy, qMode,
+                fp16Segment != null ? VectorDb.SIDECAR_FP16 : VectorDb.SIDECAR_NONE);
+    }
+
+    public FlatIndex(MemorySegment baseSegment, MemorySegment idsSegment, MemorySegment[] tierSegments,
+            MemorySegment metadataSegment, MemorySegment fp16Segment, MemorySegment fp8Segment, MemorySegment fp4Segment,
+            byte planetId, long planetRadius, int dimension, int numTiers, int[] tiers, long size,
+            float[] cumulativeEnergy, int qMode, int sidecarMode) {
         this.baseSegment = baseSegment;
         this.idsSegment = idsSegment;
         this.tierSegments = tierSegments;
         this.metadataSegment = metadataSegment;
         this.fp16Segment = fp16Segment;
+        this.fp8Segment = fp8Segment;
+        this.fp4Segment = fp4Segment;
+        this.sidecarMode = sidecarMode;
         this.planetId = planetId;
         this.planetRadius = planetRadius;
         this.dimension = dimension;
@@ -362,6 +390,9 @@ public class FlatIndex implements Index {
             }
         }
 
+        byte sidecarModeByte = mappedBase.get(ValueLayout.JAVA_BYTE, 62);
+        int sidecarMode = sidecarModeByte & 0xFF;
+
         MemorySegment fp16Segment = null;
         Path fp16Path = Path.of(basePath + "_fp16.bin");
         if (fp16Path.toFile().exists()) {
@@ -371,8 +402,28 @@ public class FlatIndex implements Index {
             }
         }
 
-        return new FlatIndex(mappedBase, idsSegment, tierSegments, metadataSegment, fp16Segment,
-                planetId, planetRadius, dimension, numTiers, tiers, totalRecords, cumulativeEnergy, qMode);
+        MemorySegment fp8Segment = null;
+        Path fp8Path = Path.of(basePath + "_fp8.bin");
+        if (fp8Path.toFile().exists()) {
+            try (FileChannel channel = FileChannel.open(fp8Path, StandardOpenOption.READ)) {
+                fp8Segment = channel.map(FileChannel.MapMode.READ_ONLY, 0, totalRecords * dimension * 1L,
+                        Arena.global());
+            }
+        }
+
+        MemorySegment fp4Segment = null;
+        Path fp4Path = Path.of(basePath + "_fp4.bin");
+        if (fp4Path.toFile().exists()) {
+            int numBlocks = (dimension + 15) / 16;
+            long bytesPerRecord = numBlocks * 9L;
+            try (FileChannel channel = FileChannel.open(fp4Path, StandardOpenOption.READ)) {
+                fp4Segment = channel.map(FileChannel.MapMode.READ_ONLY, 0, totalRecords * bytesPerRecord,
+                        Arena.global());
+            }
+        }
+
+        return new FlatIndex(mappedBase, idsSegment, tierSegments, metadataSegment, fp16Segment, fp8Segment, fp4Segment,
+                planetId, planetRadius, dimension, numTiers, tiers, totalRecords, cumulativeEnergy, qMode, sidecarMode);
     }
 
     @Override
@@ -398,7 +449,9 @@ public class FlatIndex implements Index {
         }
 
         int numQueries = queries.length;
-        int kCandidate = (int) Math.min(size, Math.max(100, 3 * k));
+        int kCandidate = (int) Math.min(size, (fp16Segment != null || fp8Segment != null || fp4Segment != null) 
+                ? Math.max(500, 25 * k) 
+                : Math.max(100, 3 * k));
 
         long[][][] threadLocalIds = new long[numWorkers][numQueries][kCandidate];
         int[][][] threadLocalDists = new int[numWorkers][numQueries][kCandidate];
@@ -498,7 +551,32 @@ public class FlatIndex implements Index {
             }
 
             List<RerankedCandidate> reranked = new ArrayList<>();
-            if (fp16Segment != null) {
+            if (fp8Segment != null) {
+                // Hebel 1: Asymmetric Precomputed Query Lookup-Tables
+                float[][] queryLut = new float[dimension][256];
+                float[] qRaw = queries[q];
+                for (int d = 0; d < dimension; d++) {
+                    float qVal = qRaw[d];
+                    for (int b = 0; b < 256; b++) {
+                        float diff = qVal - FP8_E4M3_LUT[b];
+                        queryLut[d][b] = diff * diff;
+                    }
+                }
+                byte[] localFp8 = new byte[dimension];
+                for (long rowIdx : candidates) {
+                    double dist = computeExactL2FP8_LUT(queryLut, rowIdx, localFp8);
+                    reranked.add(new RerankedCandidate(rowIdx, dist));
+                }
+            } else if (fp4Segment != null) {
+                int numBlocks = (dimension + 15) / 16;
+                int bytesPerRecord = numBlocks * 9;
+                byte[] localFp4 = new byte[bytesPerRecord];
+                float[] qRaw = queries[q];
+                for (long rowIdx : candidates) {
+                    double dist = computeExactL2FP4(qRaw, rowIdx, localFp4, numBlocks);
+                    reranked.add(new RerankedCandidate(rowIdx, dist));
+                }
+            } else if (fp16Segment != null) {
                 float[] rawQuery = queries[q];
                 short[] localFp16 = new short[dimension];
                 for (long rowIdx : candidates) {
@@ -704,6 +782,43 @@ public class FlatIndex implements Index {
                 }
             }
         }
+    }
+
+    private double computeExactL2FP8_LUT(float[][] queryLut, long rowIdx, byte[] localFp8) {
+        long rowOffset = rowIdx * (long) dimension;
+        MemorySegment.copy(fp8Segment, ValueLayout.JAVA_BYTE, rowOffset, localFp8, 0, dimension);
+        double sum = 0.0;
+        for (int d = 0; d < dimension; d++) {
+            sum += queryLut[d][localFp8[d] & 0xFF];
+        }
+        return sum;
+    }
+
+    private double computeExactL2FP4(float[] rawQuery, long rowIdx, byte[] localFp4, int numBlocks) {
+        long rowOffset = rowIdx * (numBlocks * 9L);
+        MemorySegment.copy(fp4Segment, ValueLayout.JAVA_BYTE, rowOffset, localFp4, 0, numBlocks * 9);
+        double sum = 0.0;
+        for (int b = 0; b < numBlocks; b++) {
+            int blockOffset = b * 9;
+            float scale = FP8_E4M3_LUT[localFp4[blockOffset] & 0xFF];
+            int blockStart = b * 16;
+            for (int j = 0; j < 8; j++) {
+                byte packed = localFp4[blockOffset + 1 + j];
+                int n0 = packed & 0xF;
+                int n1 = (packed >>> 4) & 0xF;
+                int d0 = blockStart + j * 2;
+                int d1 = blockStart + j * 2 + 1;
+                if (d0 < dimension) {
+                    float diff = rawQuery[d0] - (FP4_E2M1_LUT[n0] * scale);
+                    sum += diff * diff;
+                }
+                if (d1 < dimension) {
+                    float diff = rawQuery[d1] - (FP4_E2M1_LUT[n1] * scale);
+                    sum += diff * diff;
+                }
+            }
+        }
+        return sum;
     }
 
     private double computeExactL2FP16(float[] rawQuery, long rowIdx, short[] localFp16) {

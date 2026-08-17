@@ -125,7 +125,7 @@ class TestPithosComplete(unittest.TestCase):
             # Test FPGA hardware descriptor
             fpga_desc = index.get_fpga_descriptor(0)
             self.assertEqual(fpga_desc.record_count, self.num_records)
-            self.assertEqual(fpga_desc.tier_dimension, self.dim)
+            self.assertEqual(fpga_desc.tier_dimension, self.tiers[0])
             self.assertEqual(fpga_desc.tier_base_address, addr)
             self.assertEqual(fpga_desc.tier_byte_length, length)
             self.assertEqual(fpga_desc.metadata_base_address, m_addr)

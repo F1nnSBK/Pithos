@@ -292,11 +292,11 @@ public class CApi {
         }
     }
 
-    /// Compiles raw continuous float records into a multi-tier binary database layout with optional FP16 sidecar.
+    /// Compiles raw continuous float records into a multi-tier binary database layout with configurable sidecar mode.
     @CEntryPoint(name = "vdb_compile_index_file_ext")
     public static int compileIndexFileExt(IsolateThread thread, CCharPointer path, byte planetId, long planetRadius,
             int dimension, CIntPointer tiers, int numTiers,
-            CLongPointer ids, CFloatPointer vectors, int numRecords, int qMode, int writeFp16) {
+            CLongPointer ids, CFloatPointer vectors, int numRecords, int qMode, int sidecarMode) {
         try {
             String filePath = CTypeConversion.toJavaString(path);
 
@@ -315,12 +315,26 @@ public class CApi {
                 records.add(new VectorRecord(id, vector));
             }
 
-            VectorDb.compileIndexFile(filePath, planetId, planetRadius, dimension, javaTiers, records, qMode, writeFp16 != 0);
+            VectorDb.compileIndexFile(filePath, planetId, planetRadius, dimension, javaTiers, records, qMode, sidecarMode);
             return 0;
         } catch (Throwable t) {
             t.printStackTrace();
             return -4;
         }
+    }
+
+    /// Returns the sidecar format mode (0=None, 1=FP16, 2=FP8, 3=FP4) for a loaded index.
+    @CEntryPoint(name = "vdb_get_sidecar_mode")
+    public static int getSidecarMode(IsolateThread thread, CCharPointer indexName) {
+        if (db == null) {
+            return -1;
+        }
+        String idxName = CTypeConversion.toJavaString(indexName);
+        Index index = db.getIndex(idxName);
+        if (index == null) {
+            return -2;
+        }
+        return index.getSidecarMode();
     }
 
     /// Returns the total record count (N) for a loaded index.

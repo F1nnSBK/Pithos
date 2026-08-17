@@ -84,6 +84,11 @@ public interface Index extends AutoCloseable {
     /// Returns the number of cumulative Matryoshka tiers.
     int getTierCount();
 
+    /// Returns the sidecar format mode (0=None, 1=FP16, 2=FP8, 3=FP4).
+    default int getSidecarMode() {
+        return 0;
+    }
+
     /// Represents a single search result match containing the resolved record ID and distance score.
     ///
     /// @param id the unique record identifier

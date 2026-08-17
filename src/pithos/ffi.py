@@ -91,6 +91,10 @@ class NativeBindings:
         self.lib.vdb_set_energy_budget.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_double]
         self.lib.vdb_set_energy_budget.restype = ctypes.c_int
 
+        if hasattr(self.lib, "vdb_get_sidecar_mode"):
+            self.lib.vdb_get_sidecar_mode.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+            self.lib.vdb_get_sidecar_mode.restype = ctypes.c_int
+
         # Search & Resonant Voting
         self.lib.vdb_batch_search.argtypes = [
             ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int,

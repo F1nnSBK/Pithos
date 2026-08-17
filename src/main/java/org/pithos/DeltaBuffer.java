@@ -142,6 +142,21 @@ public class DeltaBuffer {
         return entries.size();
     }
 
+    /// Returns the vector dimension.
+    public int getDimension() {
+        return dimension;
+    }
+
+    /// Returns the configured soft flush threshold.
+    public int getFlushThreshold() {
+        return flushThreshold;
+    }
+
+    /// Returns the backing WAL filepath, or `null` if running in-memory only.
+    public String getWalPath() {
+        return walPath;
+    }
+
     /// Returns `true` if the live entry count has reached or exceeded the configured flush threshold.
     public boolean needsFlush() {
         return liveCount.get() >= flushThreshold;

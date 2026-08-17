@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import ctypes
+import os
+import math
+import shutil
 from dataclasses import dataclass
 from enum import IntEnum
 from typing import List, Optional, Union, Dict, Any, Sequence
@@ -8,11 +11,59 @@ import numpy as np
 
 from .ffi import NativeBindings, PithosNativeError
 
+_FP4_TABLE = [0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0]
+
+def _encode_fp8_e4m3_scalar(val: float) -> int:
+    if val == 0.0:
+        return 0
+    sign = 1 if val < 0.0 else 0
+    abs_val = abs(val)
+    if abs_val > 448.0:
+        abs_val = 448.0
+    if abs_val < 0.015625:  # 2^(-6) subnormal
+        mantissa = min(7, int(round(abs_val * 512.0)))
+        return (sign << 7) | mantissa
+    exp = int(math.floor(math.log2(abs_val))) + 7
+    exp = max(1, min(15, exp))
+    scale = math.pow(2.0, exp - 7)
+    mantissa = min(7, max(0, int(round((abs_val / scale - 1.0) * 8.0))))
+    return (sign << 7) | (exp << 3) | mantissa
+
+def _decode_fp8_e4m3_scalar(b: int) -> float:
+    sign = 1 if (b & 0x80) != 0 else 0
+    exp = (b >> 3) & 0x0F
+    mantissa = b & 0x07
+    sign_mult = -1.0 if sign == 1 else 1.0
+    if exp == 0:
+        return sign_mult * (mantissa / 512.0)
+    else:
+        scale = math.pow(2.0, exp - 7)
+        return sign_mult * scale * (1.0 + mantissa / 8.0)
+
+def _encode_fp4_nibble(val: float) -> int:
+    sign = 1 if val < 0.0 else 0
+    abs_val = abs(val)
+    best_idx = 0
+    best_diff = abs_val
+    for i in range(1, 8):
+        diff = abs(abs_val - _FP4_TABLE[i])
+        if diff < best_diff:
+            best_diff = diff
+            best_idx = i
+    return (sign << 3) | (best_idx & 0x07)
+
 class QuantizationMode(IntEnum):
     """Supported vector quantization modes in Pithos."""
     ONE_BIT = 0       # 1-bit sign quantization (1 bit per dimension)
-    TWO_BIT = 1       # 2-bit ternary quantization (sign + mask, 2 bits per dimension)
+    TWO_BIT = 1       # 2-bit ternary / QJL residual quantization (2 bits per dimension)
     FLOAT32 = 2       # Unquantized 32-bit float bypass
+
+class SidecarMode(IntEnum):
+    """Supported float sidecar storage formats in Pithos."""
+    NONE = 0          # No float sidecar (asymmetric rotated L2 fallback)
+    FP16 = 1          # IEEE 754 half-precision float sidecar (_fp16.bin, 2 B/dim)
+    FP8  = 2          # OCP/NVIDIA Blackwell FP8 E4M3 sidecar (_fp8.bin, 1 B/dim)
+    FP4  = 3          # Blackwell NVFP4 E2M1 block microscaling (_fp4.bin, 0.5 B/dim + scale)
 
 @dataclass(frozen=True)
 class SearchResult:
@@ -33,6 +84,7 @@ class IndexInfo:
     planet_id: int
     planet_radius: int
     tiers_count: int
+    sidecar_mode: SidecarMode = SidecarMode.NONE
 
     def __getitem__(self, item: str) -> Any:
         return getattr(self, item)
@@ -44,6 +96,7 @@ class IndexInfo:
             "planet_id": self.planet_id,
             "planet_radius": self.planet_radius,
             "tiers_count": self.tiers_count,
+            "sidecar_mode": int(self.sidecar_mode),
         }
 
 
@@ -170,12 +223,26 @@ class Index:
         )
         self._ffi.check_status(status, "get index info")
         
+        if hasattr(self._ffi.lib, "vdb_get_sidecar_mode"):
+            sidecar_code = self._ffi.lib.vdb_get_sidecar_mode(self._ffi.thread, self._name.encode("utf-8"))
+            sidecar_mode = SidecarMode(sidecar_code) if sidecar_code >= 0 else SidecarMode.NONE
+        else:
+            if os.path.exists(f"{self._base_path}_fp8.bin"):
+                sidecar_mode = SidecarMode.FP8
+            elif os.path.exists(f"{self._base_path}_fp4.bin"):
+                sidecar_mode = SidecarMode.FP4
+            elif os.path.exists(f"{self._base_path}_fp16.bin"):
+                sidecar_mode = SidecarMode.FP16
+            else:
+                sidecar_mode = SidecarMode.NONE
+
         self._info = IndexInfo(
             dimension=dim.value,
             size=sz.value,
             planet_id=pid.value,
             planet_radius=prad.value,
-            tiers_count=tcount.value
+            tiers_count=tcount.value,
+            sidecar_mode=sidecar_mode
         )
         return self._info
 
@@ -271,6 +338,17 @@ class Index:
             results.append(q_res)
 
         return results[0] if is_single else results
+
+    def batch_search(
+        self,
+        queries: Union[np.ndarray, Sequence[float], Sequence[Sequence[float]]],
+        k: int = 10,
+        cuda: bool = False
+    ) -> Union[List[SearchResult], List[List[SearchResult]]]:
+        """
+        Alias for search() performing batch k-NN search across multi-tier vectors.
+        """
+        return self.search(queries, k=k, cuda=cuda)
 
     def search_merged(
         self,
@@ -430,8 +508,9 @@ class Index:
         
         num_recs = self.size()
         if num_recs > 0 and tier_len > 0:
-            words_per_record = int(tier_len // (num_recs * 8))
-            tier_dim = words_per_record * 64
+            bytes_per_rec = int(tier_len // num_recs)
+            tier_dim = bytes_per_rec * 8
+            words_per_record = max(1, (bytes_per_rec + 7) // 8)
         else:
             tier_dim = self.dimension
             words_per_record = (tier_dim + 63) // 64
@@ -567,7 +646,8 @@ class VectorDb:
         planet_id: int = 1,
         planet_radius: int = 1737400,
         q_mode: QuantizationMode = QuantizationMode.ONE_BIT,
-        write_fp16: bool = True,
+        sidecar_mode: Union[SidecarMode, str, int] = SidecarMode.FP8,
+        write_fp16: Optional[bool] = None,
         lib_path: Optional[str] = None
     ) -> None:
         """
@@ -587,6 +667,19 @@ class VectorDb:
         else:
             tiers_arr = np.ascontiguousarray(tiers, dtype=np.int32)
 
+        if write_fp16 is not None:
+            actual_sidecar = SidecarMode.FP16 if write_fp16 else SidecarMode.NONE
+        elif isinstance(sidecar_mode, str):
+            sidecar_map = {
+                "none": SidecarMode.NONE,
+                "fp16": SidecarMode.FP16,
+                "fp8": SidecarMode.FP8,
+                "fp4": SidecarMode.FP4
+            }
+            actual_sidecar = sidecar_map.get(sidecar_mode.lower(), SidecarMode.FP8)
+        else:
+            actual_sidecar = SidecarMode(int(sidecar_mode))
+
         status = ffi.lib.vdb_compile_index_file_ext(
             ffi.thread,
             base_path.encode("utf-8"),
@@ -599,9 +692,66 @@ class VectorDb:
             vecs.ctypes.data_as(ctypes.c_void_p),
             ctypes.c_int(num_records),
             ctypes.c_int(int(q_mode)),
-            ctypes.c_int(1 if write_fp16 else 0)
+            ctypes.c_int(int(actual_sidecar))
         )
         ffi.check_status(status, "compile index file")
+
+        # Sidecar file handling (FP8 / FP4 / NONE)
+        if actual_sidecar == SidecarMode.FP8:
+            fp16_file = f"{base_path}_fp16.bin"
+            if os.path.exists(fp16_file):
+                os.remove(fp16_file)
+            fp8_file = f"{base_path}_fp8.bin"
+            if not os.path.exists(fp8_file) or os.path.getsize(fp8_file) != num_records * dimension:
+                fp8_bytes = bytearray(num_records * dimension)
+                flat_vecs = vecs.flatten()
+                for i in range(len(flat_vecs)):
+                    fp8_bytes[i] = _encode_fp8_e4m3_scalar(flat_vecs[i])
+                with open(fp8_file, "wb") as f:
+                    f.write(fp8_bytes)
+            with open(base_path, "r+b") as f:
+                f.seek(62)
+                f.write(bytes([2]))
+        elif actual_sidecar == SidecarMode.FP4:
+            fp16_file = f"{base_path}_fp16.bin"
+            if os.path.exists(fp16_file):
+                os.remove(fp16_file)
+            fp4_file = f"{base_path}_fp4.bin"
+            num_blocks = (dimension + 15) // 16
+            bytes_per_rec = num_blocks * 9
+            fp4_bytes = bytearray(num_records * bytes_per_rec)
+            for r in range(num_records):
+                row = vecs[r]
+                rec_offset = r * bytes_per_rec
+                for b in range(num_blocks):
+                    block_start = b * 16
+                    block = row[block_start : min(block_start + 16, dimension)]
+                    max_val = float(np.max(np.abs(block))) if len(block) > 0 else 0.0
+                    scale = max_val / 6.0 if max_val > 0.0 else 1.0
+                    fp8_scale = _encode_fp8_e4m3_scalar(scale)
+                    actual_scale = _decode_fp8_e4m3_scalar(fp8_scale)
+                    if actual_scale == 0.0:
+                        actual_scale = 1.0
+                    block_offset = rec_offset + b * 9
+                    fp4_bytes[block_offset] = fp8_scale
+                    for j in range(8):
+                        d0 = block_start + j * 2
+                        d1 = block_start + j * 2 + 1
+                        n0 = _encode_fp4_nibble(row[d0] / actual_scale) if d0 < dimension else 0
+                        n1 = _encode_fp4_nibble(row[d1] / actual_scale) if d1 < dimension else 0
+                        fp4_bytes[block_offset + 1 + j] = (n0 & 0x0F) | ((n1 & 0x0F) << 4)
+            with open(fp4_file, "wb") as f:
+                f.write(fp4_bytes)
+            with open(base_path, "r+b") as f:
+                f.seek(62)
+                f.write(bytes([3]))
+        elif actual_sidecar == SidecarMode.NONE:
+            fp16_file = f"{base_path}_fp16.bin"
+            if os.path.exists(fp16_file):
+                os.remove(fp16_file)
+            with open(base_path, "r+b") as f:
+                f.seek(62)
+                f.write(bytes([0]))
 
     @staticmethod
     def compact_indices(
@@ -620,6 +770,30 @@ class VectorDb:
             target_path.encode("utf-8")
         )
         ffi.check_status(status, "compact indices")
+
+        first_path = source_paths[0]
+        if os.path.exists(f"{first_path}_fp8.bin"):
+            target_fp8 = f"{target_path}_fp8.bin"
+            with open(target_fp8, "wb") as out_f:
+                for sp in source_paths:
+                    with open(f"{sp}_fp8.bin", "rb") as in_f:
+                        shutil.copyfileobj(in_f, out_f)
+            if os.path.exists(f"{target_path}_fp16.bin"):
+                os.remove(f"{target_path}_fp16.bin")
+            with open(target_path, "r+b") as f:
+                f.seek(62)
+                f.write(bytes([2]))
+        elif os.path.exists(f"{first_path}_fp4.bin"):
+            target_fp4 = f"{target_path}_fp4.bin"
+            with open(target_fp4, "wb") as out_f:
+                for sp in source_paths:
+                    with open(f"{sp}_fp4.bin", "rb") as in_f:
+                        shutil.copyfileobj(in_f, out_f)
+            if os.path.exists(f"{target_path}_fp16.bin"):
+                os.remove(f"{target_path}_fp16.bin")
+            with open(target_path, "r+b") as f:
+                f.seek(62)
+                f.write(bytes([3]))
 
     # -------------------------------------------------------------------------
     # CUDA Acceleration Management

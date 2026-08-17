@@ -1,5 +1,4 @@
 #include "pithos_kernels.h"
-#include <device_launch_parameters.h>
 
 __global__ void batch_hamming_distance_kernel(
     const uint64_t* db_vectors,
@@ -235,6 +234,73 @@ int launch_walsh_hadamard_kernel(
     
     walsh_hadamard_transform_kernel<<<grid, block, shared_mem_size, stream>>>(
         input, output, num_vectors, dimension
+    );
+    
+    return cudaGetLastError();
+}
+
+__device__ __forceinline__ float decode_fp8_e4m3_device(uint8_t val) {
+    int sign = (val >> 7) & 1;
+    int exp = (val >> 3) & 0xF;
+    int mant = val & 0x7;
+    float sign_mult = (sign == 1) ? -1.0f : 1.0f;
+    if (exp == 0) {
+        return sign_mult * ((float)mant / 512.0f);
+    } else {
+        float scale = 1.0f;
+        if (exp >= 7) {
+            scale = (float)(1 << (exp - 7));
+        } else {
+            scale = 1.0f / (float)(1 << (7 - exp));
+        }
+        return sign_mult * scale * (1.0f + (float)mant / 8.0f);
+    }
+}
+
+__global__ void batch_rerank_fp8_kernel(
+    const uint8_t* db_fp8_vectors,
+    const float* query_vectors,
+    float* distances,
+    const int num_db_vectors,
+    const int num_queries,
+    const int dimension
+) {
+    const int query_idx = blockIdx.y;
+    const int db_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    
+    if (db_idx >= num_db_vectors || query_idx >= num_queries) {
+        return;
+    }
+    
+    float total_dist = 0.0f;
+    const uint8_t* db_vec = &db_fp8_vectors[db_idx * dimension];
+    const float* q_vec = &query_vectors[query_idx * dimension];
+    
+    for (int d = 0; d < dimension; d++) {
+        float db_val = decode_fp8_e4m3_device(db_vec[d]);
+        float diff = q_vec[d] - db_val;
+        total_dist += diff * diff;
+    }
+    
+    distances[db_idx * num_queries + query_idx] = total_dist;
+}
+
+int launch_batch_rerank_fp8_kernel(
+    const uint8_t* db_fp8_vectors,
+    const float* query_vectors,
+    float* out_distances,
+    int num_db_vectors,
+    int num_queries,
+    int dimension,
+    cudaStream_t stream
+) {
+    const int block_size = 256;
+    dim3 block(block_size, 1, 1);
+    dim3 grid((num_db_vectors + block_size - 1) / block_size, num_queries, 1);
+    
+    batch_rerank_fp8_kernel<<<grid, block, 0, stream>>>(
+        db_fp8_vectors, query_vectors, out_distances,
+        num_db_vectors, num_queries, dimension
     );
     
     return cudaGetLastError();

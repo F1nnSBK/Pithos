@@ -1,5 +1,4 @@
 #include "pithos_kernels.h"
-#include <cuda_runtime_api.h>
 #include <stdio.h>
 
 static cudaStream_t pithos_default_stream = 0;

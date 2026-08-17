@@ -1,8 +1,66 @@
 #ifndef PITHOS_KERNELS_H
 #define PITHOS_KERNELS_H
 
+#if defined(__CUDACC__) || defined(__NVCC__)
 #include <cuda_runtime.h>
+#include <cuda_runtime_api.h>
+#include <device_launch_parameters.h>
+#else
 #include <stdint.h>
+#include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
+
+typedef void* cudaStream_t;
+typedef int cudaError_t;
+
+enum {
+    cudaSuccess = 0,
+    cudaErrorInvalidValue = 1,
+    cudaErrorMemoryAllocation = 2,
+    cudaErrorInitializationError = 3
+};
+
+enum {
+    cudaMemcpyHostToDevice = 1,
+    cudaMemcpyDeviceToHost = 2,
+    cudaMemcpyDeviceToDevice = 3
+};
+
+#define __global__
+#define __device__
+#define __host__
+#define __forceinline__ inline
+#define __shared__
+
+#ifdef __cplusplus
+struct dim3 {
+    unsigned int x, y, z;
+    dim3(unsigned int x = 1, unsigned int y = 1, unsigned int z = 1) : x(x), y(y), z(z) {}
+};
+extern "C" {
+    unsigned cudaConfigureCall(dim3 gridDim, dim3 blockDim, size_t sharedMem = 0, void* stream = 0);
+}
+static struct { unsigned int x, y, z; } blockIdx, threadIdx, blockDim, gridDim;
+static inline void __syncthreads() {}
+static inline int __popcll(uint64_t x) { return (int)__builtin_popcountll(x); }
+#endif
+
+static inline cudaError_t cudaGetLastError() { return (cudaError_t)0; }
+static inline cudaError_t cudaMalloc(void** devPtr, size_t size) { *devPtr = malloc(size); return (cudaError_t)0; }
+static inline cudaError_t cudaFree(void* devPtr) { free(devPtr); return (cudaError_t)0; }
+static inline cudaError_t cudaMallocHost(void** ptr, size_t size) { *ptr = malloc(size); return (cudaError_t)0; }
+static inline cudaError_t cudaFreeHost(void* ptr) { free(ptr); return (cudaError_t)0; }
+static inline cudaError_t cudaMemcpyAsync(void* dst, const void* src, size_t count, int kind, cudaStream_t stream = 0) { memcpy(dst, src, count); return (cudaError_t)0; }
+static inline cudaError_t cudaStreamSynchronize(cudaStream_t stream) { return (cudaError_t)0; }
+static inline cudaError_t cudaStreamCreate(cudaStream_t* pStream) { *pStream = (void*)1; return (cudaError_t)0; }
+static inline cudaError_t cudaStreamDestroy(cudaStream_t stream) { return (cudaError_t)0; }
+static inline cudaError_t cudaSetDevice(int device) { return (cudaError_t)0; }
+static inline cudaError_t cudaDeviceReset() { return (cudaError_t)0; }
+static inline cudaError_t cudaGetDeviceCount(int* count) { *count = 0; return (cudaError_t)0; }
+static inline cudaError_t cudaGetDeviceProperties(void* prop, int device) { return (cudaError_t)0; }
+
+#endif /* !__CUDACC__ */
 
 #define MAX_WORDS_PER_VECTOR 6
 #define MAX_TIERS 8
@@ -51,6 +109,16 @@ int launch_walsh_hadamard_kernel(
     float* input,
     float* output,
     int num_vectors,
+    int dimension,
+    cudaStream_t stream
+);
+
+int launch_batch_rerank_fp8_kernel(
+    const uint8_t* db_fp8_vectors,
+    const float* query_vectors,
+    float* out_distances,
+    int num_db_vectors,
+    int num_queries,
     int dimension,
     cudaStream_t stream
 );

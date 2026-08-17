@@ -216,16 +216,141 @@ public class VectorDb {
                 .toList();
     }
 
+    public static final int SIDECAR_NONE = 0;
+    public static final int SIDECAR_FP16 = 1;
+    public static final int SIDECAR_FP8  = 2;
+    public static final int SIDECAR_FP4  = 3;
+
+    public static final float[] FP4_E2M1_TABLE = {
+        0.0f, 0.5f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f, 6.0f,
+        -0.0f, -0.5f, -1.0f, -1.5f, -2.0f, -3.0f, -4.0f, -6.0f
+    };
+
+    /// Converts a 32-bit float to an 8-bit OCP/NVIDIA FP8 E4M3 standard byte.
+    public static byte encodeFP8_E4M3(float val) {
+        int bits = Float.floatToRawIntBits(val);
+        int sign = (bits >>> 31) & 0x1;
+        int exp = (bits >>> 23) & 0xFF;
+        int mant = bits & 0x7FFFFF;
+
+        if (Float.isNaN(val)) {
+            return (byte) ((sign << 7) | 0x7F);
+        }
+        if (Float.isInfinite(val)) {
+            return (byte) ((sign << 7) | 0x7E); // Clamp to max finite (448.0)
+        }
+
+        float absVal = Math.abs(val);
+        if (absVal >= 448.0f) {
+            return (byte) ((sign << 7) | 0x7E); // 448.0 is max finite in E4M3
+        }
+        if (absVal < (0.5f / 512.0f)) { // Underflow to zero
+            return (byte) (sign << 7);
+        }
+
+        // Subnormal in E4M3: absVal < 2^(-6) = 0.015625
+        if (absVal < 0.015625f) {
+            int m = Math.round(absVal * 512.0f);
+            if (m > 7) m = 7;
+            return (byte) ((sign << 7) | (m & 0x7));
+        }
+
+        // Normal E4M3: exponent bias is 7
+        int e = exp - 127 + 7;
+        if (e < 1) {
+            int m = Math.round(absVal * 512.0f);
+            if (m > 7) m = 7;
+            return (byte) ((sign << 7) | (m & 0x7));
+        }
+        if (e > 15) {
+            return (byte) ((sign << 7) | 0x7E);
+        }
+
+        int m = (mant + (1 << 19)) >>> 20;
+        if (m >= 8) {
+            e += 1;
+            m = 0;
+            if (e >= 16) {
+                return (byte) ((sign << 7) | 0x7E);
+            }
+        }
+        if (e == 15 && m == 7) {
+            m = 6;
+        }
+        return (byte) ((sign << 7) | (e << 3) | (m & 0x7));
+    }
+
+    /// Converts an 8-bit OCP/NVIDIA FP8 E4M3 byte to a 32-bit float.
+    public static float decodeFP8_E4M3(byte b) {
+        int u = b & 0xFF;
+        int sign = (u >>> 7) & 1;
+        int exp = (u >>> 3) & 0xF;
+        int mant = u & 0x7;
+
+        if (exp == 0xF && mant == 0x7) {
+            return sign == 1 ? -Float.NaN : Float.NaN;
+        }
+        float signMult = (sign == 1) ? -1.0f : 1.0f;
+        if (exp == 0) {
+            return signMult * (mant / 512.0f);
+        } else {
+            float scale = (float) Math.scalb(1.0f, exp - 7);
+            return signMult * scale * (1.0f + mant / 8.0f);
+        }
+    }
+
+    /// Quantizes a single float into a 4-bit NVFP4 E2M1 nibble.
+    public static byte encodeFP4_E2M1_Nibble(float val) {
+        int sign = (Float.floatToRawIntBits(val) >>> 31) & 1;
+        float absVal = Math.abs(val);
+        int bestIdx = 0;
+        float bestDiff = absVal;
+        for (int i = 1; i < 8; i++) {
+            float diff = Math.abs(absVal - FP4_E2M1_TABLE[i]);
+            if (diff < bestDiff) {
+                bestDiff = diff;
+                bestIdx = i;
+            }
+        }
+        return (byte) ((sign << 3) | (bestIdx & 0x7));
+    }
+
+    /// Decodes a 4-bit NVFP4 E2M1 nibble to a 32-bit float.
+    public static float decodeFP4_E2M1_Nibble(int nibble) {
+        return FP4_E2M1_TABLE[nibble & 0xF];
+    }
+
+    /// Encodes planetary Latitude and Longitude into a 48-bit geodetic Morton code.
+    public static long encodeGeodeticMorton(double latDeg, double lonDeg) {
+        double normLat = Math.max(0.0, Math.min(1.0, (latDeg + 90.0) / 180.0));
+        double normLon = Math.max(0.0, Math.min(1.0, (lonDeg + 180.0) / 360.0));
+
+        long x = (long) (normLon * ((1L << 24) - 1));
+        long y = (long) (normLat * ((1L << 24) - 1));
+
+        long result = 0;
+        for (int i = 0; i < 24; i++) {
+            result |= ((x & (1L << i)) << i) | ((y & (1L << i)) << (i + 1));
+        }
+        return result;
+    }
+
     /// Compiles raw float records into a multi-tier, cache-aligned database file layout (1-bit default).
     public static void compileIndexFile(String basePath, byte planetId, long planetRadius, int dimension, int[] tiers,
             List<VectorRecord> records) throws IOException {
-        compileIndexFile(basePath, planetId, planetRadius, dimension, tiers, records, 0);
+        compileIndexFile(basePath, planetId, planetRadius, dimension, tiers, records, 0, SIDECAR_NONE);
     }
 
     /// Compiles raw float records into a multi-tier, cache-aligned database file layout with configurable quantization mode.
     public static void compileIndexFile(String basePath, byte planetId, long planetRadius, int dimension, int[] tiers,
             List<VectorRecord> records, int qMode) throws IOException {
-        compileIndexFile(basePath, planetId, planetRadius, dimension, tiers, records, qMode, true);
+        compileIndexFile(basePath, planetId, planetRadius, dimension, tiers, records, qMode, SIDECAR_FP16);
+    }
+
+    /// Compiles raw continuous float vector records with boolean writeFp16 flag (backward compatible).
+    public static void compileIndexFile(String basePath, byte planetId, long planetRadius, int dimension, int[] tiers,
+            List<VectorRecord> records, int qMode, boolean writeFp16) throws IOException {
+        compileIndexFile(basePath, planetId, planetRadius, dimension, tiers, records, qMode, writeFp16 ? SIDECAR_FP16 : SIDECAR_NONE);
     }
 
     /// Compiles raw continuous float vector records into a multi-tier binary columnar format on disk.
@@ -237,10 +362,16 @@ public class VectorDb {
     /// @param tiers cumulative Matryoshka tier step boundaries (up to 8 tiers)
     /// @param records input vector records
     /// @param qMode quantization mode: 0 = 1-bit, 1 = 2-bit ternary, 2 = float32 bypass
-    /// @param writeFp16 whether to generate the `_fp16.bin` sidecar file for Stage 2 reranking
+    /// @param sidecarMode sidecar format: 0 = None, 1 = FP16, 2 = FP8 E4M3, 3 = FP4 NVFP4
     /// @throws IOException on I/O failure
     public static void compileIndexFile(String basePath, byte planetId, long planetRadius, int dimension, int[] tiers,
-            List<VectorRecord> records, int qMode, boolean writeFp16) throws IOException {
+            List<VectorRecord> records, int qMode, int sidecarMode) throws IOException {
+        compileIndexFile(basePath, planetId, planetRadius, dimension, tiers, records, qMode, sidecarMode, null, null);
+    }
+
+    /// Compiles raw continuous float vector records with optional geospatial coordinates.
+    public static void compileIndexFile(String basePath, byte planetId, long planetRadius, int dimension, int[] tiers,
+            List<VectorRecord> records, int qMode, int sidecarMode, double[] latitudes, double[] longitudes) throws IOException {
 
         if (records == null || records.isEmpty()) {
             throw new IllegalArgumentException("Records list cannot be null or empty");
@@ -250,6 +381,7 @@ public class VectorDb {
         }
 
         long totalRecords = records.size();
+        boolean hasSpatial = (latitudes != null && longitudes != null && latitudes.length == totalRecords && longitudes.length == totalRecords);
 
         // 1. Write base .pithos config file containing the 64-byte PLAN header
         Path mainPath = Path.of(basePath);
@@ -276,6 +408,10 @@ public class VectorDb {
             }
             // Write qMode to offset 61
             mapped.set(ValueLayout.JAVA_BYTE, 61, (byte) qMode);
+            // Write sidecarMode to offset 62
+            mapped.set(ValueLayout.JAVA_BYTE, 62, (byte) sidecarMode);
+            // Write flags to offset 63
+            mapped.set(ValueLayout.JAVA_BYTE, 63, (byte) (hasSpatial ? 1 : 0));
             mapped.force();
         }
 
@@ -293,7 +429,7 @@ public class VectorDb {
             mapped.force();
         }
 
-        // 3. Write Metadata file (tombstones & attributes, default value is 2 for all-active)
+        // 3. Write Metadata file (tombstones & Morton spatial flags)
         Path metadataPath = Path.of(basePath + "_metadata.bin");
         try (FileChannel channel = FileChannel.open(metadataPath,
                 StandardOpenOption.CREATE,
@@ -302,7 +438,12 @@ public class VectorDb {
                 StandardOpenOption.TRUNCATE_EXISTING)) {
             MemorySegment mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, totalRecords * 8, Arena.global());
             for (int i = 0; i < totalRecords; i++) {
-                mapped.set(ValueLayout.JAVA_LONG, i * 8L, 2L);
+                long metaWord = 2L; // bit 1 active, bit 0 tombstone = 0
+                if (hasSpatial) {
+                    long morton = encodeGeodeticMorton(latitudes[i], longitudes[i]);
+                    metaWord = (morton << 16) | 2L;
+                }
+                mapped.set(ValueLayout.JAVA_LONG, i * 8L, metaWord);
             }
             mapped.force();
         }
@@ -395,8 +536,8 @@ public class VectorDb {
             }
         }
 
-        // 5. Write FP16 sidecar: stores original (pre-rotation) vectors in IEEE 754 half-precision
-        if (writeFp16) {
+        // 5. Write Sidecar Files (FP16, FP8 E4M3, or FP4 NVFP4)
+        if (sidecarMode == SIDECAR_FP16) {
             Path fp16Path = Path.of(basePath + "_fp16.bin");
             try (FileChannel channel = FileChannel.open(fp16Path,
                     StandardOpenOption.CREATE,
@@ -414,6 +555,70 @@ public class VectorDb {
                     }
                 }
                 fp16Mapped.force();
+            }
+        } else if (sidecarMode == SIDECAR_FP8) {
+            Path fp8Path = Path.of(basePath + "_fp8.bin");
+            try (FileChannel channel = FileChannel.open(fp8Path,
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.WRITE,
+                    StandardOpenOption.READ,
+                    StandardOpenOption.TRUNCATE_EXISTING)) {
+                long fp8Bytes = totalRecords * dimension * 1L;
+                MemorySegment fp8Mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, fp8Bytes, Arena.global());
+                for (int i = 0; i < totalRecords; i++) {
+                    float[] vec = records.get(i).vector();
+                    long rowOffset = (long) i * dimension;
+                    for (int d = 0; d < dimension; d++) {
+                        byte fp8 = encodeFP8_E4M3(vec[d]);
+                        fp8Mapped.set(ValueLayout.JAVA_BYTE, rowOffset + d, fp8);
+                    }
+                }
+                fp8Mapped.force();
+            }
+        } else if (sidecarMode == SIDECAR_FP4) {
+            Path fp4Path = Path.of(basePath + "_fp4.bin");
+            int blockSize = 16;
+            int numBlocks = (dimension + blockSize - 1) / blockSize;
+            int bytesPerRecord = numBlocks * 9; // 8 bytes for 16 nibbles + 1 byte FP8 scale factor
+            try (FileChannel channel = FileChannel.open(fp4Path,
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.WRITE,
+                    StandardOpenOption.READ,
+                    StandardOpenOption.TRUNCATE_EXISTING)) {
+                long fp4Bytes = totalRecords * (long) bytesPerRecord;
+                MemorySegment fp4Mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, fp4Bytes, Arena.global());
+                for (int i = 0; i < totalRecords; i++) {
+                    float[] vec = records.get(i).vector();
+                    long rowOffset = (long) i * bytesPerRecord;
+                    for (int b = 0; b < numBlocks; b++) {
+                        int blockStart = b * blockSize;
+                        float maxAbs = 0.0f;
+                        for (int j = 0; j < blockSize; j++) {
+                            int dimIdx = blockStart + j;
+                            if (dimIdx < dimension) {
+                                float abs = Math.abs(vec[dimIdx]);
+                                if (abs > maxAbs) maxAbs = abs;
+                            }
+                        }
+                        float scale = maxAbs / 6.0f;
+                        byte scaleByte = encodeFP8_E4M3(scale);
+                        long blockOffset = rowOffset + b * 9L;
+                        fp4Mapped.set(ValueLayout.JAVA_BYTE, blockOffset, scaleByte);
+
+                        float invScale = (scale > 0.0f) ? (1.0f / scale) : 0.0f;
+                        for (int j = 0; j < 8; j++) {
+                            int d0 = blockStart + j * 2;
+                            int d1 = blockStart + j * 2 + 1;
+                            float v0 = (d0 < dimension) ? vec[d0] * invScale : 0.0f;
+                            float v1 = (d1 < dimension) ? vec[d1] * invScale : 0.0f;
+                            byte n0 = encodeFP4_E2M1_Nibble(v0);
+                            byte n1 = encodeFP4_E2M1_Nibble(v1);
+                            byte packed = (byte) ((n1 << 4) | (n0 & 0xF));
+                            fp4Mapped.set(ValueLayout.JAVA_BYTE, blockOffset + 1 + j, packed);
+                        }
+                    }
+                }
+                fp4Mapped.force();
             }
         }
     }
@@ -487,6 +692,7 @@ public class VectorDb {
         int firstTiersCount;
         int[] firstTiers;
         byte firstQMode;
+        byte firstSidecarMode;
 
         try (FileChannel channel = FileChannel.open(firstHeaderPath, StandardOpenOption.READ)) {
             MemorySegment mapped = channel.map(FileChannel.MapMode.READ_ONLY, 0, 64, Arena.global());
@@ -505,6 +711,7 @@ public class VectorDb {
                 firstTiers[i] = mapped.get(ValueLayout.JAVA_INT_UNALIGNED, 29 + (i * 4));
             }
             firstQMode = mapped.get(ValueLayout.JAVA_BYTE, 61);
+            firstSidecarMode = mapped.get(ValueLayout.JAVA_BYTE, 62);
         }
 
         long combinedRecords = 0;
@@ -528,8 +735,9 @@ public class VectorDb {
                 int dim = mapped.get(ValueLayout.JAVA_INT_UNALIGNED, 21);
                 int tiersCnt = mapped.get(ValueLayout.JAVA_INT_UNALIGNED, 25);
                 byte qm = mapped.get(ValueLayout.JAVA_BYTE, 61);
+                byte sc = mapped.get(ValueLayout.JAVA_BYTE, 62);
 
-                if (pid != firstPlanetId || radius != firstPlanetRadius || dim != firstDimension || tiersCnt != firstTiersCount || qm != firstQMode) {
+                if (pid != firstPlanetId || radius != firstPlanetRadius || dim != firstDimension || tiersCnt != firstTiersCount || qm != firstQMode || sc != firstSidecarMode) {
                     throw new IllegalArgumentException("Index schema mismatch for source: " + sourcePathStr);
                 }
 
@@ -568,6 +776,7 @@ public class VectorDb {
                 mapped.set(ValueLayout.JAVA_INT_UNALIGNED, 29 + (i * 4), firstTiers[i]);
             }
             mapped.set(ValueLayout.JAVA_BYTE, 61, firstQMode);
+            mapped.set(ValueLayout.JAVA_BYTE, 62, firstSidecarMode);
             mapped.force();
         }
 
@@ -580,6 +789,14 @@ public class VectorDb {
         Path firstFp16Path = Path.of(sourcePaths[0] + "_fp16.bin");
         if (Files.exists(firstFp16Path)) {
             mergeSidecarFiles(sourcePaths, targetPath, "_fp16.bin");
+        }
+        Path firstFp8Path = Path.of(sourcePaths[0] + "_fp8.bin");
+        if (Files.exists(firstFp8Path)) {
+            mergeSidecarFiles(sourcePaths, targetPath, "_fp8.bin");
+        }
+        Path firstFp4Path = Path.of(sourcePaths[0] + "_fp4.bin");
+        if (Files.exists(firstFp4Path)) {
+            mergeSidecarFiles(sourcePaths, targetPath, "_fp4.bin");
         }
     }
 
