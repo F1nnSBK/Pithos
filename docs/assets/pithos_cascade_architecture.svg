@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="100%" height="100%">
+  <defs>
+    <style>
+      .bg { fill: #0f172a; rx: 12px; }
+      .box { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 8px; }
+      .box-highlight { fill: #1e293b; stroke: #6366f1; stroke-width: 1.8; rx: 8px; }
+      .sidecar-box { fill: #0f172a; stroke: #475569; stroke-width: 1; rx: 6px; }
+      .text-title { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 16px; font-weight: 700; fill: #f8fafc; letter-spacing: 0.5px; }
+      .text-sub { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 12.5px; font-weight: 400; fill: #94a3b8; }
+      .text-gate { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 14px; font-weight: 600; fill: #e2e8f0; }
+      .text-tag { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 500; fill: #38bdf8; }
+      .text-code { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; fill: #cbd5e1; }
+      .text-highlight { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; font-weight: 600; fill: #818cf8; }
+      .text-accent { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; fill: #34d399; }
+      .line { stroke: #64748b; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+      .line-accent { stroke: #6366f1; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+      .arrow { fill: #64748b; }
+      .arrow-accent { fill: #6366f1; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" class="arrow"/>
+    </marker>
+    <marker id="arrow-accent" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" class="arrow-accent"/>
+    </marker>
+  </defs>
+
+  <!-- Container -->
+  <rect width="960" height="540" class="bg"/>
+
+  <!-- Main Header -->
+  <text x="480" y="38" text-anchor="middle" class="text-title">PITHOS 5-LEVER CASCADE ARCHITECTURE</text>
+  <text x="480" y="58" text-anchor="middle" class="text-sub">Model-Isomorphic Multi-Stage Retrieval &amp; Asymmetric Distance Computation</text>
+
+  <!-- Top Input: Query Vector -->
+  <g transform="translate(60, 80)">
+    <rect width="480" height="42" class="box"/>
+    <text x="20" y="26" class="text-gate">Query Vector <tspan class="text-highlight">q ∈ ℝᴰ</tspan> (Continuous FP32 Precision)</text>
+    <text x="460" y="26" text-anchor="end" class="text-tag">Uncompressed</text>
+  </g>
+
+  <!-- Connection to Right Pass-through -->
+  <path d="M 540 101 L 870 101 L 870 375" class="line-accent" marker-end="url(#arrow-accent)"/>
+  <text x="860" y="235" text-anchor="end" class="text-tag" transform="rotate(-90 860 235)">FP32 Full Precision Bypass</text>
+
+  <!-- Arrow down to Gate 1 -->
+  <path d="M 300 122 L 300 148" class="line" marker-end="url(#arrow)"/>
+
+  <!-- Gate 1: Spatial & Saliency -->
+  <g transform="translate(60, 150)">
+    <rect width="700" height="68" class="box"/>
+    <text x="24" y="28" class="text-gate">Gate 1: Geodetic Spatial &amp; Saliency Filtering</text>
+    <text x="676" y="28" text-anchor="end" class="text-tag">0 Clock Cycles</text>
+    <text x="24" y="50" class="text-sub">48-Bit Morton Code / S2 Geometry in Metadata Word <tspan class="text-code">m_i</tspan> • Instant Bounding Box Pruning</text>
+  </g>
+
+  <!-- Arrow down to Gate 2 -->
+  <path d="M 300 218 L 300 244" class="line" marker-end="url(#arrow)"/>
+  <text x="315" y="236" class="text-tag">Candidate Stream</text>
+
+  <!-- Gate 2: Matryoshka QJL Scan -->
+  <g transform="translate(60, 246)">
+    <rect width="700" height="82" class="box"/>
+    <text x="24" y="28" class="text-gate">Gate 2: Matryoshka QJL-Residual Scan &amp; Resonant Voting</text>
+    <text x="676" y="28" text-anchor="end" class="text-accent">&gt; 96.0% Recall</text>
+    <text x="24" y="50" class="text-sub">Hardware-Accelerated Bitwise XOR-Popcount Cascade (AVX-512 VPOPCNTDQ / ARM Neon)</text>
+    <text x="24" y="68" class="text-sub">Hierarchical Spherical Pruning via Triangle Inequality Centroid Sweeps</text>
+  </g>
+
+  <!-- Arrow down to Gate 3 -->
+  <path d="M 300 328 L 300 354" class="line" marker-end="url(#arrow)"/>
+  <text x="315" y="346" class="text-tag">Top-K Candidates</text>
+
+  <!-- Gate 3: Exact Reranking via LUT -->
+  <g transform="translate(60, 356)">
+    <rect width="810" height="110" class="box-highlight"/>
+    <text x="24" y="26" class="text-gate">Gate 3: Exact Reranking via Asymmetric Query LUTs (Hebel 1)</text>
+    <text x="786" y="26" text-anchor="end" class="text-accent">Zero-FP Multiply</text>
+    
+    <!-- Sidecar 1: FP8 -->
+    <g transform="translate(20, 38)">
+      <rect width="245" height="58" class="sidecar-box"/>
+      <text x="12" y="22" class="text-code">FP8 Sidecar (E4M3)</text>
+      <text x="233" y="22" text-anchor="end" class="text-accent">1.00 B/dim</text>
+      <text x="12" y="44" class="text-sub">1.19 TB Atlas • &gt;99.8% Recall</text>
+    </g>
+
+    <!-- Sidecar 2: NVFP4 -->
+    <g transform="translate(282, 38)">
+      <rect width="245" height="58" class="sidecar-box"/>
+      <text x="12" y="22" class="text-code">NVFP4 Sidecar (E2M1)</text>
+      <text x="233" y="22" text-anchor="end" class="text-tag">0.56 B/dim</text>
+      <text x="12" y="44" class="text-sub">668 GB Atlas • 32,000 tiles/s</text>
+    </g>
+
+    <!-- Sidecar 3: FP16 -->
+    <g transform="translate(545, 38)">
+      <rect width="245" height="58" class="sidecar-box"/>
+      <text x="12" y="22" class="text-code">FP16 Sidecar (IEEE 754)</text>
+      <text x="233" y="22" text-anchor="end" class="text-sub">2.00 B/dim</text>
+      <text x="12" y="44" class="text-sub">2.23 TB Atlas • Baseline</text>
+    </g>
+  </g>
+
+  <!-- Final Output Arrow -->
+  <path d="M 465 466 L 465 490" class="line" marker-end="url(#arrow)"/>
+
+  <!-- Final Output Banner -->
+  <g transform="translate(280, 492)">
+    <rect width="370" height="34" class="box"/>
+    <text x="185" y="22" text-anchor="middle" class="text-gate" style="font-size: 13px;">Exact KNN Search Results (Top-K)</text>
+  </g>
+</svg>

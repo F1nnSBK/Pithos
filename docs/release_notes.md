@@ -6,29 +6,17 @@
 
 ---
 
-## 🌟 Executive Summary
+## Executive Summary
 
 **Pithos v1.1.0 ("Blackwell Titan")** marks a paradigm shift in high-performance vector search: transitioning from classical, model-agnostic vector indexes toward a truly **Model-Isomorphic Vector Database (MIDB)**. 
 
 By natively integrating the neural embedding model's latent geometry, SVD spectral energy decay ($\Phi(k)$), and randomized isometric transforms with hardware co-design on the NVIDIA Grace Blackwell architecture, Pithos v1.1.0 achieves **50% to 75% index storage reduction** while preserving **$\ge 99.8\%$ KNN retrieval accuracy** and delivering up to **32,000 tiles/s tensor core throughput**.
 
-```
-┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                PITHOS 5-LEVER ARCHITECTURAL CASCADE                              │
-└──────────────────────────────────────────────────────────────────────────────────────────────────┘
-  Gate 1: Geodetic Spatial & Saliency Gate (48-bit Morton Code in 64-bit m_i) [0 Cycles]
-  Gate 2: Matryoshka QJL-Residual Scan (Dual-Bit Orthogonal Residuals) [>96% Bit-Only Recall]
-          └── Multi-Family Sweeps: Hierarchical Spherical Pruning (Bounding Sphere Early Exit)
-  Gate 3: Exact Reranking via Asymmetric Precomputed Query LUT (Zero-FP Multiply Codebook)
-          ├── [Option 1] FP16 Sidecar: _fp16.bin (768 B/tile, 2 B/dim) -> 2.23 TB (Tier 2 Atlas)
-          ├── [Option 2] FP8 Sidecar (E4M3): _fp8.bin (384 B/tile, 1 B/dim) -> 1.19 TB [RECOMMENDED]
-          └── [Option 3] FP4 Sidecar (NVFP4): _fp4.bin (192 B/tile, 0.5 B/dim + Scale) -> 668 GB
-  Host/Device Transport: Zero-Copy IPC Shared Memory Arena (Panama FFM & 900 GB/s NVLink-C2C)
-```
+![Pithos 5-Lever Cascade Architecture](assets/pithos_cascade_architecture.svg)
 
 ---
 
-## 🚀 Key Highlights & Architectural Innovations
+## Key Highlights & Architectural Innovations
 
 ### 1. Native Blackwell FP8 (E4M3) & NVFP4 (E2M1) Sidecar Engine
 Pithos v1.1.0 introduces hardware-native compressed float sidecars for in-engine Gate 3 exact Euclidean reranking:
@@ -74,7 +62,7 @@ Exploits the 128 GB unified LPDDR5X memory architecture on Grace Blackwell:
 
 ---
 
-## 🥊 Model-Isomorphic Vector Database (MIDB) vs. Classical Vector Engines
+## Model-Isomorphic Vector Database (MIDB) vs. Classical Vector Engines
 
 | Architectural Dimension | Faiss (IVF-PQ / HNSW) | Qdrant / Milvus | ScaNN | **Pithos v1.1.0 (MIDB Engine)** |
 | :--- | :--- | :--- | :--- | :--- |
@@ -88,7 +76,7 @@ Exploits the 128 GB unified LPDDR5X memory architecture on Grace Blackwell:
 
 ---
 
-## 💾 Storage & Performance Benchmarks
+## Storage & Performance Benchmarks
 
 ### Global Lunar Atlas (2.72 Billion Tiles, D=384)
 
@@ -102,7 +90,7 @@ Exploits the 128 GB unified LPDDR5X memory architecture on Grace Blackwell:
 
 ---
 
-## 📦 Binary Header & Columnar Layout Specification
+## Binary Header & Columnar Layout Specification
 
 ### 64-Byte PLAN Header Layout (`<basePath>`)
 ```
@@ -128,7 +116,7 @@ Offset 63      : flags / reserved (1 byte: bit 0 = Geodetic Morton enabled)     
 
 ---
 
-## 💻 API & Language Bindings
+## API & Language Bindings
 
 ### Python (`pithosdb` / `pithos`)
 ```python
@@ -182,7 +170,7 @@ vdb_compile_index_file_ext(
 
 ---
 
-## 🧪 Verification & Test Suite
+## Verification & Test Suite
 
 Pithos v1.1.0 includes an exhaustive test and verification suite:
 
@@ -199,6 +187,6 @@ python3 benchmarks/verify_fp8_sidecar.py --dim 384 --records 50000 --benchmark-l
 
 ---
 
-## 📄 License & Attribution
+## License & Attribution
 Pithos is licensed under the **Apache 2.0 License**.  
 Developed by the Lunar Core Vector Kernel team for autonomous planetary exploration and foundation model retrieval.

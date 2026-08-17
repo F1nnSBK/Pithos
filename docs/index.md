@@ -13,37 +13,15 @@
 
 ---
 
-## 🌟 What is Pithos?
+## What is Pithos?
 
 **Pithos** is a **Model-Isomorphic Vector Database (MIDB)** built from the ground up to bypass traditional garbage collection overheads and runtime indirection. Instead of treating vectors as generic high-dimensional points, Pithos physically aligns its storage format with the embedding model's latent geometry:
 
-```
-                            PITHOS 5-LEVER CASCADE ARCHITECTURE
-                            
-  Query Vector q (FP32) ────────────────────────────────────────────────────────────┐
-                                                                                    │
-  ┌──────────────────────────────────────────────────────────────────────────────┐  │
-  │ Gate 1: Geodetic Spatial & Saliency Filtering (48-bit Morton Code) [0 Cycles] │  │
-  └──────────────────────────────────────┬───────────────────────────────────────┘  │
-                                         ▼                                          │
-  ┌──────────────────────────────────────────────────────────────────────────────┐  │
-  │ Gate 2: Matryoshka QJL-Residual Scan (Bitwise XOR-Popcount Cascade)          │  │
-  │         └── Multi-Family Resonant Voting & Spherical Pruning (>96% Recall)   │  │
-  └──────────────────────────────────────┬───────────────────────────────────────┘  │
-                                         ▼ [Top Candidates]                         │
-  ┌──────────────────────────────────────────────────────────────────────────────┐  │
-  │ Gate 3: Exact Reranking via Asymmetric Query LUTs (Hebel 1 / Zero-FP Multiply)│◄─┘
-  │         ├── FP8 Sidecar (E4M3, 1.0 B/dim)   ──► 1.19 TB Global Atlas [RECOMMENDED]
-  │         ├── NVFP4 Sidecar (E2M1, 0.56 B/dim)──► 668 GB Global Atlas (4x QPS)
-  │         └── FP16 Sidecar (2.0 B/dim)        ──► 2.23 TB Standard Precision
-  └──────────────────────────────────────┬───────────────────────────────────────┘
-                                         ▼
-                             Exact KNN Search Results
-```
+![Pithos 5-Lever Cascade Architecture](assets/pithos_cascade_architecture.svg)
 
 ---
 
-## 🚀 Key Features
+## Key Features
 
 === "Hardware Co-Design"
     - **Blackwell FP8 / NVFP4 Sidecar Engine:** Native E4M3 (1 B/dim) and NVFP4 (0.56 B/dim) sidecars for in-engine candidate reranking.
@@ -62,7 +40,7 @@
 
 ---
 
-## ⚡ Quickstart
+## Quickstart
 
 ### Python Installation & Usage
 
@@ -139,7 +117,7 @@ int main() {
 
 ---
 
-## 📊 Benchmark Summary (Lunar DINOv3 Dataset, D=384)
+## Benchmark Summary (Lunar DINOv3 Dataset, D=384)
 
 | Index Mode | Storage (B/dim) | 2.72B Atlas Size | Recall@1 | Recall@10 | Search Latency |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -150,7 +128,7 @@ int main() {
 
 ---
 
-## 📚 Documentation Sections
+## Documentation Sections
 
 - [**Architectural Principles**](architecture.md): Deep dive into off-heap virtual memory, memory layouts, and LMAX Disruptor parallelism.
 - [**CUDA GPU Acceleration**](cuda_integration.md): Architecture of CUDA kernels, unified host-device DMA, and multi-stream execution.
