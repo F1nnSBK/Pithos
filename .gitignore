@@ -55,6 +55,7 @@ siftsmall/
 *.egg-info/
 dist/
 build/
+site/
 .pytest_cache/
 .test/
 .venv/
