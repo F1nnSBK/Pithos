@@ -36,8 +36,13 @@ jobs:
       - name: Build MkDocs Site
         run: mkdocs build --strict
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./site
+      - name: Deploy to GitHub Pages Branch
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          cd site
+          git init
+          git checkout -b gh-pages
+          git add -A
+          git commit -m 'deploy: update documentation [skip ci]'
+          git push -f https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git gh-pages
