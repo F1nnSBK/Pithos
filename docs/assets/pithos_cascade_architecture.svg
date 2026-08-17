@@ -1,113 +1,124 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="100%" height="100%">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 620" width="100%" height="100%">
   <defs>
     <style>
-      .bg { fill: #0f172a; rx: 12px; }
-      .box { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 8px; }
-      .box-highlight { fill: #1e293b; stroke: #6366f1; stroke-width: 1.8; rx: 8px; }
-      .sidecar-box { fill: #0f172a; stroke: #475569; stroke-width: 1; rx: 6px; }
-      .text-title { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 16px; font-weight: 700; fill: #f8fafc; letter-spacing: 0.5px; }
-      .text-sub { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 12.5px; font-weight: 400; fill: #94a3b8; }
-      .text-gate { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 14px; font-weight: 600; fill: #e2e8f0; }
-      .text-tag { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 500; fill: #38bdf8; }
-      .text-code { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; fill: #cbd5e1; }
-      .text-highlight { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; font-weight: 600; fill: #818cf8; }
-      .text-accent { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; fill: #34d399; }
-      .line { stroke: #64748b; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-      .line-accent { stroke: #6366f1; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-      .arrow { fill: #64748b; }
-      .arrow-accent { fill: #6366f1; }
+      .bg { fill: #0f172a; }
+      .node-rect { fill: #1e293b; stroke: #475569; stroke-width: 1.5; rx: 6px; }
+      .node-active { fill: #1e293b; stroke: #6366f1; stroke-width: 1.8; rx: 6px; }
+      .sidecar-rect { fill: #0f172a; stroke: #334155; stroke-width: 1.2; rx: 4px; }
+      
+      .title-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif; font-size: 15px; font-weight: 700; fill: #f8fafc; text-anchor: middle; }
+      .subtitle-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif; font-size: 12px; fill: #94a3b8; text-anchor: middle; }
+      
+      .header-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif; font-size: 13.5px; font-weight: 600; fill: #f1f5f9; }
+      .desc-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif; font-size: 11.5px; fill: #94a3b8; }
+      .badge-text { font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace; font-size: 11px; font-weight: 600; fill: #38bdf8; text-anchor: end; }
+      .accent-badge { font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace; font-size: 11px; font-weight: 600; fill: #34d399; text-anchor: end; }
+      
+      .sidecar-title { font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace; font-size: 11px; font-weight: 600; fill: #e2e8f0; }
+      .sidecar-sub { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif; font-size: 10.5px; fill: #64748b; }
+      .sidecar-metric { font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace; font-size: 10.5px; font-weight: 600; fill: #38bdf8; text-anchor: end; }
+      
+      .conn-line { stroke: #64748b; stroke-width: 1.5; stroke-linecap: round; }
+      .conn-accent { stroke: #6366f1; stroke-width: 1.5; stroke-dasharray: 4, 4; stroke-linecap: round; }
+      .conn-arrow { fill: #64748b; }
+      .conn-arrow-accent { fill: #6366f1; }
     </style>
     <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M 0 1.5 L 8 5 L 0 8.5 z" class="arrow"/>
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" class="conn-arrow"/>
     </marker>
-    <marker id="arrow-accent" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M 0 1.5 L 8 5 L 0 8.5 z" class="arrow-accent"/>
+    <marker id="arrow-acc" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" class="conn-arrow-accent"/>
     </marker>
   </defs>
 
-  <!-- Container -->
-  <rect width="960" height="540" class="bg"/>
+  <!-- Canvas Background -->
+  <rect width="880" height="620" class="bg" rx="8"/>
 
-  <!-- Main Header -->
-  <text x="480" y="38" text-anchor="middle" class="text-title">PITHOS 5-LEVER CASCADE ARCHITECTURE</text>
-  <text x="480" y="58" text-anchor="middle" class="text-sub">Model-Isomorphic Multi-Stage Retrieval &amp; Asymmetric Distance Computation</text>
+  <!-- Main Document Header -->
+  <text x="440" y="32" class="title-text">PITHOS 5-LEVER CASCADE ARCHITECTURE</text>
+  <text x="440" y="50" class="subtitle-text">Multi-Stage Model-Isomorphic Vector Retrieval &amp; Distance Computation</text>
 
-  <!-- Top Input: Query Vector -->
-  <g transform="translate(60, 80)">
-    <rect width="480" height="42" class="box"/>
-    <text x="20" y="26" class="text-gate">Query Vector <tspan class="text-highlight">q ∈ ℝᴰ</tspan> (Continuous FP32 Precision)</text>
-    <text x="460" y="26" text-anchor="end" class="text-tag">Uncompressed</text>
+  <!-- 1. Input Node -->
+  <g transform="translate(100, 70)">
+    <rect width="600" height="42" class="node-rect"/>
+    <text x="20" y="26" class="header-text">Query Vector q (Continuous FP32 Precision)</text>
+    <text x="580" y="26" class="badge-text">100% Precision</text>
   </g>
 
-  <!-- Connection to Right Pass-through -->
-  <path d="M 540 101 L 870 101 L 870 375" class="line-accent" marker-end="url(#arrow-accent)"/>
-  <text x="860" y="235" text-anchor="end" class="text-tag" transform="rotate(-90 860 235)">FP32 Full Precision Bypass</text>
+  <!-- Flow Arrow: Input -> Gate 1 -->
+  <line x1="400" y1="112" x2="400" y2="138" class="conn-line" marker-end="url(#arrow)"/>
 
-  <!-- Arrow down to Gate 1 -->
-  <path d="M 300 122 L 300 148" class="line" marker-end="url(#arrow)"/>
+  <!-- Bypass Line: FP32 to Gate 3 -->
+  <path d="M 700 91 L 790 91 L 790 410 L 760 410" class="conn-accent" marker-end="url(#arrow-acc)"/>
+  <text x="800" y="250" class="desc-text" transform="rotate(90 800 250)" style="font-size: 10px; fill: #818cf8;">FP32 Query Stream</text>
 
-  <!-- Gate 1: Spatial & Saliency -->
-  <g transform="translate(60, 150)">
-    <rect width="700" height="68" class="box"/>
-    <text x="24" y="28" class="text-gate">Gate 1: Geodetic Spatial &amp; Saliency Filtering</text>
-    <text x="676" y="28" text-anchor="end" class="text-tag">0 Clock Cycles</text>
-    <text x="24" y="50" class="text-sub">48-Bit Morton Code / S2 Geometry in Metadata Word <tspan class="text-code">m_i</tspan> • Instant Bounding Box Pruning</text>
+  <!-- 2. Gate 1 Node -->
+  <g transform="translate(100, 140)">
+    <rect width="600" height="60" class="node-rect"/>
+    <text x="20" y="24" class="header-text">Gate 1: Geodetic Spatial &amp; Saliency Filtering</text>
+    <text x="580" y="24" class="accent-badge">0 Clock Cycles</text>
+    <text x="20" y="44" class="desc-text">48-Bit Morton Code in Metadata Word m_i • Instant Bounding Box Pruning</text>
   </g>
 
-  <!-- Arrow down to Gate 2 -->
-  <path d="M 300 218 L 300 244" class="line" marker-end="url(#arrow)"/>
-  <text x="315" y="236" class="text-tag">Candidate Stream</text>
+  <!-- Flow Arrow: Gate 1 -> Gate 2 -->
+  <line x1="400" y1="200" x2="400" y2="228" class="conn-line" marker-end="url(#arrow)"/>
 
-  <!-- Gate 2: Matryoshka QJL Scan -->
-  <g transform="translate(60, 246)">
-    <rect width="700" height="82" class="box"/>
-    <text x="24" y="28" class="text-gate">Gate 2: Matryoshka QJL-Residual Scan &amp; Resonant Voting</text>
-    <text x="676" y="28" text-anchor="end" class="text-accent">&gt; 96.0% Recall</text>
-    <text x="24" y="50" class="text-sub">Hardware-Accelerated Bitwise XOR-Popcount Cascade (AVX-512 VPOPCNTDQ / ARM Neon)</text>
-    <text x="24" y="68" class="text-sub">Hierarchical Spherical Pruning via Triangle Inequality Centroid Sweeps</text>
+  <!-- 3. Gate 2 Node -->
+  <g transform="translate(100, 230)">
+    <rect width="600" height="72" class="node-rect"/>
+    <text x="20" y="24" class="header-text">Gate 2: Matryoshka QJL-Residual Scan &amp; Resonant Voting</text>
+    <text x="580" y="24" class="accent-badge">&gt; 96.0% Recall</text>
+    <text x="20" y="44" class="desc-text">Bitwise XOR-Popcount Cascade (AVX-512 VPOPCNTDQ / ARM Neon)</text>
+    <text x="20" y="60" class="desc-text">Hierarchical Spherical Pruning via Centroid Triangle Inequality</text>
   </g>
 
-  <!-- Arrow down to Gate 3 -->
-  <path d="M 300 328 L 300 354" class="line" marker-end="url(#arrow)"/>
-  <text x="315" y="346" class="text-tag">Top-K Candidates</text>
+  <!-- Flow Arrow: Gate 2 -> Gate 3 -->
+  <line x1="400" y1="302" x2="400" y2="330" class="conn-line" marker-end="url(#arrow)"/>
 
-  <!-- Gate 3: Exact Reranking via LUT -->
-  <g transform="translate(60, 356)">
-    <rect width="810" height="110" class="box-highlight"/>
-    <text x="24" y="26" class="text-gate">Gate 3: Exact Reranking via Asymmetric Query LUTs (Hebel 1)</text>
-    <text x="786" y="26" text-anchor="end" class="text-accent">Zero-FP Multiply</text>
-    
-    <!-- Sidecar 1: FP8 -->
-    <g transform="translate(20, 38)">
-      <rect width="245" height="58" class="sidecar-box"/>
-      <text x="12" y="22" class="text-code">FP8 Sidecar (E4M3)</text>
-      <text x="233" y="22" text-anchor="end" class="text-accent">1.00 B/dim</text>
-      <text x="12" y="44" class="text-sub">1.19 TB Atlas • &gt;99.8% Recall</text>
+  <!-- 4. Gate 3 Node (Sidecar Reranking) -->
+  <g transform="translate(100, 332)">
+    <rect width="650" height="155" class="node-active"/>
+    <text x="20" y="25" class="header-text">Gate 3: Exact Reranking via Asymmetric Query LUTs (Hebel 1)</text>
+    <text x="630" y="25" class="accent-badge">Zero-FP Multiply</text>
+    <text x="20" y="43" class="desc-text">Precomputed Query LUTs decode compressed sidecars in L1 Cache</text>
+
+    <!-- Sidecar Option 1: FP8 -->
+    <g transform="translate(15, 55)">
+      <rect width="195" height="85" class="sidecar-rect"/>
+      <text x="12" y="20" class="sidecar-title">FP8 (E4M3)</text>
+      <text x="183" y="20" class="accent-badge">1.0 B/dim</text>
+      <text x="12" y="42" class="sidecar-sub">1.19 TB Lunar Atlas</text>
+      <text x="12" y="58" class="sidecar-sub">100.0% Recall@1</text>
+      <text x="12" y="74" class="sidecar-sub" style="fill: #34d399;">Recommended</text>
     </g>
 
-    <!-- Sidecar 2: NVFP4 -->
-    <g transform="translate(282, 38)">
-      <rect width="245" height="58" class="sidecar-box"/>
-      <text x="12" y="22" class="text-code">NVFP4 Sidecar (E2M1)</text>
-      <text x="233" y="22" text-anchor="end" class="text-tag">0.56 B/dim</text>
-      <text x="12" y="44" class="text-sub">668 GB Atlas • 32,000 tiles/s</text>
+    <!-- Sidecar Option 2: NVFP4 -->
+    <g transform="translate(225, 55)">
+      <rect width="195" height="85" class="sidecar-rect"/>
+      <text x="12" y="20" class="sidecar-title">NVFP4 (E2M1)</text>
+      <text x="183" y="20" class="sidecar-metric">0.56 B/dim</text>
+      <text x="12" y="42" class="sidecar-sub">668 GB Lunar Atlas</text>
+      <text x="12" y="58" class="sidecar-sub">96.8% Recall@1</text>
+      <text x="12" y="74" class="sidecar-sub">32,000 tiles/s (4x QPS)</text>
     </g>
 
-    <!-- Sidecar 3: FP16 -->
-    <g transform="translate(545, 38)">
-      <rect width="245" height="58" class="sidecar-box"/>
-      <text x="12" y="22" class="text-code">FP16 Sidecar (IEEE 754)</text>
-      <text x="233" y="22" text-anchor="end" class="text-sub">2.00 B/dim</text>
-      <text x="12" y="44" class="text-sub">2.23 TB Atlas • Baseline</text>
+    <!-- Sidecar Option 3: FP16 -->
+    <g transform="translate(435, 55)">
+      <rect width="195" height="85" class="sidecar-rect"/>
+      <text x="12" y="20" class="sidecar-title">FP16 (IEEE 754)</text>
+      <text x="183" y="20" class="sidecar-metric">2.0 B/dim</text>
+      <text x="12" y="42" class="sidecar-sub">2.23 TB Lunar Atlas</text>
+      <text x="12" y="58" class="sidecar-sub">100.0% Recall@1</text>
+      <text x="12" y="74" class="sidecar-sub">Baseline Precision</text>
     </g>
   </g>
 
-  <!-- Final Output Arrow -->
-  <path d="M 465 466 L 465 490" class="line" marker-end="url(#arrow)"/>
+  <!-- Flow Arrow: Gate 3 -> Output -->
+  <line x1="425" y1="487" x2="425" y2="520" class="conn-line" marker-end="url(#arrow)"/>
 
-  <!-- Final Output Banner -->
-  <g transform="translate(280, 492)">
-    <rect width="370" height="34" class="box"/>
-    <text x="185" y="22" text-anchor="middle" class="text-gate" style="font-size: 13px;">Exact KNN Search Results (Top-K)</text>
+  <!-- 5. Output Result Node -->
+  <g transform="translate(200, 522)">
+    <rect width="450" height="42" class="node-rect"/>
+    <text x="225" y="26" class="header-text" text-anchor="middle">Exact KNN Top-K Search Results</text>
   </g>
 </svg>

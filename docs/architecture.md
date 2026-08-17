@@ -10,12 +10,12 @@ Pithos is built on the premise that the database is a physical extension of the 
 
 ```mermaid
 graph TD
-    classDef input fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000;
-    classDef transform fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px,color:#000;
-    classDef storage fill:#ffcc80,stroke:#e65100,stroke-width:2px,color:#000;
-    classDef gate fill:#ffcdd2,stroke:#c62828,stroke-width:2px,color:#000;
-    classDef cuda fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000;
-    classDef output fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#000;
+    classDef input fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#f8fafc;
+    classDef transform fill:#1e293b,stroke:#10b981,stroke-width:2px,color:#f8fafc;
+    classDef storage fill:#1e293b,stroke:#f59e0b,stroke-width:2px,color:#f8fafc;
+    classDef gate fill:#1e293b,stroke:#ef4444,stroke-width:2px,color:#f8fafc;
+    classDef cuda fill:#1e293b,stroke:#8b5cf6,stroke-width:2px,color:#f8fafc;
+    classDef output fill:#1e293b,stroke:#06b6d4,stroke-width:2px,color:#f8fafc;
     
     A[Raw Input Vector x]:::input --> B["Rademacher Preconditioning (z = x ⊙ d)"]:::transform
     B --> C["Sylvester-Hadamard Rotation (H_BD ⊕ Ω_v)"]:::transform
