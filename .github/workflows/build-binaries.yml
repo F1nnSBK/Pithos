@@ -36,10 +36,11 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up GraalVM JDK 25
-        uses: actions/setup-java@v4
+        uses: graalvm/setup-graalvm@v1
         with:
           java-version: '25'
-          distribution: 'oracle'
+          distribution: 'graalvm'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           cache: 'maven'
 
       - name: Cache Maven Dependencies

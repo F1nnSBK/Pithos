@@ -18,7 +18,7 @@
         <maven.compiler.source>25</maven.compiler.source>
         <maven.compiler.target>25</maven.compiler.target>
         <graalvm.version>24.1.2</graalvm.version>
-        <native.maven.plugin.version>0.10.2</native.maven.plugin.version>
+        <native.maven.plugin.version>0.10.5</native.maven.plugin.version>
         <junit.version>5.11.0</junit.version>
     </properties>
 
