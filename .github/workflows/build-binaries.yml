@@ -166,12 +166,25 @@ jobs:
           ls -la release-assets/
 
       - name: Create or Update GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'latest' }}
-          name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'Latest Automated Build' }}
-          prerelease: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-          make_latest: ${{ startsWith(github.ref, 'refs/tags/v') && 'true' || 'false' }}
-          files: release-assets/*
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'latest' }}
+          RELEASE_TITLE: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'Latest Automated Build' }}
+          IS_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && 'true' || 'false' }}
+        run: |
+          set -e
+          echo "Publishing release binaries for tag: ${TAG_NAME}"
+          
+          if [ "$IS_TAG" = "false" ]; then
+            gh release delete latest --yes || true
+            git push --delete origin latest || true
+            git tag -f latest
+            git push origin latest --force
+            gh release create latest release-assets/* --title "${RELEASE_TITLE}" --notes "Automated rolling build from main branch." --prerelease
+          else
+            if gh release view "${TAG_NAME}" >/dev/null 2>&1; then
+              gh release upload "${TAG_NAME}" release-assets/* --clobber
+            else
+              gh release create "${TAG_NAME}" release-assets/* --title "${RELEASE_TITLE}" --generate-notes
+            fi
+          fi
