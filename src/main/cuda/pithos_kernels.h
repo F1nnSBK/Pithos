@@ -8,6 +8,9 @@
 #include <cuda_runtime.h>
 #include <cuda_runtime_api.h>
 #include <device_launch_parameters.h>
+#elif defined(__has_include) && __has_include(<cuda_runtime.h>)
+#include <cuda_runtime.h>
+#include <cuda_runtime_api.h>
 #else
 #include <stdlib.h>
 #include <string.h>
@@ -47,21 +50,21 @@ static inline void __syncthreads() {}
 static inline int __popcll(uint64_t x) { return (int)__builtin_popcountll(x); }
 #endif
 
-static inline cudaError_t cudaGetLastError() { return (cudaError_t)0; }
+static inline cudaError_t cudaGetLastError(void) { return (cudaError_t)0; }
 static inline cudaError_t cudaMalloc(void** devPtr, size_t size) { *devPtr = malloc(size); return (cudaError_t)0; }
 static inline cudaError_t cudaFree(void* devPtr) { free(devPtr); return (cudaError_t)0; }
 static inline cudaError_t cudaMallocHost(void** ptr, size_t size) { *ptr = malloc(size); return (cudaError_t)0; }
 static inline cudaError_t cudaFreeHost(void* ptr) { free(ptr); return (cudaError_t)0; }
-static inline cudaError_t cudaMemcpyAsync(void* dst, const void* src, size_t count, int kind, cudaStream_t stream = 0) { memcpy(dst, src, count); return (cudaError_t)0; }
-static inline cudaError_t cudaStreamSynchronize(cudaStream_t stream) { return (cudaError_t)0; }
+static inline cudaError_t cudaMemcpyAsync(void* dst, const void* src, size_t count, int kind, cudaStream_t stream) { memcpy(dst, src, count); (void)kind; (void)stream; return (cudaError_t)0; }
+static inline cudaError_t cudaStreamSynchronize(cudaStream_t stream) { (void)stream; return (cudaError_t)0; }
 static inline cudaError_t cudaStreamCreate(cudaStream_t* pStream) { *pStream = (void*)1; return (cudaError_t)0; }
-static inline cudaError_t cudaStreamDestroy(cudaStream_t stream) { return (cudaError_t)0; }
-static inline cudaError_t cudaSetDevice(int device) { return (cudaError_t)0; }
-static inline cudaError_t cudaDeviceReset() { return (cudaError_t)0; }
+static inline cudaError_t cudaStreamDestroy(cudaStream_t stream) { (void)stream; return (cudaError_t)0; }
+static inline cudaError_t cudaSetDevice(int device) { (void)device; return (cudaError_t)0; }
+static inline cudaError_t cudaDeviceReset(void) { return (cudaError_t)0; }
 static inline cudaError_t cudaGetDeviceCount(int* count) { *count = 0; return (cudaError_t)0; }
-static inline cudaError_t cudaGetDeviceProperties(void* prop, int device) { return (cudaError_t)0; }
+static inline cudaError_t cudaGetDeviceProperties(void* prop, int device) { (void)prop; (void)device; return (cudaError_t)0; }
 
-#endif /* !__CUDACC__ */
+#endif /* !CUDA */
 
 #define MAX_WORDS_PER_VECTOR 6
 #define MAX_TIERS 8
