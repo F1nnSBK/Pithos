@@ -1,4 +1,4 @@
-# ⚱ Pithos — Model-Isomorphic Vector Database
+# Pithos — Model-Isomorphic Vector Database
 
 <p align="center">
   <strong>Ultra-low latency, model-isomorphic vector database engine for multi-billion scale datasets.</strong>
@@ -96,5 +96,5 @@ with VectorDb() as db:
 - [**CUDA GPU Acceleration**](cuda_integration.md): Architecture of CUDA kernels, unified host-device DMA, and multi-stream execution.
 - [**C-API Reference**](c_api_reference.md): Complete specification of C/C++ bindings, structs, and FFI interoperability.
 - [**Mathematical Foundations**](math_theory.md): SVD spectral energy decay, Sylvester-Hadamard isometric rotations, and spherical pruning.
-- [**Release Notes**](release_notes.md): Detailed changelog for Pithos v1.2.0 and previous releases.
+- [**Release Notes**](release_notes.md): Detailed changelog for Pithos v1.2.1 and previous releases.
 - [**Roadmap & Next Steps**](next_steps.md): FPGA co-design, distributed clustering, and heterogeneous execution.

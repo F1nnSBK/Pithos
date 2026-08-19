@@ -1,4 +1,4 @@
-# ⚱ Pithos - Model-Isomorphic Vector Database (MIDB)
+# Pithos - Model-Isomorphic Vector Database (MIDB)
 
 [![PyPI Version](https://img.shields.io/pypi/v/pithosdb?color=blue&label=pithosdb)](https://pypi.org/project/pithosdb/)
 [![Python Versions](https://img.shields.io/pypi/pyversions/pithosdb)](https://pypi.org/project/pithosdb/)
