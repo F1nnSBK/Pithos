@@ -255,6 +255,10 @@ class NativeBindings:
             ]
             self.lib.vdb_cuda_query_planetary_grid.restype = ctypes.c_longlong
 
+        if hasattr(self.lib, "vdb_shrink_to_fit"):
+            self.lib.vdb_shrink_to_fit.argtypes = [ctypes.c_void_p]
+            self.lib.vdb_shrink_to_fit.restype = ctypes.c_int
+
         # Start GraalVM Isolate
         status = self.lib.graal_create_isolate(None, ctypes.byref(self.isolate), ctypes.byref(self.thread))
         if status != 0:
@@ -267,3 +271,116 @@ class NativeBindings:
     def check_status(self, status: int, action: str = "operation"):
         if status != 0:
             raise PithosNativeError(status, f"Failed to execute {action}.")
+
+    def create_isolate(self):
+        """Creates an ephemeral GraalVM isolate and returns (isolate, thread)."""
+        iso = ctypes.POINTER(GraalIsolate)()
+        thr = ctypes.POINTER(GraalIsolateThread)()
+        status = self.lib.graal_create_isolate(None, ctypes.byref(iso), ctypes.byref(thr))
+        if status != 0:
+            raise RuntimeError(f"Failed to create GraalVM Native Image isolate (status={status})")
+        return iso, thr
+
+    def tear_down_isolate(self, thread) -> None:
+        """Tears down a GraalVM isolate thread, returning all allocated heap pages to the OS."""
+        if thread:
+            self.lib.graal_tear_down_isolate(thread)
+
+    from contextlib import contextmanager
+
+    @contextmanager
+    def isolated_context(self):
+        """
+        Context manager that yields an ephemeral GraalVM isolate thread and
+        guarantees full teardown upon exit.
+        """
+        iso, thr = self.create_isolate()
+        try:
+            yield thr
+        finally:
+            self.tear_down_isolate(thr)
+
+    def reset_isolate(self) -> None:
+        """
+        Tears down the active GraalVM isolate and initializes a fresh coordinator.
+        Use this to reclaim all native memory during long-running pipelines.
+        """
+        with self._lock:
+            if self.thread:
+                try:
+                    self.lib.vdb_close(self.thread)
+                except Exception:
+                    pass
+                try:
+                    self.lib.graal_tear_down_isolate(self.thread)
+                except Exception:
+                    pass
+                self.isolate = None
+                self.thread = None
+
+            self.isolate = ctypes.POINTER(GraalIsolate)()
+            self.thread = ctypes.POINTER(GraalIsolateThread)()
+            status = self.lib.graal_create_isolate(None, ctypes.byref(self.isolate), ctypes.byref(self.thread))
+            if status != 0:
+                raise RuntimeError(f"Failed to create GraalVM Native Image isolate (status={status})")
+            status = self.lib.vdb_init(self.thread)
+            if status != 0:
+                raise PithosNativeError(status, "Failed to initialize Pithos database coordinator.")
+
+    def shrink_to_fit(self) -> None:
+        """
+        Triggers explicit GraalVM garbage collection, system malloc_trim (on Linux),
+        and Python GC to release unreferenced memory to the operating system.
+        """
+        if self.thread and hasattr(self.lib, "vdb_shrink_to_fit"):
+            try:
+                self.lib.vdb_shrink_to_fit(self.thread)
+            except Exception:
+                pass
+
+        try:
+            import sys
+            if sys.platform.startswith("linux"):
+                try:
+                    libc = ctypes.CDLL(None)
+                    if hasattr(libc, "malloc_trim"):
+                        libc.malloc_trim(0)
+                except Exception:
+                    pass
+                try:
+                    libc = ctypes.CDLL("libc.so.6")
+                    if hasattr(libc, "malloc_trim"):
+                        libc.malloc_trim(0)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        import gc
+        gc.collect()
+
+    def close(self) -> None:
+        """Closes the coordinator and destroys the native isolate."""
+        with self._lock:
+            if self.thread:
+                try:
+                    self.lib.vdb_close(self.thread)
+                except Exception:
+                    pass
+                try:
+                    self.lib.graal_tear_down_isolate(self.thread)
+                except Exception:
+                    pass
+                self.isolate = None
+                self.thread = None
+
+
+def reset_isolate(lib_path: Optional[str] = None) -> None:
+    """Tears down the active GraalVM isolate and initializes a fresh coordinator."""
+    NativeBindings(lib_path).reset_isolate()
+
+
+def shrink_to_fit(lib_path: Optional[str] = None) -> None:
+    """Explicitly reclaims unused memory across GraalVM Native Image, glibc, and Python runtime."""
+    NativeBindings(lib_path).shrink_to_fit()
+

@@ -6,7 +6,7 @@
 
     <groupId>org.pithos</groupId>
     <artifactId>pithos_core</artifactId>
-    <version>1.2.0</version>
+    <version>1.2.1</version>
     <packaging>jar</packaging>
 
 
@@ -102,6 +102,9 @@
                         <buildArg>--add-modules=jdk.incubator.vector</buildArg>
                         <buildArg>-H:+UnlockExperimentalVMOptions</buildArg>
                         <buildArg>-H:+VectorAPISupport</buildArg>
+                        <buildArg>-H:+PageFreelist</buildArg>
+                        <buildArg>--gc=serial</buildArg>
+                        <buildArg>-R:MaxHeapSize=4g</buildArg>
                         <buildArg>--parallelism=3</buildArg>
                         <buildArg>-J-Xmx5g</buildArg>
                         <buildArg>-O3</buildArg>
@@ -218,6 +221,9 @@ EOF
                                 <buildArg>--add-modules=jdk.incubator.vector</buildArg>
                                 <buildArg>-H:+UnlockExperimentalVMOptions</buildArg>
                                 <buildArg>-H:+VectorAPISupport</buildArg>
+                                <buildArg>-H:+PageFreelist</buildArg>
+                                <buildArg>--gc=serial</buildArg>
+                                <buildArg>-R:MaxHeapSize=4g</buildArg>
                                 <buildArg>--parallelism=3</buildArg>
                                 <buildArg>-J-Xmx5g</buildArg>
                                 <buildArg>-O3</buildArg>

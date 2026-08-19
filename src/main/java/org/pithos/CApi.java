@@ -598,6 +598,18 @@ public class CApi {
         return 0;
     }
 
+    /// Triggers explicit garbage collection and memory compaction inside the GraalVM isolate.
+    @CEntryPoint(name = "vdb_shrink_to_fit")
+    public static int shrinkToFit(IsolateThread thread) {
+        try {
+            System.gc();
+            return 0;
+        } catch (Throwable t) {
+            t.printStackTrace();
+            return -4;
+        }
+    }
+
     // =========================================================================
     // LSM Delta Buffer C-API
     // =========================================================================

@@ -92,6 +92,13 @@ int vdb_init(graal_isolatethread_t *thread);
  */
 int vdb_close(graal_isolatethread_t *thread);
 
+/**
+ * Triggers explicit garbage collection and memory compaction inside the GraalVM isolate.
+ * @param thread GraalVM isolate thread context.
+ * @return 0 on success, negative error code on failure.
+ */
+int vdb_shrink_to_fit(graal_isolatethread_t *thread);
+
 /* =========================================================================
  * Index Loading, Metadata & Configuration
  * ========================================================================= */
@@ -321,6 +328,17 @@ int vdb_compile_container(graal_isolatethread_t *thread, const char *path, int32
                           int32_t metric_type, int32_t q_mode, int32_t sidecar_mode,
                           const char *metadata_payload, int32_t metadata_len,
                           const char *metadata_format, const char *user_metadata_json);
+
+/**
+ * Compiles a single-file container inside an ephemeral GraalVM isolate,
+ * guaranteeing complete memory reclamation (0 byte residual RSS) upon completion.
+ */
+int vdb_compile_container_isolated(const char *path, int32_t dimension,
+                                   const int32_t *tiers, int32_t num_tiers,
+                                   const int64_t *ids, const float *vectors, int32_t num_records,
+                                   int32_t metric_type, int32_t q_mode, int32_t sidecar_mode,
+                                   const char *metadata_payload, int32_t metadata_len,
+                                   const char *metadata_format, const char *user_metadata_json);
 
 /**
  * Retrieves the user metadata JSON string embedded in a loaded single-file .pithos container.

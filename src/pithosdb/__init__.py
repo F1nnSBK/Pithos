@@ -12,6 +12,8 @@ from pithos import (
     SidecarMode,
     FpgaDescriptor,
     PithosNativeError,
+    reset_isolate,
+    shrink_to_fit,
     __version__,
 )
 
@@ -25,6 +27,8 @@ __all__ = [
     "SidecarMode",
     "FpgaDescriptor",
     "PithosNativeError",
+    "reset_isolate",
+    "shrink_to_fit",
     "__version__",
 ]
 

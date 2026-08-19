@@ -11,10 +11,12 @@ from .core import (
     QuantizationMode,
     SidecarMode,
     FpgaDescriptor,
+    reset_isolate,
+    shrink_to_fit,
 )
 from .ffi import PithosNativeError
 
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 __all__ = [
     "VectorDb",
     "Index",
@@ -25,6 +27,8 @@ __all__ = [
     "SidecarMode",
     "FpgaDescriptor",
     "PithosNativeError",
+    "reset_isolate",
+    "shrink_to_fit",
     "__version__",
 ]
 

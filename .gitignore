@@ -36,6 +36,7 @@ data/
 # Binary databases and NumPy arrays
 *.bin
 !src/test/resources/**
+!src/main/resources/**
 *.npy
 lunar_real_data
 pithos_scale_test
@@ -62,3 +63,11 @@ site/
 siftsmall.tgz
 siftsmall_*.fvecs
 siftsmall_groundtruth.ivecs*.bin
+
+# Node & VS Code Extension
+node_modules/
+/.pithos/
+*.pithos
+!src/main/resources/**
+!src/test/resources/**
+
