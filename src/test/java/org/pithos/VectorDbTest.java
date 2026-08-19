@@ -6,7 +6,9 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -536,5 +538,127 @@ class VectorDbTest {
         assertEquals(0, results.get(0).id());
 
         db.close();
+    }
+
+    @Test
+    void testDisruptorConcurrentCQRS(@TempDir Path tempDir) throws Exception {
+        int dimension = 64;
+        DeltaBuffer delta = new DeltaBuffer(dimension, 1000, tempDir.resolve("wal_disruptor.bin").toString());
+
+        // Spawn 4 parallel producer threads publishing inserts to the Disruptor ring buffer
+        int numThreads = 4;
+        int insertsPerThread = 250;
+        java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(numThreads + 2);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(numThreads);
+
+        for (int t = 0; t < numThreads; t++) {
+            final int threadId = t;
+            executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    for (int i = 0; i < insertsPerThread; i++) {
+                        long id = (long) threadId * 10000L + i;
+                        float[] vec = new float[dimension];
+                        java.util.Arrays.fill(vec, (float) (threadId + 1) * 0.1f);
+                        delta.insert(id, vec);
+                    }
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                } finally {
+                    doneLatch.countDown();
+                }
+            });
+        }
+
+        // Concurrent reader thread querying delta buffer lock-free
+        java.util.concurrent.atomic.AtomicBoolean running = new java.util.concurrent.atomic.AtomicBoolean(true);
+        executor.submit(() -> {
+            float[] q = new float[dimension];
+            java.util.Arrays.fill(q, 0.1f);
+            while (running.get()) {
+                delta.searchKnn(q, 5);
+            }
+        });
+
+        startLatch.countDown();
+        doneLatch.await();
+        running.set(false);
+
+        assertEquals(numThreads * insertsPerThread, delta.liveSize());
+
+        // Verify top-1 query
+        float[] query = new float[dimension];
+        java.util.Arrays.fill(query, 0.1f);
+        List<Index.SearchResult> topResults = delta.searchKnn(query, 5);
+        assertFalse(topResults.isEmpty());
+        assertEquals(0, topResults.get(0).score(), "Top match distance should be exact 0");
+        assertTrue(topResults.get(0).id() < 10000L, "Top match should belong to thread 0");
+
+        delta.close();
+        executor.shutdown();
+    }
+
+    @Test
+    void testHighConcurrencyParallelThroughput(@TempDir Path tempDir) throws Exception {
+        Path containerPath = tempDir.resolve("throughput_bench.pithos");
+        int dimension = 128;
+        int[] tiers = { 64, 128 };
+        int numRecords = 5000;
+
+        java.util.Random rng = new java.util.Random(42);
+        List<VectorRecord> records = new ArrayList<>(numRecords);
+        for (int i = 0; i < numRecords; i++) {
+            float[] vec = new float[dimension];
+            float norm = 0.0f;
+            for (int d = 0; d < dimension; d++) {
+                vec[d] = rng.nextFloat() * 2.0f - 1.0f;
+                norm += vec[d] * vec[d];
+            }
+            norm = (float) Math.sqrt(norm);
+            for (int d = 0; d < dimension; d++) {
+                vec[d] /= norm;
+            }
+            records.add(new VectorRecord(i, vec));
+        }
+
+        PithosContainer.writeContainer(
+                containerPath,
+                dimension,
+                tiers,
+                records,
+                PithosContainer.METRIC_COSINE,
+                0,
+                VectorDb.SIDECAR_FP8,
+                null,
+                null,
+                "{\"benchmark\": \"throughput\"}");
+
+        FlatIndex index = FlatIndex.mapFile(containerPath.toString(), null, 0);
+
+        int numQueries = 200;
+        float[][] queries = new float[numQueries][dimension];
+        for (int q = 0; q < numQueries; q++) {
+            queries[q] = records.get(q * 10).vector();
+        }
+
+        // JIT Warmup
+        index.batchSearch(queries, 5);
+
+        // Perform timed batch search
+        long t0 = System.nanoTime();
+        List<Index.SearchResult>[] batch = index.batchSearch(queries, 10);
+        long elapsedNanos = System.nanoTime() - t0;
+
+        assertEquals(numQueries, batch.length);
+        for (int q = 0; q < numQueries; q++) {
+            assertFalse(batch[q].isEmpty());
+            assertEquals(q * 10L, batch[q].get(0).id());
+        }
+
+        double qps = (double) numQueries / (elapsedNanos / 1e9);
+        assertTrue(qps > 1000.0, "Throughput QPS should exceed 1000 QPS (measured: " + qps + " QPS)");
+
+        index.close();
     }
 }

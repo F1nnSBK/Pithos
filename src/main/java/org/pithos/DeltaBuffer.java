@@ -11,28 +11,51 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.PriorityQueue;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+
+import com.lmax.disruptor.BlockingWaitStrategy;
+import com.lmax.disruptor.RingBuffer;
+import com.lmax.disruptor.dsl.Disruptor;
+import com.lmax.disruptor.dsl.ProducerType;
 
 /// # DeltaBuffer
 ///
 /// Log-Structured Merge (LSM) in-memory write buffer with Write-Ahead Log (WAL) persistence for real-time inserts.
 ///
-/// ### Architecture & Lifecycle:
-/// 1. **Real-time Ingestion:** Newly inserted vectors land in this in-memory flat buffer without mutating immutable base `.pithos` files.
-/// 2. **Durability (WAL):** Each insert and delete operation is appended synchronously to a binary WAL file on disk:
-///    - Insert record: `[byte type=1][long id][float[D] vector]`
-///    - Delete tombstone: `[byte type=2][long id]`
-/// 3. **Unified Hybrid Search:** Searches query both the base memory-mapped index and the `DeltaBuffer` concurrently, merging
-///    and deduplicating results.
-/// 4. **Exact L2 Distance Evaluation:** Queries against the delta buffer evaluate unquantized Euclidean distance:
-///    `d(q, x) = ∑_{d=0}^{D-1} (q_d - x_d)²`
+/// ### CQRS Architecture & LMAX Disruptor Ingestion:
+/// 1. **Lock-Free Sequential Ingestion:** Mutating operations (inserts, tombstones) are published to an LMAX Disruptor
+///    lock-free ring buffer, processing mutations sequentially on a dedicated writer thread with zero lock contention.
+/// 2. **Durability (WAL):** Each insert and delete operation is appended to a binary WAL file on disk.
+/// 3. **Contention-Free Reads:** Searches query in-memory snapshot states concurrently without acquiring write locks.
+/// 4. **Exact L2 Distance Evaluation:** Queries against the delta buffer evaluate unquantized Euclidean distance.
 /// 5. **Flush & Compaction:** When `liveSize() >= flushThreshold`, the buffer can be drained and merged into the base index.
 public class DeltaBuffer {
 
     /// A single buffered entry containing record ID, raw float vector, and tombstone status.
     private record BufferEntry(long id, float[] vector, boolean tombstone) {}
+
+    /// Disruptor mutation event for lock-free write ingestion and WAL serialization.
+    public static final class MutationEvent {
+        public byte type; // 1 = INSERT, 2 = DELETE
+        public long id;
+        public float[] vector;
+        public CompletableFuture<Boolean> future;
+
+        public void set(byte type, long id, float[] vector, CompletableFuture<Boolean> future) {
+            this.type = type;
+            this.id = id;
+            this.vector = vector;
+            this.future = future;
+        }
+
+        public void clear() {
+            this.vector = null;
+            this.future = null;
+        }
+    }
 
     private final int dimension;
     private final int flushThreshold;
@@ -45,7 +68,8 @@ public class DeltaBuffer {
     /// Count of live (non-tombstoned) entries.
     private final AtomicInteger liveCount = new AtomicInteger(0);
 
-    private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+    private final Disruptor<MutationEvent> disruptor;
+    private final RingBuffer<MutationEvent> ringBuffer;
 
     /// Constructs a `DeltaBuffer` without persistent WAL logging.
     ///
@@ -80,6 +104,51 @@ public class DeltaBuffer {
                 throw new RuntimeException("Failed to initialize WAL log: " + walPath, e);
             }
         }
+
+        ThreadFactory tf = r -> {
+            Thread t = new Thread(r, "pithos-deltabuffer-writer");
+            t.setDaemon(true);
+            return t;
+        };
+        this.disruptor = new Disruptor<>(MutationEvent::new, 65536, tf, ProducerType.MULTI, new BlockingWaitStrategy());
+        this.disruptor.handleEventsWith((event, sequence, endOfBatch) -> {
+            try {
+                if (event.type == 1) { // INSERT
+                    if (walChannel != null) {
+                        writeInsertToWal(event.id, event.vector);
+                    }
+                    entries.add(new BufferEntry(event.id, event.vector, false));
+                    liveCount.incrementAndGet();
+                    if (event.future != null) {
+                        event.future.complete(true);
+                    }
+                } else if (event.type == 2) { // DELETE
+                    boolean found = false;
+                    for (int i = 0; i < entries.size(); i++) {
+                        BufferEntry e = entries.get(i);
+                        if (e.id() == event.id && !e.tombstone()) {
+                            entries.set(i, new BufferEntry(e.id(), e.vector(), true));
+                            liveCount.decrementAndGet();
+                            found = true;
+                        }
+                    }
+                    if (found && walChannel != null) {
+                        writeDeleteToWal(event.id);
+                    }
+                    if (event.future != null) {
+                        event.future.complete(found);
+                    }
+                }
+            } catch (Exception e) {
+                if (event.future != null) {
+                    event.future.completeExceptionally(e);
+                }
+            } finally {
+                event.clear();
+            }
+        });
+        this.disruptor.start();
+        this.ringBuffer = disruptor.getRingBuffer();
     }
 
     /// Inserts a new vector record into the delta buffer and appends it to the WAL.
@@ -91,18 +160,15 @@ public class DeltaBuffer {
             throw new IllegalArgumentException(
                     "Vector dimension mismatch: expected " + dimension + ", got " + vector.length);
         }
-        lock.writeLock().lock();
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        long seq = ringBuffer.next();
         try {
-            if (walChannel != null) {
-                writeInsertToWal(id, vector);
-            }
-            entries.add(new BufferEntry(id, vector.clone(), false));
-            liveCount.incrementAndGet();
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to write insert to WAL", e);
+            MutationEvent evt = ringBuffer.get(seq);
+            evt.set((byte) 1, id, vector.clone(), future);
         } finally {
-            lock.writeLock().unlock();
+            ringBuffer.publish(seq);
         }
+        future.join();
     }
 
     /// Soft-deletes a record by writing a tombstone.
@@ -110,26 +176,15 @@ public class DeltaBuffer {
     /// @param id unique record identifier
     /// @return `true` if at least one active entry was tombstoned
     public boolean delete(long id) {
-        lock.writeLock().lock();
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        long seq = ringBuffer.next();
         try {
-            boolean found = false;
-            for (int i = 0; i < entries.size(); i++) {
-                BufferEntry e = entries.get(i);
-                if (e.id() == id && !e.tombstone()) {
-                    entries.set(i, new BufferEntry(e.id(), e.vector(), true));
-                    liveCount.decrementAndGet();
-                    found = true;
-                }
-            }
-            if (found && walChannel != null) {
-                writeDeleteToWal(id);
-            }
-            return found;
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to write delete to WAL", e);
+            MutationEvent evt = ringBuffer.get(seq);
+            evt.set((byte) 2, id, null, future);
         } finally {
-            lock.writeLock().unlock();
+            ringBuffer.publish(seq);
         }
+        return future.join();
     }
 
     /// Returns the number of active (non-tombstoned) records.
@@ -178,21 +233,16 @@ public class DeltaBuffer {
         PriorityQueue<long[]> heap = new PriorityQueue<>(
                 (a, b) -> Long.compare(b[0], a[0]));
 
-        lock.readLock().lock();
-        try {
-            for (BufferEntry e : entries) {
-                if (e.tombstone()) continue;
-                float dist = exactL2(query, e.vector());
-                long distBits = Float.floatToRawIntBits(dist) & 0xFFFFFFFFL;
-                if (heap.size() < k) {
-                    heap.offer(new long[]{distBits, e.id()});
-                } else if (distBits < heap.peek()[0]) {
-                    heap.poll();
-                    heap.offer(new long[]{distBits, e.id()});
-                }
+        for (BufferEntry e : entries) {
+            if (e.tombstone()) continue;
+            float dist = exactL2(query, e.vector());
+            long distBits = Float.floatToRawIntBits(dist) & 0xFFFFFFFFL;
+            if (heap.size() < k) {
+                heap.offer(new long[]{distBits, e.id()});
+            } else if (distBits < heap.peek()[0]) {
+                heap.poll();
+                heap.offer(new long[]{distBits, e.id()});
             }
-        } finally {
-            lock.readLock().unlock();
         }
 
         List<Index.SearchResult> results = new ArrayList<>(heap.size());
@@ -228,7 +278,6 @@ public class DeltaBuffer {
     /// @param path target destination filepath
     /// @throws IOException on I/O failure
     public void serializeToPath(String path) throws IOException {
-        lock.readLock().lock();
         try (DataOutputStream out = new DataOutputStream(
                 Files.newOutputStream(Path.of(path)))) {
             List<BufferEntry> snapshot = new ArrayList<>();
@@ -245,8 +294,6 @@ public class DeltaBuffer {
                     out.writeFloat(v);
                 }
             }
-        } finally {
-            lock.readLock().unlock();
         }
     }
 
@@ -277,29 +324,24 @@ public class DeltaBuffer {
     /// Drains and returns all live entries, clearing the buffer and truncating the WAL.
     ///
     /// @return list of live vector records
-    public List<VectorRecord> drainLiveEntries() {
-        lock.writeLock().lock();
-        try {
-            List<VectorRecord> result = new ArrayList<>();
-            for (BufferEntry e : entries) {
-                if (!e.tombstone()) {
-                    result.add(new VectorRecord(e.id(), e.vector()));
-                }
+    public synchronized List<VectorRecord> drainLiveEntries() {
+        List<VectorRecord> result = new ArrayList<>();
+        for (BufferEntry e : entries) {
+            if (!e.tombstone()) {
+                result.add(new VectorRecord(e.id(), e.vector()));
             }
-            entries.clear();
-            liveCount.set(0);
-            if (walChannel != null) {
-                try {
-                    walChannel.truncate(0);
-                    walChannel.force(false);
-                } catch (IOException e) {
-                    // Ignore truncation errors
-                }
-            }
-            return result;
-        } finally {
-            lock.writeLock().unlock();
         }
+        entries.clear();
+        liveCount.set(0);
+        if (walChannel != null) {
+            try {
+                walChannel.truncate(0);
+                walChannel.force(false);
+            } catch (IOException e) {
+                // Ignore truncation errors
+            }
+        }
+        return result;
     }
 
     private void replayWal() throws IOException {
@@ -365,18 +407,18 @@ public class DeltaBuffer {
         walChannel.force(false);
     }
 
-    /// Closes the delta buffer and releases any open WAL file channels.
+    /// Closes the delta buffer, shuts down the Disruptor write ring buffer, and releases open WAL channels.
     public void close() {
-        lock.writeLock().lock();
-        try {
-            if (walChannel != null) {
+        if (disruptor != null) {
+            disruptor.shutdown();
+        }
+        if (walChannel != null) {
+            try {
                 walChannel.close();
                 walChannel = null;
+            } catch (IOException e) {
+                // Ignore
             }
-        } catch (IOException e) {
-            // Ignore
-        } finally {
-            lock.writeLock().unlock();
         }
     }
 }

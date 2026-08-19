@@ -607,84 +607,151 @@ public class FlatIndex implements Index {
             return searchWithPrefixRouting(queries, k);
         }
 
+        return searchLinearScanParallel(queries, k);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<SearchResult>[] searchLinearScanParallel(float[][] queries, int k) {
         int numQueries = queries.length;
-        int kCandidate = (int) Math.min(size, (fp16Segment != null || fp8Segment != null || fp4Segment != null) 
-                ? Math.max(500, 25 * k) 
+        int tVal = 0;
+        for (int i = 0; i < numTiers; i++) {
+            if (cumulativeEnergy[i] >= targetEnergyBudget) {
+                tVal = i;
+                break;
+            }
+        }
+        final int activeT = tVal;
+        int kCandidate = (int) Math.min(size, (fp16Segment != null || fp8Segment != null || fp4Segment != null)
+                ? Math.max(500, 25 * k)
                 : Math.max(100, 3 * k));
 
-        long[][][] threadLocalIds = new long[numWorkers][numQueries][kCandidate];
-        int[][][] threadLocalDists = new int[numWorkers][numQueries][kCandidate];
-
-        for (int w = 0; w < numWorkers; w++) {
-            for (int q = 0; q < numQueries; q++) {
-                Arrays.fill(threadLocalDists[w][q], Integer.MAX_VALUE);
-            }
-        }
-
-        long currentChunkSize = this.chunkSize;
-        long numChunks = (size + currentChunkSize - 1) / currentChunkSize;
-        CountDownLatch latch = new CountDownLatch((int) numChunks);
-
-        for (long c = 0; c < numChunks; c++) {
-            long startIdx = c * currentChunkSize;
-            long endIdx = Math.min(startIdx + currentChunkSize, size);
-
-            long sequence = ringBuffer.next();
-            try {
-                RangeEvent event = ringBuffer.get(sequence);
-                event.setKnn(startIdx, endIdx, queries, kCandidate, threadLocalIds, threadLocalDists, latch);
-            } finally {
-                ringBuffer.publish(sequence);
-            }
-        }
-
-        try {
-            latch.await();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Search execution was interrupted", e);
-        }
-
-        float[][] zQueries = new float[numQueries][];
-        for (int q = 0; q < numQueries; q++) {
-            zQueries[q] = transformOperator.preconditionAndRotate(queries[q]);
-        }
-
         List<SearchResult>[] finalResults = new List[numQueries];
-        IntStream.range(0, numQueries).forEach(q -> {
-            List<SearchResult> merged = new ArrayList<>();
-            for (int w = 0; w < numWorkers; w++) {
-                long[] ids = threadLocalIds[w][q];
-                int[] dists = threadLocalDists[w][q];
-                for (int i = 0; i < kCandidate; i++) {
-                    if (dists[i] != Integer.MAX_VALUE) {
-                        merged.add(new SearchResult(ids[i], dists[i]));
+
+        IntStream.range(0, numQueries).parallel().forEach(q -> {
+            float[] query = queries[q];
+            float[] zQuery = transformOperator.preconditionAndRotate(query);
+
+            long[] bQuery;
+            long[] bQueryMask = null;
+            if (qMode == 1) { // 2-bit
+                float qThreshold = TransformOperator.calculatePercentileThreshold(zQuery, 0.20f);
+                long[][] packed = transformOperator.quantize2Bit(zQuery, qThreshold);
+                bQuery = packed[0];
+                bQueryMask = packed[1];
+            } else if (qMode == 0) { // 1-bit
+                bQuery = transformOperator.transformAndQuantize(query);
+            } else {
+                bQuery = null;
+            }
+
+            int[] topDists = new int[kCandidate];
+            long[] topRowIds = new long[kCandidate];
+            Arrays.fill(topDists, Integer.MAX_VALUE);
+
+            for (long rowIdx = 0; rowIdx < size; rowIdx++) {
+                if (metadataSegment != null && (metadataSegment.get(ValueLayout.JAVA_LONG, rowIdx * 8L) & 1L) == 1L) {
+                    continue;
+                }
+
+                int currentLimit = topDists[kCandidate - 1];
+                int totalDist = 0;
+
+                if (qMode == 1) { // 2-bit
+                    for (int tierIdx = 0; tierIdx <= activeT; tierIdx++) {
+                        int numLongs = tierLongs[tierIdx];
+                        int offset = tierOffsets[tierIdx];
+                        MemorySegment tierSeg = tierSegments[tierIdx];
+                        long baseOffset = rowIdx * (numLongs * 16L);
+                        int tierDist = 0;
+                        int l = 0;
+                        for (; l + 3 < numLongs; l += 4) {
+                            long s0 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
+                            long m0 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + (l * 8L));
+                            long s1 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 1) * 8L));
+                            long m1 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + ((l + 1) * 8L));
+                            long s2 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 2) * 8L));
+                            long m2 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + ((l + 2) * 8L));
+                            long s3 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 3) * 8L));
+                            long m3 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + ((l + 3) * 8L));
+
+                            tierDist += 4 * Long.bitCount(m0 & bQueryMask[offset + l] & (s0 ^ bQuery[offset + l])) + Long.bitCount(m0 ^ bQueryMask[offset + l])
+                                      + 4 * Long.bitCount(m1 & bQueryMask[offset + l + 1] & (s1 ^ bQuery[offset + l + 1])) + Long.bitCount(m1 ^ bQueryMask[offset + l + 1])
+                                      + 4 * Long.bitCount(m2 & bQueryMask[offset + l + 2] & (s2 ^ bQuery[offset + l + 2])) + Long.bitCount(m2 ^ bQueryMask[offset + l + 2])
+                                      + 4 * Long.bitCount(m3 & bQueryMask[offset + l + 3] & (s3 ^ bQuery[offset + l + 3])) + Long.bitCount(m3 ^ bQueryMask[offset + l + 3]);
+                        }
+                        for (; l < numLongs; l++) {
+                            long dbSign = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
+                            long dbMask = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + (l * 8L));
+                            long qSign = bQuery[offset + l];
+                            long qMask = bQueryMask[offset + l];
+                            tierDist += 4 * Long.bitCount(dbMask & qMask & (dbSign ^ qSign)) + Long.bitCount(dbMask ^ qMask);
+                        }
+                        totalDist += tierDist;
+                        if (totalDist > currentLimit) break;
+                    }
+                } else if (qMode == 2) { // Float
+                    float[] dbFloat = new float[dimension];
+                    int dimOffset = 0;
+                    for (int tierIdx = 0; tierIdx < numTiers; tierIdx++) {
+                        int width = tiers[tierIdx] - (tierIdx == 0 ? 0 : tiers[tierIdx - 1]);
+                        long baseOffset = rowIdx * (width * 4L);
+                        MemorySegment.copy(tierSegments[tierIdx], ValueLayout.JAVA_FLOAT, baseOffset, dbFloat, dimOffset, width);
+                        dimOffset += width;
+                    }
+                    totalDist = (int) (transformOperator.computeL2Float(zQuery, dbFloat) * 1000f);
+                } else { // 1-bit unrolled 8x
+                    for (int tierIdx = 0; tierIdx <= activeT; tierIdx++) {
+                        int numLongs = tierLongs[tierIdx];
+                        int offset = tierOffsets[tierIdx];
+                        MemorySegment tierSeg = tierSegments[tierIdx];
+                        long baseOffset = rowIdx * (numLongs * 8L);
+                        int tierDist = 0;
+                        int l = 0;
+                        for (; l + 7 < numLongs; l += 8) {
+                            long w0 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
+                            long w1 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 1) * 8L));
+                            long w2 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 2) * 8L));
+                            long w3 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 3) * 8L));
+                            long w4 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 4) * 8L));
+                            long w5 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 5) * 8L));
+                            long w6 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 6) * 8L));
+                            long w7 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 7) * 8L));
+
+                            tierDist += Long.bitCount(bQuery[offset + l] ^ w0)
+                                      + Long.bitCount(bQuery[offset + l + 1] ^ w1)
+                                      + Long.bitCount(bQuery[offset + l + 2] ^ w2)
+                                      + Long.bitCount(bQuery[offset + l + 3] ^ w3)
+                                      + Long.bitCount(bQuery[offset + l + 4] ^ w4)
+                                      + Long.bitCount(bQuery[offset + l + 5] ^ w5)
+                                      + Long.bitCount(bQuery[offset + l + 6] ^ w6)
+                                      + Long.bitCount(bQuery[offset + l + 7] ^ w7);
+                        }
+                        for (; l < numLongs; l++) {
+                            long dbWord = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
+                            tierDist += Long.bitCount(bQuery[offset + l] ^ dbWord);
+                        }
+                        totalDist += tierDist;
+                        if (totalDist > currentLimit) break;
                     }
                 }
-            }
 
-            merged.sort((r1, r2) -> {
-                int cmp = Integer.compare(r1.score(), r2.score());
-                if (cmp != 0)
-                    return cmp;
-                return Long.compare(r1.id(), r2.id());
-            });
-
-            List<Long> candidates = new ArrayList<>();
-            Set<Long> seen = new HashSet<>();
-            for (SearchResult r : merged) {
-                if (seen.add(r.id())) {
-                    candidates.add(r.id());
-                    if (candidates.size() >= kCandidate)
-                        break;
+                if (totalDist < currentLimit) {
+                    int pos = kCandidate - 1;
+                    while (pos > 0 && totalDist < topDists[pos - 1]) {
+                        topDists[pos] = topDists[pos - 1];
+                        topRowIds[pos] = topRowIds[pos - 1];
+                        pos--;
+                    }
+                    topDists[pos] = totalDist;
+                    topRowIds[pos] = rowIdx;
                 }
             }
 
-            double queryL2Norm = 0.0;
-            double querySum = 0.0;
-            for (float val : zQueries[q]) {
-                queryL2Norm += val * val;
-                querySum += val;
+            List<Long> candidates = new ArrayList<>();
+            for (int i = 0; i < kCandidate; i++) {
+                if (topDists[i] != Integer.MAX_VALUE) {
+                    candidates.add(topRowIds[i]);
+                }
             }
 
             if (qMode == 2) {
@@ -692,30 +759,28 @@ public class FlatIndex implements Index {
                 int limit = Math.min(k, candidates.size());
                 for (int i = 0; i < limit; i++) {
                     long rowIdx = candidates.get(i);
-                    long recordId = idsSegment.get(ValueLayout.JAVA_LONG, rowIdx * 8);
-                    queryResults.add(new SearchResult(recordId, 0));
+                    long recordId = idsSegment.get(ValueLayout.JAVA_LONG, rowIdx * 8L);
+                    queryResults.add(new SearchResult(recordId, topDists[i]));
                 }
                 finalResults[q] = queryResults;
                 return;
             }
 
+            // Gate 3: Precision Sidecar Reranking
             class RerankedCandidate {
                 final long rowIdx;
                 final double distance;
-
                 RerankedCandidate(long rowIdx, double distance) {
                     this.rowIdx = rowIdx;
                     this.distance = distance;
                 }
             }
 
-            List<RerankedCandidate> reranked = new ArrayList<>();
+            List<RerankedCandidate> reranked = new ArrayList<>(candidates.size());
             if (fp8Segment != null) {
-                // Hebel 1: Asymmetric Precomputed Query Lookup-Tables
                 float[][] queryLut = new float[dimension][256];
-                float[] qRaw = queries[q];
                 for (int d = 0; d < dimension; d++) {
-                    float qVal = qRaw[d];
+                    float qVal = query[d];
                     for (int b = 0; b < 256; b++) {
                         float diff = qVal - FP8_E4M3_LUT[b];
                         queryLut[d][b] = diff * diff;
@@ -730,21 +795,25 @@ public class FlatIndex implements Index {
                 int numBlocks = (dimension + 15) / 16;
                 int bytesPerRecord = numBlocks * 9;
                 byte[] localFp4 = new byte[bytesPerRecord];
-                float[] qRaw = queries[q];
                 for (long rowIdx : candidates) {
-                    double dist = computeExactL2FP4(qRaw, rowIdx, localFp4, numBlocks);
+                    double dist = computeExactL2FP4(query, rowIdx, localFp4, numBlocks);
                     reranked.add(new RerankedCandidate(rowIdx, dist));
                 }
             } else if (fp16Segment != null) {
-                float[] rawQuery = queries[q];
                 short[] localFp16 = new short[dimension];
                 for (long rowIdx : candidates) {
-                    double dist = computeExactL2FP16(rawQuery, rowIdx, localFp16);
+                    double dist = computeExactL2FP16(query, rowIdx, localFp16);
                     reranked.add(new RerankedCandidate(rowIdx, dist));
                 }
             } else {
+                double queryL2Norm = 0.0;
+                double querySum = 0.0;
+                for (float val : zQuery) {
+                    queryL2Norm += val * val;
+                    querySum += val;
+                }
                 for (long rowIdx : candidates) {
-                    double dist = computeAsymmetricL2DistanceOffHeap(zQueries[q], queryL2Norm, querySum, rowIdx);
+                    double dist = computeAsymmetricL2DistanceOffHeap(zQuery, queryL2Norm, querySum, rowIdx);
                     reranked.add(new RerankedCandidate(rowIdx, dist));
                 }
             }
@@ -755,7 +824,7 @@ public class FlatIndex implements Index {
             int limit = Math.min(k, reranked.size());
             for (int i = 0; i < limit; i++) {
                 RerankedCandidate c = reranked.get(i);
-                long recordId = idsSegment.get(ValueLayout.JAVA_LONG, c.rowIdx * 8);
+                long recordId = idsSegment.get(ValueLayout.JAVA_LONG, c.rowIdx * 8L);
                 queryResults.add(new SearchResult(recordId, (int) (c.distance * 1000000.0)));
             }
             finalResults[q] = queryResults;
@@ -764,12 +833,9 @@ public class FlatIndex implements Index {
         return finalResults;
     }
 
-    /// Performs batch nearest neighbor search accelerated by Gate 0 Spectral Prefix Routing.
-    ///
-    /// Exploits the direct-mapped 16-bit prefix table to prune >99% of candidate vectors in O(1) time,
-    /// evaluating only matching bucket and Hamming-distance-1 (or Hamming-2) neighbor candidate lists.
+    /// Evaluates queries using Gate 0 direct-mapped 16-bit prefix routing ($2^{16} = 65,536$ buckets).
     @SuppressWarnings("unchecked")
-    public List<SearchResult>[] searchWithPrefixRouting(float[][] queries, int k) {
+    private List<SearchResult>[] searchWithPrefixRouting(float[][] queries, int k) {
         int numQueries = queries.length;
         List<SearchResult>[] finalResults = new List[numQueries];
 
@@ -793,44 +859,39 @@ public class FlatIndex implements Index {
             long[] bQuery;
             long[] bQueryMask = null;
             int queryBucketKey;
-
-            if (qMode == 1) {
+            if (qMode == 1) { // 2-bit QJL
                 float qThreshold = TransformOperator.calculatePercentileThreshold(zQuery, 0.20f);
                 long[][] packed = transformOperator.quantize2Bit(zQuery, qThreshold);
                 bQuery = packed[0];
                 bQueryMask = packed[1];
                 queryBucketKey = (int) (bQuery[0] & 0xFFFFL);
-            } else if (qMode == 2) {
+            } else if (qMode == 0) { // 1-bit
+                bQuery = transformOperator.transformAndQuantize(query);
+                queryBucketKey = (int) (bQuery[0] & 0xFFFFL);
+            } else {
                 bQuery = null;
                 int k16 = 0;
-                for (int j = 0; j < Math.min(16, dimension); j++) {
-                    if (zQuery[j] >= 0.0f) {
-                        k16 |= (1 << j);
+                for (int bit = 0; bit < Math.min(16, dimension); bit++) {
+                    if (zQuery[bit] >= 0.0f) {
+                        k16 |= (1 << bit);
                     }
                 }
                 queryBucketKey = k16;
-            } else {
-                bQuery = transformOperator.transformAndQuantize(query);
-                queryBucketKey = (int) (bQuery[0] & 0xFFFFL);
             }
 
-            // Gather candidate row indices (exact bucket + 16 Hamming-1 neighbors)
-            int maxProbedBuckets = 1 + 16;
-            int[] probedBuckets = new int[maxProbedBuckets];
+            int[] probedBuckets = new int[17];
             probedBuckets[0] = queryBucketKey;
-            for (int b = 0; b < 16; b++) {
-                probedBuckets[1 + b] = queryBucketKey ^ (1 << b);
+            for (int bit = 0; bit < 16; bit++) {
+                probedBuckets[1 + bit] = queryBucketKey ^ (1 << bit);
             }
 
             int totalCandidatesCount = 0;
-            for (int b = 0; b < maxProbedBuckets; b++) {
-                int bKey = probedBuckets[b];
+            for (int bKey : probedBuckets) {
                 int start = prefixOffsetsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, (long) bKey * 4L);
                 int end = prefixOffsetsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, (long) (bKey + 1) * 4L);
                 totalCandidatesCount += (end - start);
             }
 
-            // Expand to Hamming-2 if candidate count is smaller than kCandidate and dataset is non-trivial
             int[] allProbedBuckets = probedBuckets;
             if (totalCandidatesCount < Math.min(size, kCandidate) && size > 100) {
                 int h2Count = 16 * 15 / 2; // 120
@@ -841,6 +902,18 @@ public class FlatIndex implements Index {
                     for (int b2 = b1 + 1; b2 < 16; b2++) {
                         allProbedBuckets[idx++] = queryBucketKey ^ (1 << b1) ^ (1 << b2);
                     }
+                }
+            }
+
+            // Task 4: Proactive Async DMA / Page Prefetch for Candidate Postings
+            for (int bKey : allProbedBuckets) {
+                int start = prefixOffsetsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, (long) bKey * 4L);
+                int end = prefixOffsetsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, (long) (bKey + 1) * 4L);
+                int count = end - start;
+                if (count > 0) {
+                    try {
+                        prefixPostingsSegment.asSlice((long) start * 4L, (long) count * 4L).load();
+                    } catch (Exception ignored) {}
                 }
             }
 
@@ -860,7 +933,7 @@ public class FlatIndex implements Index {
                         continue;
                     }
 
-                    // Gate 2: Matryoshka Early-Exit Hamming Scan
+                    // Gate 2: Matryoshka Early-Exit Hamming Scan with 8x SIMD unrolling
                     int currentLimit = topDists[kCandidate - 1];
                     int totalDist = 0;
 
@@ -871,15 +944,28 @@ public class FlatIndex implements Index {
                             MemorySegment tierSeg = tierSegments[tierIdx];
                             long baseOffset = rowIdx * (numLongs * 16L);
                             int tierDist = 0;
-                            for (int l = 0; l < numLongs; l++) {
+                            int l = 0;
+                            for (; l + 3 < numLongs; l += 4) {
+                                long s0 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
+                                long m0 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + (l * 8L));
+                                long s1 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 1) * 8L));
+                                long m1 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + ((l + 1) * 8L));
+                                long s2 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 2) * 8L));
+                                long m2 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + ((l + 2) * 8L));
+                                long s3 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 3) * 8L));
+                                long m3 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + ((l + 3) * 8L));
+
+                                tierDist += 4 * Long.bitCount(m0 & bQueryMask[offset + l] & (s0 ^ bQuery[offset + l])) + Long.bitCount(m0 ^ bQueryMask[offset + l])
+                                          + 4 * Long.bitCount(m1 & bQueryMask[offset + l + 1] & (s1 ^ bQuery[offset + l + 1])) + Long.bitCount(m1 ^ bQueryMask[offset + l + 1])
+                                          + 4 * Long.bitCount(m2 & bQueryMask[offset + l + 2] & (s2 ^ bQuery[offset + l + 2])) + Long.bitCount(m2 ^ bQueryMask[offset + l + 2])
+                                          + 4 * Long.bitCount(m3 & bQueryMask[offset + l + 3] & (s3 ^ bQuery[offset + l + 3])) + Long.bitCount(m3 ^ bQueryMask[offset + l + 3]);
+                            }
+                            for (; l < numLongs; l++) {
                                 long dbSign = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
                                 long dbMask = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + (l * 8L));
                                 long qSign = bQuery[offset + l];
                                 long qMask = bQueryMask[offset + l];
-
-                                long mask4 = dbMask & qMask & (dbSign ^ qSign);
-                                long mask1 = dbMask ^ qMask;
-                                tierDist += 4 * Long.bitCount(mask4) + Long.bitCount(mask1);
+                                tierDist += 4 * Long.bitCount(dbMask & qMask & (dbSign ^ qSign)) + Long.bitCount(dbMask ^ qMask);
                             }
                             totalDist += tierDist;
                             if (totalDist > currentLimit) break;
@@ -894,14 +980,34 @@ public class FlatIndex implements Index {
                             dimOffset += width;
                         }
                         totalDist = (int) (transformOperator.computeL2Float(zQuery, dbFloat) * 1000f);
-                    } else { // 1-bit
+                    } else { // 1-bit unrolled 8x
                         for (int tierIdx = 0; tierIdx <= activeT; tierIdx++) {
                             int numLongs = tierLongs[tierIdx];
                             int offset = tierOffsets[tierIdx];
                             MemorySegment tierSeg = tierSegments[tierIdx];
                             long baseOffset = rowIdx * (numLongs * 8L);
                             int tierDist = 0;
-                            for (int l = 0; l < numLongs; l++) {
+                            int l = 0;
+                            for (; l + 7 < numLongs; l += 8) {
+                                long w0 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
+                                long w1 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 1) * 8L));
+                                long w2 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 2) * 8L));
+                                long w3 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 3) * 8L));
+                                long w4 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 4) * 8L));
+                                long w5 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 5) * 8L));
+                                long w6 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 6) * 8L));
+                                long w7 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 7) * 8L));
+
+                                tierDist += Long.bitCount(bQuery[offset + l] ^ w0)
+                                          + Long.bitCount(bQuery[offset + l + 1] ^ w1)
+                                          + Long.bitCount(bQuery[offset + l + 2] ^ w2)
+                                          + Long.bitCount(bQuery[offset + l + 3] ^ w3)
+                                          + Long.bitCount(bQuery[offset + l + 4] ^ w4)
+                                          + Long.bitCount(bQuery[offset + l + 5] ^ w5)
+                                          + Long.bitCount(bQuery[offset + l + 6] ^ w6)
+                                          + Long.bitCount(bQuery[offset + l + 7] ^ w7);
+                            }
+                            for (; l < numLongs; l++) {
                                 long dbWord = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
                                 tierDist += Long.bitCount(bQuery[offset + l] ^ dbWord);
                             }
@@ -930,6 +1036,13 @@ public class FlatIndex implements Index {
                 }
             }
 
+            if (candidates.isEmpty()) {
+                int limit = (int) Math.min(size, kCandidate);
+                for (long rowIdx = 0; rowIdx < limit; rowIdx++) {
+                    candidates.add(rowIdx);
+                }
+            }
+
             if (qMode == 2) {
                 List<SearchResult> queryResults = new ArrayList<>();
                 int limit = Math.min(k, candidates.size());
@@ -940,6 +1053,28 @@ public class FlatIndex implements Index {
                 }
                 finalResults[q] = queryResults;
                 return;
+            }
+
+            // Task 4: Proactive Async DMA Prefetch for Gate 3 Precision Sidecars
+            if (fp8Segment != null) {
+                for (long rId : candidates) {
+                    try {
+                        fp8Segment.asSlice(rId * (long) dimension, (long) dimension).load();
+                    } catch (Exception ignored) {}
+                }
+            } else if (fp4Segment != null) {
+                int bytesPerRec = ((dimension + 15) / 16) * 9;
+                for (long rId : candidates) {
+                    try {
+                        fp4Segment.asSlice(rId * (long) bytesPerRec, (long) bytesPerRec).load();
+                    } catch (Exception ignored) {}
+                }
+            } else if (fp16Segment != null) {
+                for (long rId : candidates) {
+                    try {
+                        fp16Segment.asSlice(rId * (long) dimension * 2L, (long) dimension * 2L).load();
+                    } catch (Exception ignored) {}
+                }
             }
 
             // Gate 3: Precision Sidecar Reranking
