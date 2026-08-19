@@ -197,8 +197,8 @@ class TestPithosContainer(unittest.TestCase):
             prefix_offset = int.from_bytes(sb[60:68], byteorder="little")
             prefix_len = int.from_bytes(sb[68:76], byteorder="little")
             self.assertGreater(prefix_offset, 0)
-            # Prefix offsets = (65536 + 1) * 4 = 262148 bytes; Postings = 1500 * 4 = 6000 bytes
-            expected_min_len = 262148 + n_records * 4
+            # MIH Prefix offsets = 4 * (256 + 1) * 4 = 4112 bytes; Postings = 4 * 1500 * 4 = 24000 bytes
+            expected_min_len = 4112 + 4 * n_records * 4
             self.assertEqual(prefix_len, expected_min_len)
 
             # Check TOC JSON contains "prefix_table" section
@@ -207,7 +207,7 @@ class TestPithosContainer(unittest.TestCase):
             f.seek(toc_offset)
             toc_dict = json.loads(f.read(toc_len).decode("utf-8"))
             self.assertIn("prefix_table", toc_dict["sections"])
-            self.assertEqual(toc_dict["sections"]["prefix_table"]["num_buckets"], 65536)
+            self.assertEqual(toc_dict["sections"]["prefix_table"]["format"], "mih_csr_4x8")
 
         with VectorDb() as db:
             idx = db.load_index("prefix_idx", container_path)
@@ -218,6 +218,17 @@ class TestPithosContainer(unittest.TestCase):
                 res = idx.search(q, k=5)
                 self.assertEqual(len(res), 5)
                 self.assertEqual(res[0].id, ids[q_idx], f"Top 1 match for query {q_idx} must match exactly")
+
+            # Test Zero-Copy search_numpy
+            batch_queries = vecs[[0, 100, 500]]
+            out_ids, out_dists = idx.search_numpy(batch_queries, k=5)
+            self.assertIsInstance(out_ids, np.ndarray)
+            self.assertIsInstance(out_dists, np.ndarray)
+            self.assertEqual(out_ids.shape, (3, 5))
+            self.assertEqual(out_ids[0, 0], ids[0])
+            self.assertEqual(out_ids[1, 0], ids[100])
+            self.assertEqual(out_ids[2, 0], ids[500])
+
             db.drop_index("prefix_idx")
 
 

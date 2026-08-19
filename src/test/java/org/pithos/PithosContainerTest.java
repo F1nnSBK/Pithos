@@ -163,8 +163,8 @@ class PithosContainerTest {
         assertTrue(index.hasPrefixTable(), "Prefix table must be active");
         assertNotNull(index.getPrefixOffsetsSegment());
         assertNotNull(index.getPrefixPostingsSegment());
-        assertEquals(PithosContainer.PREFIX_OFFSETS_BYTES, index.getPrefixOffsetsSegment().byteSize());
-        assertEquals(numRecords * 4L, index.getPrefixPostingsSegment().byteSize());
+        assertEquals(PithosContainer.MIH_OFFSETS_BYTES, index.getPrefixOffsetsSegment().byteSize());
+        assertEquals(numRecords * 4L * PithosContainer.NUM_MIH_CHUNKS, index.getPrefixPostingsSegment().byteSize());
 
         // Batch search across multiple queries
         float[][] queries = new float[10][dimension];

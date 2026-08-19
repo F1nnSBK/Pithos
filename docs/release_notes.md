@@ -13,18 +13,20 @@ Pithos v2.0.0 is a milestone architectural overhaul designed to exceed 100,000 Q
 
 ### The 4 Core Architectural Upgrades:
 
-#### 1. Algorithmic Breakthrough: "Gate 0" Spectral Prefix Routing
-* **Direct-Mapped 16-Bit CSR Prefix Table:** Exploits SVD/Walsh-Hadamard preconditioned Tier-0 coordinates to build a direct-mapped table of 2^16 = 65,536 spatial buckets.
-* **O(1) Candidate Pruning:** For incoming queries, probes the exact bucket and 16 Hamming-1 neighbor buckets, instantly eliminating 98%–99.9% of the search space before Hamming scans or sidecar reranking.
-* **Zero-Copy Container Format Integration:** Serialized as `SECTION_PREFIX_TABLE` inside `.pithos` single-file containers with 64-byte cache-line alignment and direct memory mapping via Java 25 FFM.
+#### 1. Algorithmic Breakthrough: "Gate 0" Multi-Index Hashing (MIH 4x8-Bit CSR)
+* **4x8-Bit Multi-Index Hashing (MIH):** Exploits SVD/Walsh-Hadamard preconditioned 32-bit prefix coordinates split into 4 orthogonal 8-bit chunks (256 buckets per chunk).
+* **Guaranteed Recall via Pigeonhole Principle:** Probes exact and Hamming-1/Hamming-2 neighbor buckets across chunks with lock-free deduplication, ensuring high recall while bounding candidate scans to a small fraction of the dataset.
+* **Zero-Copy Container Format Integration:** Serialized as `SECTION_PREFIX_TABLE` (`mih_csr_4x8`) inside `.pithos` single-file containers with 64-byte cache-line alignment and direct memory mapping via Java 25 FFM.
 
-#### 2. Concurrency Redesign: LMAX Disruptor Read-Bypass & Contention-Free Reads
+#### 2. Concurrency Redesign: LMAX Disruptor Read-Bypass & Zero-Copy FFI Returns
 * **Strict CQRS Isolation:** The LMAX Disruptor lock-free ring buffer is strictly dedicated to write ingestion, WAL recovery, and DeltaBuffer mutation pipelines.
-* **Contention-Free Parallel Reads:** Read queries bypass Disruptor ring contention using thread-local nearest-neighbor heaps and lock-free work-stealing / chunked partitions for linear multicore scaling across 16+ CPU cores.
+* **Contention-Free Parallel Reads:** Read queries bypass Disruptor ring contention using thread-local nearest-neighbor heaps and lock-free chunked partitions for linear multicore scaling across 16+ CPU cores.
+* **Zero-Copy Flat NumPy Return Path:** Introduced `search_numpy()` and `batch_search_numpy()` (`return_numpy=True`) returning flat `(out_ids, out_dists)` NumPy ndarrays directly from C FFI memory buffers without Python object instantiation overhead.
 
 #### 3. Micro-Architecture: SIMD Register Tiling & Micro-Batching
 * **SIMD Register Tiling:** Amortizes database vector memory loads across 8 query vectors simultaneously held in SIMD registers.
 * **Aggressive Loop Unrolling & Popcount:** 8x unrolled NEON and AVX-512 popcount intrinsics maximizing CPU instruction-level parallelism (ILP).
+* **Flat FP8 LUT Reranking:** Computes exact FP8 L2 distances directly off-heap using precomputed flat query distance LUTs with zero heap allocation.
 
 #### 4. Async Out-of-Core I/O: Proactive Prefetching (MADV_WILLNEED / io_uring)
 * **Proactive Candidate Prefetching:** Dispatches asynchronous page prefetch hints (`posix_madvise(MADV_WILLNEED)`) for candidate prefix bucket postings and sidecar bytes ahead of SIMD compute cycles.

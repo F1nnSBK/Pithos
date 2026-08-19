@@ -445,9 +445,9 @@ public class FlatIndex implements Index {
                 PithosContainer.Section prefixSec = PithosContainer.extractPrefixTableSection(tocJson);
                 MemorySegment prefixOffsetsSegment = null;
                 MemorySegment prefixPostingsSegment = null;
-                if (prefixSec.offset() > 0 && prefixSec.length() >= PithosContainer.PREFIX_OFFSETS_BYTES) {
-                    long offSegLen = PithosContainer.PREFIX_OFFSETS_BYTES;
-                    long postSegLen = totalRecords * 4L;
+                if (prefixSec.offset() > 0 && prefixSec.length() >= PithosContainer.MIH_OFFSETS_BYTES) {
+                    long offSegLen = PithosContainer.MIH_OFFSETS_BYTES;
+                    long postSegLen = totalRecords * 4L * PithosContainer.NUM_MIH_CHUNKS;
                     prefixOffsetsSegment = containerSegment.asSlice(prefixSec.offset(), offSegLen);
                     prefixPostingsSegment = containerSegment.asSlice(prefixSec.offset() + offSegLen, postSegLen);
                 }
@@ -622,8 +622,8 @@ public class FlatIndex implements Index {
         }
         final int activeT = tVal;
         int kCandidate = (int) Math.min(size, (fp16Segment != null || fp8Segment != null || fp4Segment != null)
-                ? Math.max(500, 25 * k)
-                : Math.max(100, 3 * k));
+                ? Math.max(100, 20 * k)
+                : Math.max(50, 3 * k));
 
         List<SearchResult>[] finalResults = new List[numQueries];
 
@@ -778,17 +778,17 @@ public class FlatIndex implements Index {
 
             List<RerankedCandidate> reranked = new ArrayList<>(candidates.size());
             if (fp8Segment != null) {
-                float[][] queryLut = new float[dimension][256];
+                float[] queryLut = new float[dimension * 256];
                 for (int d = 0; d < dimension; d++) {
                     float qVal = query[d];
+                    int dBase = d << 8;
                     for (int b = 0; b < 256; b++) {
                         float diff = qVal - FP8_E4M3_LUT[b];
-                        queryLut[d][b] = diff * diff;
+                        queryLut[dBase | b] = diff * diff;
                     }
                 }
-                byte[] localFp8 = new byte[dimension];
                 for (long rowIdx : candidates) {
-                    double dist = computeExactL2FP8_LUT(queryLut, rowIdx, localFp8);
+                    double dist = computeExactL2FP8_LUT(queryLut, rowIdx);
                     reranked.add(new RerankedCandidate(rowIdx, dist));
                 }
             } else if (fp4Segment != null) {
@@ -849,8 +849,8 @@ public class FlatIndex implements Index {
         final int activeT = tVal;
 
         int kCandidate = (int) Math.min(size, (fp16Segment != null || fp8Segment != null || fp4Segment != null)
-                ? Math.max(500, 25 * k)
-                : Math.max(100, 3 * k));
+                ? Math.max(300, 30 * k)
+                : Math.max(50, 3 * k));
 
         IntStream.range(0, numQueries).parallel().forEach(q -> {
             float[] query = queries[q];
@@ -858,80 +858,91 @@ public class FlatIndex implements Index {
 
             long[] bQuery;
             long[] bQueryMask = null;
-            int queryBucketKey;
+            int[] queryChunkKeys = new int[4];
             if (qMode == 1) { // 2-bit QJL
                 float qThreshold = TransformOperator.calculatePercentileThreshold(zQuery, 0.20f);
                 long[][] packed = transformOperator.quantize2Bit(zQuery, qThreshold);
                 bQuery = packed[0];
                 bQueryMask = packed[1];
-                queryBucketKey = (int) (bQuery[0] & 0xFFFFL);
+                long w0 = bQuery[0];
+                queryChunkKeys[0] = (int) (w0 & 0xFFL);
+                queryChunkKeys[1] = (int) ((w0 >> 8) & 0xFFL);
+                queryChunkKeys[2] = (int) ((w0 >> 16) & 0xFFL);
+                queryChunkKeys[3] = (int) ((w0 >> 24) & 0xFFL);
             } else if (qMode == 0) { // 1-bit
                 bQuery = transformOperator.transformAndQuantize(query);
-                queryBucketKey = (int) (bQuery[0] & 0xFFFFL);
+                long w0 = bQuery[0];
+                queryChunkKeys[0] = (int) (w0 & 0xFFL);
+                queryChunkKeys[1] = (int) ((w0 >> 8) & 0xFFL);
+                queryChunkKeys[2] = (int) ((w0 >> 16) & 0xFFL);
+                queryChunkKeys[3] = (int) ((w0 >> 24) & 0xFFL);
             } else {
                 bQuery = null;
-                int k16 = 0;
-                for (int bit = 0; bit < Math.min(16, dimension); bit++) {
+                int k32 = 0;
+                for (int bit = 0; bit < Math.min(32, dimension); bit++) {
                     if (zQuery[bit] >= 0.0f) {
-                        k16 |= (1 << bit);
+                        k32 |= (1 << bit);
                     }
                 }
-                queryBucketKey = k16;
-            }
-
-            int[] probedBuckets = new int[17];
-            probedBuckets[0] = queryBucketKey;
-            for (int bit = 0; bit < 16; bit++) {
-                probedBuckets[1 + bit] = queryBucketKey ^ (1 << bit);
-            }
-
-            int totalCandidatesCount = 0;
-            for (int bKey : probedBuckets) {
-                int start = prefixOffsetsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, (long) bKey * 4L);
-                int end = prefixOffsetsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, (long) (bKey + 1) * 4L);
-                totalCandidatesCount += (end - start);
-            }
-
-            int[] allProbedBuckets = probedBuckets;
-            if (totalCandidatesCount < Math.min(size, kCandidate) && size > 100) {
-                int h2Count = 16 * 15 / 2; // 120
-                allProbedBuckets = new int[1 + 16 + h2Count];
-                System.arraycopy(probedBuckets, 0, allProbedBuckets, 0, 17);
-                int idx = 17;
-                for (int b1 = 0; b1 < 16; b1++) {
-                    for (int b2 = b1 + 1; b2 < 16; b2++) {
-                        allProbedBuckets[idx++] = queryBucketKey ^ (1 << b1) ^ (1 << b2);
-                    }
-                }
-            }
-
-            // Task 4: Proactive Async DMA / Page Prefetch for Candidate Postings
-            for (int bKey : allProbedBuckets) {
-                int start = prefixOffsetsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, (long) bKey * 4L);
-                int end = prefixOffsetsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, (long) (bKey + 1) * 4L);
-                int count = end - start;
-                if (count > 0) {
-                    try {
-                        prefixPostingsSegment.asSlice((long) start * 4L, (long) count * 4L).load();
-                    } catch (Exception ignored) {}
-                }
+                queryChunkKeys[0] = (k32 & 0xFF);
+                queryChunkKeys[1] = ((k32 >> 8) & 0xFF);
+                queryChunkKeys[2] = ((k32 >> 16) & 0xFF);
+                queryChunkKeys[3] = ((k32 >> 24) & 0xFF);
             }
 
             int[] topDists = new int[kCandidate];
             long[] topRowIds = new long[kCandidate];
             Arrays.fill(topDists, Integer.MAX_VALUE);
 
-            for (int bKey : allProbedBuckets) {
-                int start = prefixOffsetsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, (long) bKey * 4L);
-                int end = prefixOffsetsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, (long) (bKey + 1) * 4L);
+            long[] visited = new long[((int) size + 63) >>> 6];
 
-                for (int p = start; p < end; p++) {
-                    long rowIdx = prefixPostingsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, (long) p * 4L) & 0xFFFFFFFFL;
-
-                    // Gate 1: Tombstone filter
-                    if (metadataSegment != null && (metadataSegment.get(ValueLayout.JAVA_LONG, rowIdx * 8L) & 1L) == 1L) {
-                        continue;
+            for (int c = 0; c < 4; c++) {
+                int qKey = queryChunkKeys[c];
+                int[] probedChunk;
+                if (c == 0) {
+                    probedChunk = new int[37];
+                    probedChunk[0] = qKey;
+                    for (int bit = 0; bit < 8; bit++) {
+                        probedChunk[1 + bit] = qKey ^ (1 << bit);
                     }
+                    int idx = 9;
+                    for (int b1 = 0; b1 < 8; b1++) {
+                        for (int b2 = b1 + 1; b2 < 8; b2++) {
+                            probedChunk[idx++] = qKey ^ (1 << b1) ^ (1 << b2);
+                        }
+                    }
+                } else {
+                    probedChunk = new int[9];
+                    probedChunk[0] = qKey;
+                    for (int bit = 0; bit < 8; bit++) {
+                        probedChunk[1 + bit] = qKey ^ (1 << bit);
+                    }
+                }
+
+                long chunkOffBase = c * (256L + 1L) * 4L;
+                long chunkPostBase = (long) c * size * 4L;
+
+                for (int bKey : probedChunk) {
+                    int start = prefixOffsetsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, chunkOffBase + (bKey * 4L));
+                    int end = prefixOffsetsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, chunkOffBase + ((bKey + 1) * 4L));
+
+                    for (int p = start; p < end; p++) {
+                        int rowIdxInt = prefixPostingsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, chunkPostBase + (p * 4L));
+                        if (rowIdxInt < 0 || rowIdxInt >= size) {
+                            continue;
+                        }
+                        int wordIdx = rowIdxInt >>> 6;
+                        long mask = 1L << (rowIdxInt & 63);
+                        if ((visited[wordIdx] & mask) != 0) {
+                            continue;
+                        }
+                        visited[wordIdx] |= mask;
+                        long rowIdx = rowIdxInt & 0xFFFFFFFFL;
+
+                        // Gate 1: Tombstone filter
+                        if (metadataSegment != null && (metadataSegment.get(ValueLayout.JAVA_LONG, rowIdx * 8L) & 1L) == 1L) {
+                            continue;
+                        }
 
                     // Gate 2: Matryoshka Early-Exit Hamming Scan with 8x SIMD unrolling
                     int currentLimit = topDists[kCandidate - 1];
@@ -1028,8 +1039,9 @@ public class FlatIndex implements Index {
                     }
                 }
             }
+        }
 
-            List<Long> candidates = new ArrayList<>();
+        List<Long> candidates = new ArrayList<>();
             for (int i = 0; i < kCandidate; i++) {
                 if (topDists[i] != Integer.MAX_VALUE) {
                     candidates.add(topRowIds[i]);
@@ -1089,17 +1101,17 @@ public class FlatIndex implements Index {
 
             List<RerankedCandidate> reranked = new ArrayList<>(candidates.size());
             if (fp8Segment != null) {
-                float[][] queryLut = new float[dimension][256];
+                float[] queryLut = new float[dimension * 256];
                 for (int d = 0; d < dimension; d++) {
                     float qVal = query[d];
+                    int dBase = d << 8;
                     for (int b = 0; b < 256; b++) {
                         float diff = qVal - FP8_E4M3_LUT[b];
-                        queryLut[d][b] = diff * diff;
+                        queryLut[dBase | b] = diff * diff;
                     }
                 }
-                byte[] localFp8 = new byte[dimension];
                 for (long rowIdx : candidates) {
-                    double dist = computeExactL2FP8_LUT(queryLut, rowIdx, localFp8);
+                    double dist = computeExactL2FP8_LUT(queryLut, rowIdx);
                     reranked.add(new RerankedCandidate(rowIdx, dist));
                 }
             } else if (fp4Segment != null) {
@@ -1323,12 +1335,27 @@ public class FlatIndex implements Index {
         }
     }
 
-    private double computeExactL2FP8_LUT(float[][] queryLut, long rowIdx, byte[] localFp8) {
+    private double computeExactL2FP8_LUT(float[] queryLut, long rowIdx) {
         long rowOffset = rowIdx * (long) dimension;
-        MemorySegment.copy(fp8Segment, ValueLayout.JAVA_BYTE, rowOffset, localFp8, 0, dimension);
         double sum = 0.0;
-        for (int d = 0; d < dimension; d++) {
-            sum += queryLut[d][localFp8[d] & 0xFF];
+        int d = 0;
+        for (; d + 7 < dimension; d += 8) {
+            int b0 = fp8Segment.get(ValueLayout.JAVA_BYTE, rowOffset + d) & 0xFF;
+            int b1 = fp8Segment.get(ValueLayout.JAVA_BYTE, rowOffset + d + 1) & 0xFF;
+            int b2 = fp8Segment.get(ValueLayout.JAVA_BYTE, rowOffset + d + 2) & 0xFF;
+            int b3 = fp8Segment.get(ValueLayout.JAVA_BYTE, rowOffset + d + 3) & 0xFF;
+            int b4 = fp8Segment.get(ValueLayout.JAVA_BYTE, rowOffset + d + 4) & 0xFF;
+            int b5 = fp8Segment.get(ValueLayout.JAVA_BYTE, rowOffset + d + 5) & 0xFF;
+            int b6 = fp8Segment.get(ValueLayout.JAVA_BYTE, rowOffset + d + 6) & 0xFF;
+            int b7 = fp8Segment.get(ValueLayout.JAVA_BYTE, rowOffset + d + 7) & 0xFF;
+            sum += queryLut[(d << 8) | b0] + queryLut[((d + 1) << 8) | b1]
+                 + queryLut[((d + 2) << 8) | b2] + queryLut[((d + 3) << 8) | b3]
+                 + queryLut[((d + 4) << 8) | b4] + queryLut[((d + 5) << 8) | b5]
+                 + queryLut[((d + 6) << 8) | b6] + queryLut[((d + 7) << 8) | b7];
+        }
+        for (; d < dimension; d++) {
+            int b = fp8Segment.get(ValueLayout.JAVA_BYTE, rowOffset + d) & 0xFF;
+            sum += queryLut[(d << 8) | b];
         }
         return sum;
     }

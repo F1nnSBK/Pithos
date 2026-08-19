@@ -52,6 +52,12 @@ public final class PithosContainer {
     public static final int METRIC_L2 = 1;
     public static final int METRIC_DOT_PRODUCT = 2;
 
+    public static final int NUM_MIH_CHUNKS = 4;
+    public static final int NUM_MIH_BUCKETS = 256;
+    public static final int MIH_OFFSETS_COUNT = NUM_MIH_CHUNKS * (NUM_MIH_BUCKETS + 1); // 4 * 257 = 1028 ints
+    public static final long MIH_OFFSETS_BYTES = MIH_OFFSETS_COUNT * 4L; // 4112 bytes
+
+    // Backward-compatibility alias
     public static final int NUM_PREFIX_BUCKETS = 65536;
     public static final int PREFIX_OFFSETS_COUNT = NUM_PREFIX_BUCKETS + 1;
     public static final long PREFIX_OFFSETS_BYTES = PREFIX_OFFSETS_COUNT * 4L;
@@ -346,10 +352,10 @@ public final class PithosContainer {
             currentOffset = align64(currentOffset + sidecarLength);
         }
 
-        // Prefix Table Section (Direct-Mapped 16-Bit Inverted Index, 65536 buckets)
+        // Multi-Index Hashing (MIH) Section (4 chunks x 256 buckets CSR)
         long prefixTableOffset = currentOffset;
-        long prefixPostingsLength = numVectors * 4L;
-        long prefixTableLength = PREFIX_OFFSETS_BYTES + prefixPostingsLength;
+        long prefixPostingsLength = NUM_MIH_CHUNKS * numVectors * 4L;
+        long prefixTableLength = MIH_OFFSETS_BYTES + prefixPostingsLength;
         currentOffset = align64(currentOffset + prefixTableLength);
 
         // Metadata payload section
@@ -377,7 +383,7 @@ public final class PithosContainer {
         tocBuilder.append("    \"sidecar\": { \"offset\": ").append(sidecarOffset).append(", \"length\": ").append(sidecarLength)
                 .append(", \"format\": \"").append(sidecarFormat).append("\" },\n");
         tocBuilder.append("    \"prefix_table\": { \"offset\": ").append(prefixTableOffset).append(", \"length\": ").append(prefixTableLength)
-                .append(", \"num_buckets\": ").append(NUM_PREFIX_BUCKETS).append(", \"format\": \"direct_mapped_csr\" },\n");
+                .append(", \"num_chunks\": 4, \"num_buckets_per_chunk\": 256, \"format\": \"mih_csr_4x8\" },\n");
         tocBuilder.append("    \"metadata\": { \"offset\": ").append(metadataOffset).append(", \"length\": ").append(metadataLength)
                 .append(", \"format\": \"").append(metaFormat).append("\" }\n");
         tocBuilder.append("  },\n");
@@ -430,21 +436,25 @@ public final class PithosContainer {
                 mapped.set(ValueLayout.JAVA_LONG, idsOffset + (i * 8L), records.get(i).id());
             }
 
-            // 3. Write Quantization Tiers Section & Compute Prefix Table Postings
-            int[] vectorBucketKeys = new int[(int) numVectors];
-            int[] bucketCounts = new int[NUM_PREFIX_BUCKETS];
+            // 3. Write Quantization Tiers Section & Compute 4x8 MIH Chunk Postings
+            int[][] chunkBucketKeys = new int[NUM_MIH_CHUNKS][(int) numVectors];
+            int[][] chunkBucketCounts = new int[NUM_MIH_CHUNKS][NUM_MIH_BUCKETS];
 
             TransformOperator transformer = new TransformOperator(dimension, tiers);
             for (int i = 0; i < numVectors; i++) {
                 VectorRecord rec = records.get(i);
-                int bucketKey;
+                int[] keys = new int[4];
                 if (qMode == 1) { // 2-bit QJL Residuals
                     float[] z = transformer.preconditionAndRotate(rec.vector());
                     float threshold = TransformOperator.calculatePercentileThreshold(z, 0.20f);
                     long[][] packed = transformer.quantize2Bit(z, threshold);
                     long[] signPacked = packed[0];
                     long[] maskPacked = packed[1];
-                    bucketKey = (int) (signPacked[0] & 0xFFFFL);
+                    long w0 = signPacked[0];
+                    keys[0] = (int) (w0 & 0xFFL);
+                    keys[1] = (int) ((w0 >> 8) & 0xFFL);
+                    keys[2] = (int) ((w0 >> 16) & 0xFFL);
+                    keys[3] = (int) ((w0 >> 24) & 0xFFL);
 
                     int longOffset = 0;
                     for (int k = 0; k < numTiers; k++) {
@@ -458,13 +468,16 @@ public final class PithosContainer {
                     }
                 } else if (qMode == 2) { // Float-Hybrid raw float32
                     float[] z = transformer.preconditionAndRotate(rec.vector());
-                    int k16 = 0;
-                    for (int j = 0; j < Math.min(16, dimension); j++) {
+                    int k32 = 0;
+                    for (int j = 0; j < Math.min(32, dimension); j++) {
                         if (z[j] >= 0.0f) {
-                            k16 |= (1 << j);
+                            k32 |= (1 << j);
                         }
                     }
-                    bucketKey = k16;
+                    keys[0] = (k32 & 0xFF);
+                    keys[1] = ((k32 >> 8) & 0xFF);
+                    keys[2] = ((k32 >> 16) & 0xFF);
+                    keys[3] = ((k32 >> 24) & 0xFF);
 
                     int longOffset = 0;
                     for (int k = 0; k < numTiers; k++) {
@@ -480,7 +493,11 @@ public final class PithosContainer {
                     }
                 } else { // 1-bit default
                     long[] packed = transformer.transformAndQuantize(rec.vector());
-                    bucketKey = (int) (packed[0] & 0xFFFFL);
+                    long w0 = packed[0];
+                    keys[0] = (int) (w0 & 0xFFL);
+                    keys[1] = (int) ((w0 >> 8) & 0xFFL);
+                    keys[2] = (int) ((w0 >> 16) & 0xFFL);
+                    keys[3] = (int) ((w0 >> 24) & 0xFFL);
 
                     int longOffset = 0;
                     for (int k = 0; k < numTiers; k++) {
@@ -492,33 +509,44 @@ public final class PithosContainer {
                         longOffset += count;
                     }
                 }
-                vectorBucketKeys[i] = bucketKey;
-                bucketCounts[bucketKey]++;
+                for (int c = 0; c < NUM_MIH_CHUNKS; c++) {
+                    chunkBucketKeys[c][i] = keys[c];
+                    chunkBucketCounts[c][keys[c]]++;
+                }
             }
 
-            // 4. Write Direct-Mapped Prefix Table Section (CSR format)
-            int[] bucketOffsets = new int[PREFIX_OFFSETS_COUNT];
-            int runningOffset = 0;
-            for (int b = 0; b < NUM_PREFIX_BUCKETS; b++) {
-                bucketOffsets[b] = runningOffset;
-                runningOffset += bucketCounts[b];
-            }
-            bucketOffsets[NUM_PREFIX_BUCKETS] = (int) numVectors;
-
-            int[] currentBucketPtrs = Arrays.copyOf(bucketOffsets, NUM_PREFIX_BUCKETS);
-            int[] postings = new int[(int) numVectors];
-            for (int i = 0; i < numVectors; i++) {
-                int b = vectorBucketKeys[i];
-                int destPos = currentBucketPtrs[b]++;
-                postings[destPos] = i;
+            // 4. Write Direct-Mapped Multi-Index Hashing (MIH) Tables (4 x CSR)
+            int[][] chunkBucketOffsets = new int[NUM_MIH_CHUNKS][NUM_MIH_BUCKETS + 1];
+            for (int c = 0; c < NUM_MIH_CHUNKS; c++) {
+                int runningOffset = 0;
+                for (int b = 0; b < NUM_MIH_BUCKETS; b++) {
+                    chunkBucketOffsets[c][b] = runningOffset;
+                    runningOffset += chunkBucketCounts[c][b];
+                }
+                chunkBucketOffsets[c][NUM_MIH_BUCKETS] = (int) numVectors;
             }
 
-            for (int b = 0; b < PREFIX_OFFSETS_COUNT; b++) {
-                mapped.set(ValueLayout.JAVA_INT_UNALIGNED, prefixTableOffset + (b * 4L), bucketOffsets[b]);
+            // Write Offsets (4 * 257 = 1028 ints)
+            for (int c = 0; c < NUM_MIH_CHUNKS; c++) {
+                long offBase = prefixTableOffset + (c * (NUM_MIH_BUCKETS + 1L) * 4L);
+                for (int b = 0; b <= NUM_MIH_BUCKETS; b++) {
+                    mapped.set(ValueLayout.JAVA_INT_UNALIGNED, offBase + (b * 4L), chunkBucketOffsets[c][b]);
+                }
             }
-            long postBase = prefixTableOffset + PREFIX_OFFSETS_BYTES;
-            for (int i = 0; i < numVectors; i++) {
-                mapped.set(ValueLayout.JAVA_INT_UNALIGNED, postBase + (i * 4L), postings[i]);
+
+            // Write Postings for each chunk
+            for (int c = 0; c < NUM_MIH_CHUNKS; c++) {
+                int[] currentPtrs = Arrays.copyOf(chunkBucketOffsets[c], NUM_MIH_BUCKETS);
+                int[] chunkPostings = new int[(int) numVectors];
+                for (int i = 0; i < numVectors; i++) {
+                    int b = chunkBucketKeys[c][i];
+                    int destPos = currentPtrs[b]++;
+                    chunkPostings[destPos] = i;
+                }
+                long postBase = prefixTableOffset + MIH_OFFSETS_BYTES + (c * (long) numVectors * 4L);
+                for (int i = 0; i < numVectors; i++) {
+                    mapped.set(ValueLayout.JAVA_INT_UNALIGNED, postBase + (i * 4L), chunkPostings[i]);
+                }
             }
 
             // 5. Write Precision Sidecar Section

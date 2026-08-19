@@ -9,7 +9,7 @@ import shutil
 import threading
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import List, Optional, Union, Dict, Any, Sequence
+from typing import List, Optional, Union, Dict, Any, Sequence, Tuple
 import numpy as np
 
 from .ffi import NativeBindings, PithosNativeError, reset_isolate, shrink_to_fit
@@ -306,10 +306,12 @@ class Index:
         self,
         queries: Union[np.ndarray, Sequence[float], Sequence[Sequence[float]]],
         k: int = 10,
-        cuda: bool = False
-    ) -> Union[List[SearchResult], List[List[SearchResult]]]:
+        cuda: bool = False,
+        return_numpy: bool = False
+    ) -> Union[List[SearchResult], List[List[SearchResult]], Tuple[np.ndarray, np.ndarray]]:
         """
         Performs high-performance batch k-NN search across multi-tier vectors.
+        If return_numpy=True, returns (out_ids, out_distances) directly as flat numpy arrays (zero-copy).
         """
         q_arr = np.ascontiguousarray(queries, dtype=np.float32)
         is_single = q_arr.ndim == 1
@@ -342,6 +344,9 @@ class Index:
             )
         self._ffi.check_status(status, "search")
 
+        if return_numpy:
+            return (out_ids[0], out_dists[0]) if is_single else (out_ids, out_dists)
+
         results: List[List[SearchResult]] = []
         for q_idx in range(num_queries):
             q_res: List[SearchResult] = []
@@ -354,16 +359,40 @@ class Index:
 
         return results[0] if is_single else results
 
-    def batch_search(
+    def search_numpy(
         self,
         queries: Union[np.ndarray, Sequence[float], Sequence[Sequence[float]]],
         k: int = 10,
         cuda: bool = False
-    ) -> Union[List[SearchResult], List[List[SearchResult]]]:
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Zero-Copy batch k-NN search returning flat numpy arrays (out_ids, out_distances).
+        Completely bypasses Python object allocation and GC overhead.
+        """
+        return self.search(queries, k=k, cuda=cuda, return_numpy=True)
+
+    def batch_search(
+        self,
+        queries: Union[np.ndarray, Sequence[float], Sequence[Sequence[float]]],
+        k: int = 10,
+        cuda: bool = False,
+        return_numpy: bool = False
+    ) -> Union[List[SearchResult], List[List[SearchResult]], Tuple[np.ndarray, np.ndarray]]:
         """
         Alias for search() performing batch k-NN search across multi-tier vectors.
         """
-        return self.search(queries, k=k, cuda=cuda)
+        return self.search(queries, k=k, cuda=cuda, return_numpy=return_numpy)
+
+    def batch_search_numpy(
+        self,
+        queries: Union[np.ndarray, Sequence[float], Sequence[Sequence[float]]],
+        k: int = 10,
+        cuda: bool = False
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Zero-Copy batch k-NN search returning flat numpy arrays (out_ids, out_distances).
+        """
+        return self.search(queries, k=k, cuda=cuda, return_numpy=True)
 
     def search_merged(
         self,
@@ -751,43 +780,50 @@ def _write_pithos_container_file(
             sidecar_len = len(sidecar_bytes)
             current_offset = _align64(current_offset + sidecar_len)
 
-        # Prefix Table Section (Direct-Mapped 16-Bit Inverted Index, 65536 buckets)
-        num_buckets = 65536
-        bucket_counts = [0] * num_buckets
-        vector_bucket_keys = [0] * num_records
+        # Multi-Index Hashing (MIH) Section (4 chunks x 256 buckets CSR)
+        NUM_MIH_CHUNKS = 4
+        NUM_MIH_BUCKETS = 256
+        MIH_OFFSETS_COUNT = NUM_MIH_CHUNKS * (NUM_MIH_BUCKETS + 1)
+        MIH_OFFSETS_BYTES = MIH_OFFSETS_COUNT * 4
+
+        chunk_bucket_keys = [[0] * num_records for _ in range(NUM_MIH_CHUNKS)]
+        chunk_bucket_counts = [[0] * NUM_MIH_BUCKETS for _ in range(NUM_MIH_CHUNKS)]
 
         bytes_per_rec_t0 = len(tier_bytes_list[0]) // num_records if num_records > 0 else 0
         tier0_raw = tier_bytes_list[0]
         for i in range(num_records):
             rec_off = i * bytes_per_rec_t0
-            b0 = tier0_raw[rec_off]
-            b1 = tier0_raw[rec_off + 1] if bytes_per_rec_t0 > 1 else 0
-            b_key = b0 | (b1 << 8)
-            vector_bucket_keys[i] = b_key
-            bucket_counts[b_key] += 1
+            k0 = tier0_raw[rec_off] if bytes_per_rec_t0 > 0 else 0
+            k1 = tier0_raw[rec_off + 1] if bytes_per_rec_t0 > 1 else 0
+            k2 = tier0_raw[rec_off + 2] if bytes_per_rec_t0 > 2 else 0
+            k3 = tier0_raw[rec_off + 3] if bytes_per_rec_t0 > 3 else 0
+            keys = [k0, k1, k2, k3]
+            for c in range(NUM_MIH_CHUNKS):
+                chunk_bucket_keys[c][i] = keys[c]
+                chunk_bucket_counts[c][keys[c]] += 1
 
-        bucket_offsets = [0] * (num_buckets + 1)
-        running = 0
-        for b in range(num_buckets):
-            bucket_offsets[b] = running
-            running += bucket_counts[b]
-        bucket_offsets[num_buckets] = num_records
+        prefix_offsets_bytes = bytearray(MIH_OFFSETS_BYTES)
+        prefix_postings_bytes = bytearray(NUM_MIH_CHUNKS * num_records * 4)
 
-        current_ptrs = list(bucket_offsets)
-        postings = [0] * num_records
-        for i in range(num_records):
-            b = vector_bucket_keys[i]
-            dest = current_ptrs[b]
-            postings[dest] = i
-            current_ptrs[b] += 1
+        for c in range(NUM_MIH_CHUNKS):
+            bucket_offsets = [0] * (NUM_MIH_BUCKETS + 1)
+            running = 0
+            for b in range(NUM_MIH_BUCKETS):
+                bucket_offsets[b] = running
+                running += chunk_bucket_counts[c][b]
+            bucket_offsets[NUM_MIH_BUCKETS] = num_records
 
-        prefix_offsets_bytes = bytearray((num_buckets + 1) * 4)
-        for b in range(num_buckets + 1):
-            prefix_offsets_bytes[b*4 : (b+1)*4] = int(bucket_offsets[b]).to_bytes(4, byteorder="little", signed=True)
+            off_base = c * (NUM_MIH_BUCKETS + 1) * 4
+            for b in range(NUM_MIH_BUCKETS + 1):
+                prefix_offsets_bytes[off_base + b*4 : off_base + (b+1)*4] = int(bucket_offsets[b]).to_bytes(4, byteorder="little", signed=True)
 
-        prefix_postings_bytes = bytearray(num_records * 4)
-        for i in range(num_records):
-            prefix_postings_bytes[i*4 : (i+1)*4] = int(postings[i]).to_bytes(4, byteorder="little", signed=True)
+            current_ptrs = list(bucket_offsets)
+            post_base = c * num_records * 4
+            for i in range(num_records):
+                b = chunk_bucket_keys[c][i]
+                dest = current_ptrs[b]
+                prefix_postings_bytes[post_base + dest*4 : post_base + (dest+1)*4] = int(i).to_bytes(4, byteorder="little", signed=True)
+                current_ptrs[b] += 1
 
         prefix_table_bytes = prefix_offsets_bytes + prefix_postings_bytes
         prefix_table_offset = current_offset
@@ -823,8 +859,9 @@ def _write_pithos_container_file(
         toc_dict["sections"]["prefix_table"] = {
             "offset": prefix_table_offset,
             "length": prefix_table_len,
-            "num_buckets": num_buckets,
-            "format": "direct_mapped_csr"
+            "num_chunks": 4,
+            "num_buckets_per_chunk": 256,
+            "format": "mih_csr_4x8"
         }
         toc_dict["sections"]["metadata"] = {
             "offset": metadata_offset,
@@ -1305,12 +1342,15 @@ class VectorDb:
             sidecar_format = "nvfp4_e2m1"
             current_offset = _align64(current_offset + sidecar_len)
 
-        # Prefix Table Section (Direct-Mapped 16-Bit Inverted Index, 65536 buckets)
-        num_buckets = 65536
+        # Multi-Index Hashing (MIH) Section (4 chunks x 256 buckets CSR)
+        NUM_MIH_CHUNKS = 4
+        NUM_MIH_BUCKETS = 256
+        MIH_OFFSETS_COUNT = NUM_MIH_CHUNKS * (NUM_MIH_BUCKETS + 1)
+        MIH_OFFSETS_BYTES = MIH_OFFSETS_COUNT * 4
+
         prefix_table_offset = current_offset
-        prefix_postings_length = total_records * 4
-        prefix_offsets_length = (num_buckets + 1) * 4
-        prefix_table_length = prefix_offsets_length + prefix_postings_length
+        prefix_postings_length = NUM_MIH_CHUNKS * total_records * 4
+        prefix_table_length = MIH_OFFSETS_BYTES + prefix_postings_length
         current_offset = _align64(current_offset + prefix_table_length)
 
         meta_bytes = metadata_payload if metadata_payload else b""
@@ -1344,8 +1384,9 @@ class VectorDb:
         toc_dict["sections"]["prefix_table"] = {
             "offset": prefix_table_offset,
             "length": prefix_table_length,
-            "num_buckets": num_buckets,
-            "format": "direct_mapped_csr"
+            "num_chunks": 4,
+            "num_buckets_per_chunk": 256,
+            "format": "mih_csr_4x8"
         }
         toc_dict["sections"]["metadata"] = {
             "offset": metadata_offset,
@@ -1438,7 +1479,7 @@ class VectorDb:
                     yield b_ids, b_vecs
 
             processed_records = 0
-            all_vector_bucket_keys = []
+            all_vector_chunk_keys = [[] for _ in range(NUM_MIH_CHUNKS)]
             with tempfile.TemporaryDirectory() as tmpdir:
                 with ffi.isolated_context() as temp_thread:
                     chunk_idx = 0
@@ -1477,9 +1518,13 @@ class VectorDb:
                                     bpr_t0 = len(t0_data) // b_size if b_size > 0 else 0
                                     for r in range(b_size):
                                         r_off = r * bpr_t0
-                                        b0 = t0_data[r_off]
-                                        b1 = t0_data[r_off + 1] if bpr_t0 > 1 else 0
-                                        all_vector_bucket_keys.append(b0 | (b1 << 8))
+                                        k0 = t0_data[r_off] if bpr_t0 > 0 else 0
+                                        k1 = t0_data[r_off + 1] if bpr_t0 > 1 else 0
+                                        k2 = t0_data[r_off + 2] if bpr_t0 > 2 else 0
+                                        k3 = t0_data[r_off + 3] if bpr_t0 > 3 else 0
+                                        keys = [k0, k1, k2, k3]
+                                        for c in range(NUM_MIH_CHUNKS):
+                                            all_vector_chunk_keys[c].append(keys[c])
                                 else:
                                     shutil.copyfileobj(f_t, out_f)
 
@@ -1540,33 +1585,33 @@ class VectorDb:
                         processed_records += b_size
                         chunk_idx += 1
 
-            # Write Prefix Table
-            actual_total = len(all_vector_bucket_keys)
-            bucket_counts = [0] * num_buckets
-            for b_key in all_vector_bucket_keys:
-                bucket_counts[b_key] += 1
+            # Write Multi-Index Hashing (MIH) Prefix Table (4 x CSR)
+            actual_total = len(all_vector_chunk_keys[0])
+            prefix_offsets_bytes = bytearray(MIH_OFFSETS_BYTES)
+            prefix_postings_bytes = bytearray(NUM_MIH_CHUNKS * actual_total * 4)
 
-            bucket_offsets = [0] * (num_buckets + 1)
-            running = 0
-            for b in range(num_buckets):
-                bucket_offsets[b] = running
-                running += bucket_counts[b]
-            bucket_offsets[num_buckets] = actual_total
+            for c in range(NUM_MIH_CHUNKS):
+                bucket_counts = [0] * NUM_MIH_BUCKETS
+                for b_key in all_vector_chunk_keys[c]:
+                    bucket_counts[b_key] += 1
 
-            current_ptrs = list(bucket_offsets)
-            postings = [0] * actual_total
-            for i, b_key in enumerate(all_vector_bucket_keys):
-                dest = current_ptrs[b_key]
-                postings[dest] = i
-                current_ptrs[b_key] += 1
+                bucket_offsets = [0] * (NUM_MIH_BUCKETS + 1)
+                running = 0
+                for b in range(NUM_MIH_BUCKETS):
+                    bucket_offsets[b] = running
+                    running += bucket_counts[b]
+                bucket_offsets[NUM_MIH_BUCKETS] = actual_total
 
-            prefix_offsets_bytes = bytearray((num_buckets + 1) * 4)
-            for b in range(num_buckets + 1):
-                prefix_offsets_bytes[b*4 : (b+1)*4] = int(bucket_offsets[b]).to_bytes(4, byteorder="little", signed=True)
+                off_base = c * (NUM_MIH_BUCKETS + 1) * 4
+                for b in range(NUM_MIH_BUCKETS + 1):
+                    prefix_offsets_bytes[off_base + b*4 : off_base + (b+1)*4] = int(bucket_offsets[b]).to_bytes(4, byteorder="little", signed=True)
 
-            prefix_postings_bytes = bytearray(actual_total * 4)
-            for i in range(actual_total):
-                prefix_postings_bytes[i*4 : (i+1)*4] = int(postings[i]).to_bytes(4, byteorder="little", signed=True)
+                current_ptrs = list(bucket_offsets)
+                post_base = c * actual_total * 4
+                for i, b_key in enumerate(all_vector_chunk_keys[c]):
+                    dest = current_ptrs[b_key]
+                    prefix_postings_bytes[post_base + dest*4 : post_base + (dest+1)*4] = int(i).to_bytes(4, byteorder="little", signed=True)
+                    current_ptrs[b_key] += 1
 
             out_f.seek(prefix_table_offset)
             out_f.write(prefix_offsets_bytes)
