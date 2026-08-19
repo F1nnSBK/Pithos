@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Arrays;
 import java.util.List;
 
 /// # PithosContainer
@@ -50,6 +51,10 @@ public final class PithosContainer {
     public static final int METRIC_COSINE = 0;
     public static final int METRIC_L2 = 1;
     public static final int METRIC_DOT_PRODUCT = 2;
+
+    public static final int NUM_PREFIX_BUCKETS = 65536;
+    public static final int PREFIX_OFFSETS_COUNT = NUM_PREFIX_BUCKETS + 1;
+    public static final long PREFIX_OFFSETS_BYTES = PREFIX_OFFSETS_COUNT * 4L;
 
     private PithosContainer() {
     }
@@ -93,6 +98,22 @@ public final class PithosContainer {
         return new Section(offset, length, format);
     }
 
+    /// Extracts prefix_table section offset, length, and format from TOC JSON.
+    public static Section extractPrefixTableSection(String tocJson) {
+        if (tocJson == null) return new Section(0, 0, "none");
+        int idx = tocJson.indexOf("\"prefix_table\"");
+        if (idx < 0) return new Section(0, 0, "none");
+        int objStart = tocJson.indexOf('{', idx);
+        int objEnd = tocJson.indexOf('}', objStart);
+        if (objStart < 0 || objEnd < 0) return new Section(0, 0, "none");
+        String sub = tocJson.substring(objStart, objEnd + 1);
+
+        long offset = extractLongField(sub, "offset");
+        long length = extractLongField(sub, "length");
+        String format = extractStringField(sub, "format");
+        return new Section(offset, length, format);
+    }
+
     private static long extractLongField(String json, String key) {
         int idx = json.indexOf("\"" + key + "\"");
         if (idx < 0) return 0;
@@ -131,6 +152,8 @@ public final class PithosContainer {
             long sidecarOffset,
             long sidecarLength,
             String sidecarFormat,
+            long prefixTableOffset,
+            long prefixTableLength,
             long metadataOffset,
             long metadataLength,
             String metadataFormat,
@@ -323,6 +346,12 @@ public final class PithosContainer {
             currentOffset = align64(currentOffset + sidecarLength);
         }
 
+        // Prefix Table Section (Direct-Mapped 16-Bit Inverted Index, 65536 buckets)
+        long prefixTableOffset = currentOffset;
+        long prefixPostingsLength = numVectors * 4L;
+        long prefixTableLength = PREFIX_OFFSETS_BYTES + prefixPostingsLength;
+        currentOffset = align64(currentOffset + prefixTableLength);
+
         // Metadata payload section
         long metadataOffset = 0;
         long metadataLength = 0;
@@ -347,6 +376,8 @@ public final class PithosContainer {
         }
         tocBuilder.append("    \"sidecar\": { \"offset\": ").append(sidecarOffset).append(", \"length\": ").append(sidecarLength)
                 .append(", \"format\": \"").append(sidecarFormat).append("\" },\n");
+        tocBuilder.append("    \"prefix_table\": { \"offset\": ").append(prefixTableOffset).append(", \"length\": ").append(prefixTableLength)
+                .append(", \"num_buckets\": ").append(NUM_PREFIX_BUCKETS).append(", \"format\": \"direct_mapped_csr\" },\n");
         tocBuilder.append("    \"metadata\": { \"offset\": ").append(metadataOffset).append(", \"length\": ").append(metadataLength)
                 .append(", \"format\": \"").append(metaFormat).append("\" }\n");
         tocBuilder.append("  },\n");
@@ -386,9 +417,11 @@ public final class PithosContainer {
             mapped.set(ValueLayout.JAVA_LONG_UNALIGNED, 46, tocOffset);
             mapped.set(ValueLayout.JAVA_INT_UNALIGNED, 54, tocLength);
             mapped.set(ValueLayout.JAVA_SHORT_UNALIGNED, 58, (short) qMode);
+            mapped.set(ValueLayout.JAVA_LONG_UNALIGNED, 60, prefixTableOffset);
+            mapped.set(ValueLayout.JAVA_LONG_UNALIGNED, 68, prefixTableLength);
 
-            // Zero reserved bytes 60..127
-            for (long p = 60; p < SUPERBLOCK_SIZE; p++) {
+            // Zero reserved bytes 76..127
+            for (long p = 76; p < SUPERBLOCK_SIZE; p++) {
                 mapped.set(ValueLayout.JAVA_BYTE, p, (byte) 0);
             }
 
@@ -397,16 +430,21 @@ public final class PithosContainer {
                 mapped.set(ValueLayout.JAVA_LONG, idsOffset + (i * 8L), records.get(i).id());
             }
 
-            // 3. Write Quantization Tiers Section
+            // 3. Write Quantization Tiers Section & Compute Prefix Table Postings
+            int[] vectorBucketKeys = new int[(int) numVectors];
+            int[] bucketCounts = new int[NUM_PREFIX_BUCKETS];
+
             TransformOperator transformer = new TransformOperator(dimension, tiers);
             for (int i = 0; i < numVectors; i++) {
                 VectorRecord rec = records.get(i);
+                int bucketKey;
                 if (qMode == 1) { // 2-bit QJL Residuals
                     float[] z = transformer.preconditionAndRotate(rec.vector());
                     float threshold = TransformOperator.calculatePercentileThreshold(z, 0.20f);
                     long[][] packed = transformer.quantize2Bit(z, threshold);
                     long[] signPacked = packed[0];
                     long[] maskPacked = packed[1];
+                    bucketKey = (int) (signPacked[0] & 0xFFFFL);
 
                     int longOffset = 0;
                     for (int k = 0; k < numTiers; k++) {
@@ -420,6 +458,14 @@ public final class PithosContainer {
                     }
                 } else if (qMode == 2) { // Float-Hybrid raw float32
                     float[] z = transformer.preconditionAndRotate(rec.vector());
+                    int k16 = 0;
+                    for (int j = 0; j < Math.min(16, dimension); j++) {
+                        if (z[j] >= 0.0f) {
+                            k16 |= (1 << j);
+                        }
+                    }
+                    bucketKey = k16;
+
                     int longOffset = 0;
                     for (int k = 0; k < numTiers; k++) {
                         int count = tierLongs[k];
@@ -434,6 +480,8 @@ public final class PithosContainer {
                     }
                 } else { // 1-bit default
                     long[] packed = transformer.transformAndQuantize(rec.vector());
+                    bucketKey = (int) (packed[0] & 0xFFFFL);
+
                     int longOffset = 0;
                     for (int k = 0; k < numTiers; k++) {
                         int count = tierLongs[k];
@@ -444,9 +492,36 @@ public final class PithosContainer {
                         longOffset += count;
                     }
                 }
+                vectorBucketKeys[i] = bucketKey;
+                bucketCounts[bucketKey]++;
             }
 
-            // 4. Write Precision Sidecar Section
+            // 4. Write Direct-Mapped Prefix Table Section (CSR format)
+            int[] bucketOffsets = new int[PREFIX_OFFSETS_COUNT];
+            int runningOffset = 0;
+            for (int b = 0; b < NUM_PREFIX_BUCKETS; b++) {
+                bucketOffsets[b] = runningOffset;
+                runningOffset += bucketCounts[b];
+            }
+            bucketOffsets[NUM_PREFIX_BUCKETS] = (int) numVectors;
+
+            int[] currentBucketPtrs = Arrays.copyOf(bucketOffsets, NUM_PREFIX_BUCKETS);
+            int[] postings = new int[(int) numVectors];
+            for (int i = 0; i < numVectors; i++) {
+                int b = vectorBucketKeys[i];
+                int destPos = currentBucketPtrs[b]++;
+                postings[destPos] = i;
+            }
+
+            for (int b = 0; b < PREFIX_OFFSETS_COUNT; b++) {
+                mapped.set(ValueLayout.JAVA_INT_UNALIGNED, prefixTableOffset + (b * 4L), bucketOffsets[b]);
+            }
+            long postBase = prefixTableOffset + PREFIX_OFFSETS_BYTES;
+            for (int i = 0; i < numVectors; i++) {
+                mapped.set(ValueLayout.JAVA_INT_UNALIGNED, postBase + (i * 4L), postings[i]);
+            }
+
+            // 5. Write Precision Sidecar Section
             if (sidecarMode == VectorDb.SIDECAR_FP16) {
                 for (int i = 0; i < numVectors; i++) {
                     float[] vec = records.get(i).vector();

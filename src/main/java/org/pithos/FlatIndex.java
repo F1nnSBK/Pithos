@@ -64,6 +64,9 @@ public class FlatIndex implements Index {
     private final String userMetadataJson;
     private final MemorySegment metadataPayloadSegment;
     private final boolean isSingleFileContainer;
+    private final MemorySegment prefixOffsetsSegment;
+    private final MemorySegment prefixPostingsSegment;
+    private final boolean hasPrefixTable;
 
     private final byte planetId;
     private final long planetRadius;
@@ -148,24 +151,25 @@ public class FlatIndex implements Index {
         }
     }
 
-    private static class RangeWorkHandler implements WorkHandler<RangeEvent> {
+    /// Work handler consuming range events from the Disruptor ring buffer.
+    public static class RangeWorkHandler implements WorkHandler<RangeEvent> {
         private final FlatIndex index;
-        private final int threadId;
+        private final int workerId;
 
-        public RangeWorkHandler(FlatIndex index, int threadId) {
+        public RangeWorkHandler(FlatIndex index, int workerId) {
             this.index = index;
-            this.threadId = threadId;
+            this.workerId = workerId;
         }
 
         @Override
-        public void onEvent(RangeEvent event) throws Exception {
+        public void onEvent(RangeEvent event) {
             try {
                 if (event.isVoting) {
-                    index.executeVotingRange(event.startIdx, event.endIdx, event.queries, event.families,
-                            event.thresholds, event.threadLocalMasks[threadId]);
+                    index.executeVotingRange(event.startIdx, event.endIdx, event.queries,
+                            event.families, event.thresholds, event.threadLocalMasks[workerId]);
                 } else {
                     index.executeKnnRange(event.startIdx, event.endIdx, event.queries, event.k,
-                            event.threadLocalIds[threadId], event.threadLocalDists[threadId]);
+                            event.threadLocalIds[workerId], event.threadLocalDists[workerId]);
                 }
             } finally {
                 event.latch.countDown();
@@ -214,6 +218,16 @@ public class FlatIndex implements Index {
             MemorySegment metadataSegment, MemorySegment fp16Segment, MemorySegment fp8Segment, MemorySegment fp4Segment,
             byte planetId, long planetRadius, int dimension, int numTiers, int[] tiers, long size,
             float[] cumulativeEnergy, int qMode, int sidecarMode, String userMetadataJson, MemorySegment metadataPayloadSegment) {
+        this(baseSegment, idsSegment, tierSegments, metadataSegment, fp16Segment, fp8Segment, fp4Segment,
+                planetId, planetRadius, dimension, numTiers, tiers, size, cumulativeEnergy, qMode, sidecarMode,
+                userMetadataJson, metadataPayloadSegment, null, null);
+    }
+
+    public FlatIndex(MemorySegment baseSegment, MemorySegment idsSegment, MemorySegment[] tierSegments,
+            MemorySegment metadataSegment, MemorySegment fp16Segment, MemorySegment fp8Segment, MemorySegment fp4Segment,
+            byte planetId, long planetRadius, int dimension, int numTiers, int[] tiers, long size,
+            float[] cumulativeEnergy, int qMode, int sidecarMode, String userMetadataJson, MemorySegment metadataPayloadSegment,
+            MemorySegment prefixOffsetsSegment, MemorySegment prefixPostingsSegment) {
         this.baseSegment = baseSegment;
         this.idsSegment = idsSegment;
         this.tierSegments = tierSegments;
@@ -233,6 +247,9 @@ public class FlatIndex implements Index {
         this.userMetadataJson = userMetadataJson;
         this.metadataPayloadSegment = metadataPayloadSegment;
         this.isSingleFileContainer = (userMetadataJson != null || metadataPayloadSegment != null);
+        this.prefixOffsetsSegment = prefixOffsetsSegment;
+        this.prefixPostingsSegment = prefixPostingsSegment;
+        this.hasPrefixTable = (prefixOffsetsSegment != null && prefixPostingsSegment != null);
 
         this.tierLongs = new int[numTiers];
         int prevBoundVal = 0;
@@ -334,6 +351,21 @@ public class FlatIndex implements Index {
         return idsSegment.byteSize();
     }
 
+    /// Returns true if this index contains a direct-mapped Gate 0 prefix table.
+    public boolean hasPrefixTable() {
+        return hasPrefixTable;
+    }
+
+    /// Returns the virtual memory segment holding the 16-bit prefix offset array (65537 int32s).
+    public MemorySegment getPrefixOffsetsSegment() {
+        return prefixOffsetsSegment;
+    }
+
+    /// Returns the virtual memory segment holding the prefix postings array.
+    public MemorySegment getPrefixPostingsSegment() {
+        return prefixPostingsSegment;
+    }
+
     /// Returns the `TransformOperator` configured for this index.
     public TransformOperator getTransformOperator() {
         return transformOperator;
@@ -410,6 +442,16 @@ public class FlatIndex implements Index {
                     currentOffset = PithosContainer.align64(currentOffset + sidecarLen);
                 }
 
+                PithosContainer.Section prefixSec = PithosContainer.extractPrefixTableSection(tocJson);
+                MemorySegment prefixOffsetsSegment = null;
+                MemorySegment prefixPostingsSegment = null;
+                if (prefixSec.offset() > 0 && prefixSec.length() >= PithosContainer.PREFIX_OFFSETS_BYTES) {
+                    long offSegLen = PithosContainer.PREFIX_OFFSETS_BYTES;
+                    long postSegLen = totalRecords * 4L;
+                    prefixOffsetsSegment = containerSegment.asSlice(prefixSec.offset(), offSegLen);
+                    prefixPostingsSegment = containerSegment.asSlice(prefixSec.offset() + offSegLen, postSegLen);
+                }
+
                 PithosContainer.Section metaSec = PithosContainer.extractMetadataSection(tocJson);
                 MemorySegment metadataPayloadSegment = null;
                 if (metaSec.offset() > 0 && metaSec.length() > 0) {
@@ -430,7 +472,7 @@ public class FlatIndex implements Index {
 
                 return new FlatIndex(containerSegment, idsSegment, tierSegments, null, fp16Segment, fp8Segment, fp4Segment,
                         (byte) 0, 0L, dimension, numTiers, tiers, totalRecords, cumulativeEnergy, qMode, sidecarMode,
-                        tocJson, metadataPayloadSegment);
+                        tocJson, metadataPayloadSegment, prefixOffsetsSegment, prefixPostingsSegment);
             }
         }
 
@@ -559,6 +601,10 @@ public class FlatIndex implements Index {
             List<SearchResult>[] empty = new List[queries.length];
             Arrays.fill(empty, List.of());
             return empty;
+        }
+
+        if (hasPrefixTable) {
+            return searchWithPrefixRouting(queries, k);
         }
 
         int numQueries = queries.length;
@@ -710,6 +756,251 @@ public class FlatIndex implements Index {
             for (int i = 0; i < limit; i++) {
                 RerankedCandidate c = reranked.get(i);
                 long recordId = idsSegment.get(ValueLayout.JAVA_LONG, c.rowIdx * 8);
+                queryResults.add(new SearchResult(recordId, (int) (c.distance * 1000000.0)));
+            }
+            finalResults[q] = queryResults;
+        });
+
+        return finalResults;
+    }
+
+    /// Performs batch nearest neighbor search accelerated by Gate 0 Spectral Prefix Routing.
+    ///
+    /// Exploits the direct-mapped 16-bit prefix table to prune >99% of candidate vectors in O(1) time,
+    /// evaluating only matching bucket and Hamming-distance-1 (or Hamming-2) neighbor candidate lists.
+    @SuppressWarnings("unchecked")
+    public List<SearchResult>[] searchWithPrefixRouting(float[][] queries, int k) {
+        int numQueries = queries.length;
+        List<SearchResult>[] finalResults = new List[numQueries];
+
+        int tVal = 0;
+        for (int i = 0; i < numTiers; i++) {
+            if (cumulativeEnergy[i] >= targetEnergyBudget) {
+                tVal = i;
+                break;
+            }
+        }
+        final int activeT = tVal;
+
+        int kCandidate = (int) Math.min(size, (fp16Segment != null || fp8Segment != null || fp4Segment != null)
+                ? Math.max(500, 25 * k)
+                : Math.max(100, 3 * k));
+
+        IntStream.range(0, numQueries).parallel().forEach(q -> {
+            float[] query = queries[q];
+            float[] zQuery = transformOperator.preconditionAndRotate(query);
+
+            long[] bQuery;
+            long[] bQueryMask = null;
+            int queryBucketKey;
+
+            if (qMode == 1) {
+                float qThreshold = TransformOperator.calculatePercentileThreshold(zQuery, 0.20f);
+                long[][] packed = transformOperator.quantize2Bit(zQuery, qThreshold);
+                bQuery = packed[0];
+                bQueryMask = packed[1];
+                queryBucketKey = (int) (bQuery[0] & 0xFFFFL);
+            } else if (qMode == 2) {
+                bQuery = null;
+                int k16 = 0;
+                for (int j = 0; j < Math.min(16, dimension); j++) {
+                    if (zQuery[j] >= 0.0f) {
+                        k16 |= (1 << j);
+                    }
+                }
+                queryBucketKey = k16;
+            } else {
+                bQuery = transformOperator.transformAndQuantize(query);
+                queryBucketKey = (int) (bQuery[0] & 0xFFFFL);
+            }
+
+            // Gather candidate row indices (exact bucket + 16 Hamming-1 neighbors)
+            int maxProbedBuckets = 1 + 16;
+            int[] probedBuckets = new int[maxProbedBuckets];
+            probedBuckets[0] = queryBucketKey;
+            for (int b = 0; b < 16; b++) {
+                probedBuckets[1 + b] = queryBucketKey ^ (1 << b);
+            }
+
+            int totalCandidatesCount = 0;
+            for (int b = 0; b < maxProbedBuckets; b++) {
+                int bKey = probedBuckets[b];
+                int start = prefixOffsetsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, (long) bKey * 4L);
+                int end = prefixOffsetsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, (long) (bKey + 1) * 4L);
+                totalCandidatesCount += (end - start);
+            }
+
+            // Expand to Hamming-2 if candidate count is smaller than kCandidate and dataset is non-trivial
+            int[] allProbedBuckets = probedBuckets;
+            if (totalCandidatesCount < Math.min(size, kCandidate) && size > 100) {
+                int h2Count = 16 * 15 / 2; // 120
+                allProbedBuckets = new int[1 + 16 + h2Count];
+                System.arraycopy(probedBuckets, 0, allProbedBuckets, 0, 17);
+                int idx = 17;
+                for (int b1 = 0; b1 < 16; b1++) {
+                    for (int b2 = b1 + 1; b2 < 16; b2++) {
+                        allProbedBuckets[idx++] = queryBucketKey ^ (1 << b1) ^ (1 << b2);
+                    }
+                }
+            }
+
+            int[] topDists = new int[kCandidate];
+            long[] topRowIds = new long[kCandidate];
+            Arrays.fill(topDists, Integer.MAX_VALUE);
+
+            for (int bKey : allProbedBuckets) {
+                int start = prefixOffsetsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, (long) bKey * 4L);
+                int end = prefixOffsetsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, (long) (bKey + 1) * 4L);
+
+                for (int p = start; p < end; p++) {
+                    long rowIdx = prefixPostingsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, (long) p * 4L) & 0xFFFFFFFFL;
+
+                    // Gate 1: Tombstone filter
+                    if (metadataSegment != null && (metadataSegment.get(ValueLayout.JAVA_LONG, rowIdx * 8L) & 1L) == 1L) {
+                        continue;
+                    }
+
+                    // Gate 2: Matryoshka Early-Exit Hamming Scan
+                    int currentLimit = topDists[kCandidate - 1];
+                    int totalDist = 0;
+
+                    if (qMode == 1) { // 2-bit
+                        for (int tierIdx = 0; tierIdx <= activeT; tierIdx++) {
+                            int numLongs = tierLongs[tierIdx];
+                            int offset = tierOffsets[tierIdx];
+                            MemorySegment tierSeg = tierSegments[tierIdx];
+                            long baseOffset = rowIdx * (numLongs * 16L);
+                            int tierDist = 0;
+                            for (int l = 0; l < numLongs; l++) {
+                                long dbSign = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
+                                long dbMask = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + (l * 8L));
+                                long qSign = bQuery[offset + l];
+                                long qMask = bQueryMask[offset + l];
+
+                                long mask4 = dbMask & qMask & (dbSign ^ qSign);
+                                long mask1 = dbMask ^ qMask;
+                                tierDist += 4 * Long.bitCount(mask4) + Long.bitCount(mask1);
+                            }
+                            totalDist += tierDist;
+                            if (totalDist > currentLimit) break;
+                        }
+                    } else if (qMode == 2) { // Float-Hybrid
+                        float[] dbFloat = new float[dimension];
+                        int dimOffset = 0;
+                        for (int tierIdx = 0; tierIdx < numTiers; tierIdx++) {
+                            int width = tiers[tierIdx] - (tierIdx == 0 ? 0 : tiers[tierIdx - 1]);
+                            long baseOffset = rowIdx * (width * 4L);
+                            MemorySegment.copy(tierSegments[tierIdx], ValueLayout.JAVA_FLOAT, baseOffset, dbFloat, dimOffset, width);
+                            dimOffset += width;
+                        }
+                        totalDist = (int) (transformOperator.computeL2Float(zQuery, dbFloat) * 1000f);
+                    } else { // 1-bit
+                        for (int tierIdx = 0; tierIdx <= activeT; tierIdx++) {
+                            int numLongs = tierLongs[tierIdx];
+                            int offset = tierOffsets[tierIdx];
+                            MemorySegment tierSeg = tierSegments[tierIdx];
+                            long baseOffset = rowIdx * (numLongs * 8L);
+                            int tierDist = 0;
+                            for (int l = 0; l < numLongs; l++) {
+                                long dbWord = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
+                                tierDist += Long.bitCount(bQuery[offset + l] ^ dbWord);
+                            }
+                            totalDist += tierDist;
+                            if (totalDist > currentLimit) break;
+                        }
+                    }
+
+                    if (totalDist < currentLimit) {
+                        int pos = kCandidate - 1;
+                        while (pos > 0 && totalDist < topDists[pos - 1]) {
+                            topDists[pos] = topDists[pos - 1];
+                            topRowIds[pos] = topRowIds[pos - 1];
+                            pos--;
+                        }
+                        topDists[pos] = totalDist;
+                        topRowIds[pos] = rowIdx;
+                    }
+                }
+            }
+
+            List<Long> candidates = new ArrayList<>();
+            for (int i = 0; i < kCandidate; i++) {
+                if (topDists[i] != Integer.MAX_VALUE) {
+                    candidates.add(topRowIds[i]);
+                }
+            }
+
+            if (qMode == 2) {
+                List<SearchResult> queryResults = new ArrayList<>();
+                int limit = Math.min(k, candidates.size());
+                for (int i = 0; i < limit; i++) {
+                    long rowIdx = candidates.get(i);
+                    long recordId = idsSegment.get(ValueLayout.JAVA_LONG, rowIdx * 8L);
+                    queryResults.add(new SearchResult(recordId, topDists[i]));
+                }
+                finalResults[q] = queryResults;
+                return;
+            }
+
+            // Gate 3: Precision Sidecar Reranking
+            class RerankedCandidate {
+                final long rowIdx;
+                final double distance;
+                RerankedCandidate(long rowIdx, double distance) {
+                    this.rowIdx = rowIdx;
+                    this.distance = distance;
+                }
+            }
+
+            List<RerankedCandidate> reranked = new ArrayList<>(candidates.size());
+            if (fp8Segment != null) {
+                float[][] queryLut = new float[dimension][256];
+                for (int d = 0; d < dimension; d++) {
+                    float qVal = query[d];
+                    for (int b = 0; b < 256; b++) {
+                        float diff = qVal - FP8_E4M3_LUT[b];
+                        queryLut[d][b] = diff * diff;
+                    }
+                }
+                byte[] localFp8 = new byte[dimension];
+                for (long rowIdx : candidates) {
+                    double dist = computeExactL2FP8_LUT(queryLut, rowIdx, localFp8);
+                    reranked.add(new RerankedCandidate(rowIdx, dist));
+                }
+            } else if (fp4Segment != null) {
+                int numBlocks = (dimension + 15) / 16;
+                int bytesPerRecord = numBlocks * 9;
+                byte[] localFp4 = new byte[bytesPerRecord];
+                for (long rowIdx : candidates) {
+                    double dist = computeExactL2FP4(query, rowIdx, localFp4, numBlocks);
+                    reranked.add(new RerankedCandidate(rowIdx, dist));
+                }
+            } else if (fp16Segment != null) {
+                short[] localFp16 = new short[dimension];
+                for (long rowIdx : candidates) {
+                    double dist = computeExactL2FP16(query, rowIdx, localFp16);
+                    reranked.add(new RerankedCandidate(rowIdx, dist));
+                }
+            } else {
+                double queryL2Norm = 0.0;
+                double querySum = 0.0;
+                for (float val : zQuery) {
+                    queryL2Norm += val * val;
+                    querySum += val;
+                }
+                for (long rowIdx : candidates) {
+                    double dist = computeAsymmetricL2DistanceOffHeap(zQuery, queryL2Norm, querySum, rowIdx);
+                    reranked.add(new RerankedCandidate(rowIdx, dist));
+                }
+            }
+
+            reranked.sort((c1, c2) -> Double.compare(c1.distance, c2.distance));
+
+            List<SearchResult> queryResults = new ArrayList<>();
+            int limit = Math.min(k, reranked.size());
+            for (int i = 0; i < limit; i++) {
+                RerankedCandidate c = reranked.get(i);
+                long recordId = idsSegment.get(ValueLayout.JAVA_LONG, c.rowIdx * 8L);
                 queryResults.add(new SearchResult(recordId, (int) (c.distance * 1000000.0)));
             }
             finalResults[q] = queryResults;

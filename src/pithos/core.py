@@ -751,6 +751,49 @@ def _write_pithos_container_file(
             sidecar_len = len(sidecar_bytes)
             current_offset = _align64(current_offset + sidecar_len)
 
+        # Prefix Table Section (Direct-Mapped 16-Bit Inverted Index, 65536 buckets)
+        num_buckets = 65536
+        bucket_counts = [0] * num_buckets
+        vector_bucket_keys = [0] * num_records
+
+        bytes_per_rec_t0 = len(tier_bytes_list[0]) // num_records if num_records > 0 else 0
+        tier0_raw = tier_bytes_list[0]
+        for i in range(num_records):
+            rec_off = i * bytes_per_rec_t0
+            b0 = tier0_raw[rec_off]
+            b1 = tier0_raw[rec_off + 1] if bytes_per_rec_t0 > 1 else 0
+            b_key = b0 | (b1 << 8)
+            vector_bucket_keys[i] = b_key
+            bucket_counts[b_key] += 1
+
+        bucket_offsets = [0] * (num_buckets + 1)
+        running = 0
+        for b in range(num_buckets):
+            bucket_offsets[b] = running
+            running += bucket_counts[b]
+        bucket_offsets[num_buckets] = num_records
+
+        current_ptrs = list(bucket_offsets)
+        postings = [0] * num_records
+        for i in range(num_records):
+            b = vector_bucket_keys[i]
+            dest = current_ptrs[b]
+            postings[dest] = i
+            current_ptrs[b] += 1
+
+        prefix_offsets_bytes = bytearray((num_buckets + 1) * 4)
+        for b in range(num_buckets + 1):
+            prefix_offsets_bytes[b*4 : (b+1)*4] = int(bucket_offsets[b]).to_bytes(4, byteorder="little", signed=True)
+
+        prefix_postings_bytes = bytearray(num_records * 4)
+        for i in range(num_records):
+            prefix_postings_bytes[i*4 : (i+1)*4] = int(postings[i]).to_bytes(4, byteorder="little", signed=True)
+
+        prefix_table_bytes = prefix_offsets_bytes + prefix_postings_bytes
+        prefix_table_offset = current_offset
+        prefix_table_len = len(prefix_table_bytes)
+        current_offset = _align64(current_offset + prefix_table_len)
+
         metadata_offset = 0
         metadata_len = 0
         if len(meta_bytes) > 0:
@@ -776,6 +819,12 @@ def _write_pithos_container_file(
             "offset": sidecar_offset,
             "length": sidecar_len,
             "format": sidecar_format
+        }
+        toc_dict["sections"]["prefix_table"] = {
+            "offset": prefix_table_offset,
+            "length": prefix_table_len,
+            "num_buckets": num_buckets,
+            "format": "direct_mapped_csr"
         }
         toc_dict["sections"]["metadata"] = {
             "offset": metadata_offset,
@@ -803,6 +852,8 @@ def _write_pithos_container_file(
         sb[46:54] = int(toc_offset).to_bytes(8, byteorder="little", signed=True)
         sb[54:58] = int(toc_len).to_bytes(4, byteorder="little", signed=True)
         sb[58:60] = int(q_mode).to_bytes(2, byteorder="little", signed=True)
+        sb[60:68] = int(prefix_table_offset).to_bytes(8, byteorder="little", signed=True)
+        sb[68:76] = int(prefix_table_len).to_bytes(8, byteorder="little", signed=True)
 
         trailer = bytearray(20)
         trailer[0:8] = int(toc_offset).to_bytes(8, byteorder="little", signed=True)
@@ -819,6 +870,8 @@ def _write_pithos_container_file(
             if sidecar_len > 0:
                 _pad_to(out_f, sidecar_offset)
                 out_f.write(sidecar_bytes)
+            _pad_to(out_f, prefix_table_offset)
+            out_f.write(prefix_table_bytes)
             if metadata_len > 0:
                 _pad_to(out_f, metadata_offset)
                 out_f.write(meta_bytes)
@@ -1252,6 +1305,14 @@ class VectorDb:
             sidecar_format = "nvfp4_e2m1"
             current_offset = _align64(current_offset + sidecar_len)
 
+        # Prefix Table Section (Direct-Mapped 16-Bit Inverted Index, 65536 buckets)
+        num_buckets = 65536
+        prefix_table_offset = current_offset
+        prefix_postings_length = total_records * 4
+        prefix_offsets_length = (num_buckets + 1) * 4
+        prefix_table_length = prefix_offsets_length + prefix_postings_length
+        current_offset = _align64(current_offset + prefix_table_length)
+
         meta_bytes = metadata_payload if metadata_payload else b""
         meta_format = metadata_format if metadata_format else "raw"
         metadata_offset = 0
@@ -1280,6 +1341,12 @@ class VectorDb:
             "length": sidecar_len,
             "format": sidecar_format
         }
+        toc_dict["sections"]["prefix_table"] = {
+            "offset": prefix_table_offset,
+            "length": prefix_table_length,
+            "num_buckets": num_buckets,
+            "format": "direct_mapped_csr"
+        }
         toc_dict["sections"]["metadata"] = {
             "offset": metadata_offset,
             "length": metadata_len,
@@ -1306,6 +1373,8 @@ class VectorDb:
         sb[46:54] = int(toc_offset).to_bytes(8, byteorder="little", signed=True)
         sb[54:58] = int(toc_len).to_bytes(4, byteorder="little", signed=True)
         sb[58:60] = int(q_mode).to_bytes(2, byteorder="little", signed=True)
+        sb[60:68] = int(prefix_table_offset).to_bytes(8, byteorder="little", signed=True)
+        sb[68:76] = int(prefix_table_length).to_bytes(8, byteorder="little", signed=True)
 
         trailer = bytearray(20)
         trailer[0:8] = int(toc_offset).to_bytes(8, byteorder="little", signed=True)
@@ -1369,6 +1438,7 @@ class VectorDb:
                     yield b_ids, b_vecs
 
             processed_records = 0
+            all_vector_bucket_keys = []
             with tempfile.TemporaryDirectory() as tmpdir:
                 with ffi.isolated_context() as temp_thread:
                     chunk_idx = 0
@@ -1401,7 +1471,17 @@ class VectorDb:
                         for k in range(num_tiers):
                             out_f.seek(tier_offsets[k] + processed_records * tier_bytes_per_rec[k])
                             with open(f"{tmp_base}_tier_{k}.bin", "rb") as f_t:
-                                shutil.copyfileobj(f_t, out_f)
+                                if k == 0:
+                                    t0_data = f_t.read()
+                                    out_f.write(t0_data)
+                                    bpr_t0 = len(t0_data) // b_size if b_size > 0 else 0
+                                    for r in range(b_size):
+                                        r_off = r * bpr_t0
+                                        b0 = t0_data[r_off]
+                                        b1 = t0_data[r_off + 1] if bpr_t0 > 1 else 0
+                                        all_vector_bucket_keys.append(b0 | (b1 << 8))
+                                else:
+                                    shutil.copyfileobj(f_t, out_f)
 
                         if actual_sidecar == SidecarMode.FP16 and os.path.exists(f"{tmp_base}_fp16.bin"):
                             out_f.seek(sidecar_offset + processed_records * sidecar_bpr)
@@ -1459,6 +1539,38 @@ class VectorDb:
 
                         processed_records += b_size
                         chunk_idx += 1
+
+            # Write Prefix Table
+            actual_total = len(all_vector_bucket_keys)
+            bucket_counts = [0] * num_buckets
+            for b_key in all_vector_bucket_keys:
+                bucket_counts[b_key] += 1
+
+            bucket_offsets = [0] * (num_buckets + 1)
+            running = 0
+            for b in range(num_buckets):
+                bucket_offsets[b] = running
+                running += bucket_counts[b]
+            bucket_offsets[num_buckets] = actual_total
+
+            current_ptrs = list(bucket_offsets)
+            postings = [0] * actual_total
+            for i, b_key in enumerate(all_vector_bucket_keys):
+                dest = current_ptrs[b_key]
+                postings[dest] = i
+                current_ptrs[b_key] += 1
+
+            prefix_offsets_bytes = bytearray((num_buckets + 1) * 4)
+            for b in range(num_buckets + 1):
+                prefix_offsets_bytes[b*4 : (b+1)*4] = int(bucket_offsets[b]).to_bytes(4, byteorder="little", signed=True)
+
+            prefix_postings_bytes = bytearray(actual_total * 4)
+            for i in range(actual_total):
+                prefix_postings_bytes[i*4 : (i+1)*4] = int(postings[i]).to_bytes(4, byteorder="little", signed=True)
+
+            out_f.seek(prefix_table_offset)
+            out_f.write(prefix_offsets_bytes)
+            out_f.write(prefix_postings_bytes)
 
             if processed_records != total_records:
                 out_f.seek(12)

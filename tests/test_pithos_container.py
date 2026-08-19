@@ -172,6 +172,54 @@ class TestPithosContainer(unittest.TestCase):
             
             db.drop_index("master_idx")
 
+    def test_04_gate_0_prefix_table_verification(self):
+        """Tests Direct-Mapped CSR Prefix Table (Gate 0) in .pithos container."""
+        container_path = os.path.join(self.temp_dir, "prefix_table_test.pithos")
+        n_records = 1500
+        vecs = np.random.randn(n_records, self.dim).astype(np.float32)
+        vecs /= np.linalg.norm(vecs, axis=1, keepdims=True)
+        ids = np.arange(50000, 50000 + n_records, dtype=np.int64)
+
+        VectorDb.compile_container(
+            path=container_path,
+            records=vecs,
+            ids=ids,
+            tiers=self.tiers,
+            metric="cosine",
+            q_mode=QuantizationMode.ONE_BIT,
+            sidecar_mode=SidecarMode.FP8,
+            user_metadata={"test": "prefix_table_direct_mapped"}
+        )
+
+        with open(container_path, "rb") as f:
+            # Check Superblock has prefix_table_offset and prefix_table_len at bytes 60..76
+            sb = f.read(128)
+            prefix_offset = int.from_bytes(sb[60:68], byteorder="little")
+            prefix_len = int.from_bytes(sb[68:76], byteorder="little")
+            self.assertGreater(prefix_offset, 0)
+            # Prefix offsets = (65536 + 1) * 4 = 262148 bytes; Postings = 1500 * 4 = 6000 bytes
+            expected_min_len = 262148 + n_records * 4
+            self.assertEqual(prefix_len, expected_min_len)
+
+            # Check TOC JSON contains "prefix_table" section
+            toc_offset = int.from_bytes(sb[46:54], byteorder="little")
+            toc_len = int.from_bytes(sb[54:58], byteorder="little")
+            f.seek(toc_offset)
+            toc_dict = json.loads(f.read(toc_len).decode("utf-8"))
+            self.assertIn("prefix_table", toc_dict["sections"])
+            self.assertEqual(toc_dict["sections"]["prefix_table"]["num_buckets"], 65536)
+
+        with VectorDb() as db:
+            idx = db.load_index("prefix_idx", container_path)
+            self.assertEqual(idx.size(), n_records)
+
+            for q_idx in [0, 100, 500, 1000]:
+                q = vecs[q_idx]
+                res = idx.search(q, k=5)
+                self.assertEqual(len(res), 5)
+                self.assertEqual(res[0].id, ids[q_idx], f"Top 1 match for query {q_idx} must match exactly")
+            db.drop_index("prefix_idx")
+
 
 if __name__ == "__main__":
     unittest.main()

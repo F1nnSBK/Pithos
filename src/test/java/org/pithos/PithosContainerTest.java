@@ -118,4 +118,68 @@ class PithosContainerTest {
 
         index.close();
     }
+
+    @Test
+    void testGate0PrefixRoutingVerification(@TempDir Path tempDir) throws IOException {
+        Path containerPath = tempDir.resolve("prefix_routing_test.pithos");
+        int dimension = 128;
+        int[] tiers = { 64, 128 };
+        int numRecords = 2000;
+
+        Random rng = new Random(999);
+        List<VectorRecord> records = new ArrayList<>(numRecords);
+        for (int i = 0; i < numRecords; i++) {
+            float[] vec = new float[dimension];
+            float norm = 0.0f;
+            for (int d = 0; d < dimension; d++) {
+                vec[d] = rng.nextFloat() * 2.0f - 1.0f;
+                norm += vec[d] * vec[d];
+            }
+            norm = (float) Math.sqrt(norm);
+            for (int d = 0; d < dimension; d++) {
+                vec[d] /= norm;
+            }
+            records.add(new VectorRecord(10000L + i, vec));
+        }
+
+        // Write single-file container with prefix table
+        PithosContainer.writeContainer(
+                containerPath,
+                dimension,
+                tiers,
+                records,
+                PithosContainer.METRIC_COSINE,
+                0, // 1-bit
+                VectorDb.SIDECAR_FP8,
+                null,
+                null,
+                "{\"test\": \"gate0_prefix_routing\"}");
+
+        assertTrue(Files.exists(containerPath));
+
+        // Map container
+        FlatIndex index = FlatIndex.mapFile(containerPath.toString(), null, 0);
+        assertNotNull(index);
+        assertTrue(index.hasPrefixTable(), "Prefix table must be active");
+        assertNotNull(index.getPrefixOffsetsSegment());
+        assertNotNull(index.getPrefixPostingsSegment());
+        assertEquals(PithosContainer.PREFIX_OFFSETS_BYTES, index.getPrefixOffsetsSegment().byteSize());
+        assertEquals(numRecords * 4L, index.getPrefixPostingsSegment().byteSize());
+
+        // Batch search across multiple queries
+        float[][] queries = new float[10][dimension];
+        for (int q = 0; q < 10; q++) {
+            queries[q] = records.get(q * 50).vector();
+        }
+
+        List<Index.SearchResult>[] batchResults = index.batchSearch(queries, 5);
+        assertEquals(10, batchResults.length);
+        for (int q = 0; q < 10; q++) {
+            assertNotNull(batchResults[q]);
+            assertFalse(batchResults[q].isEmpty());
+            assertEquals(10000L + (q * 50), batchResults[q].get(0).id(), "Exact top 1 match must be found");
+        }
+
+        index.close();
+    }
 }

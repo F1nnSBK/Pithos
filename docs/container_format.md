@@ -34,7 +34,9 @@ A `.pithos` file is structured into 64-byte cache-line aligned sections with a 1
 | `46..53` | `uint64_t` | `toc_offset` | Byte offset to Table of Contents JSON directory |
 | `54..57` | `uint32_t` | `toc_length` | Byte length of Table of Contents JSON string |
 | `58..59` | `uint16_t` | `quantization_mode` | Quantization mode: `0` = 1-bit, `1` = 2-bit QJL, `2` = FP32 bypass |
-| `60..127` | `uint8_t[68]` | `reserved` | Zero-initialized reserved bytes for future extension |
+| `60..67` | `uint64_t` | `prefix_table_offset` | Byte offset to Gate 0 Direct-Mapped CSR Prefix Table |
+| `68..75` | `uint64_t` | `prefix_table_length` | Byte length of Gate 0 Prefix Table (offsets + postings) |
+| `76..127` | `uint8_t[52]` | `reserved` | Zero-initialized reserved bytes for future extension |
 
 ---
 
@@ -57,7 +59,13 @@ A `.pithos` file is structured into 64-byte cache-line aligned sections with a 1
    * **Blackwell NVFP4 E2M1:** $N \times \lceil D / 16 \rceil \times 9$ bytes (microscaled blocks with FP8 scale factor).
    * **FP16:** $N \times D \times 2$ bytes.
 
-4. **Section 4: Generic Metadata Payload (`SECTION_METADATA`)**
+4. **Section 4: Direct-Mapped Prefix Table (`SECTION_PREFIX_TABLE`)**
+   * Gate 0 inverted CSR index for 16-bit Walsh-Hadamard prefix routing ($2^{16} = 65,536$ buckets).
+   * **Bucket Offsets:** 65,537 `int32` elements (262,148 bytes).
+   * **Postings Slice:** $N \times 4$ bytes (`int32` vector row indices).
+   * Probes exact query bucket + 16 Hamming-1 neighbors to prune 98-99% of search candidates.
+
+5. **Section 5: Generic Metadata Payload (`SECTION_METADATA`)**
    * Schema-agnostic storage for external attributes, documents, or tabular rows.
    * Supported formats: JSON Lines (`jsonl`), Apache Arrow IPC stream (`arrow`), Raw Binary Blobs (`raw`).
    * Read off-heap with zero heap memory overhead.
