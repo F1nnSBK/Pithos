@@ -14,7 +14,7 @@ Pithos v2.0.0 is a milestone architectural overhaul designed to exceed 100,000 Q
 ### The 4 Core Architectural Upgrades:
 
 #### 1. Algorithmic Breakthrough: "Gate 0" Spectral Prefix Routing
-* **Direct-Mapped 16-Bit CSR Prefix Table:** Exploits SVD/Walsh-Hadamard preconditioned Tier-0 coordinates to build a direct-mapped table of $2^{16} = 65,536$ spatial buckets.
+* **Direct-Mapped 16-Bit CSR Prefix Table:** Exploits SVD/Walsh-Hadamard preconditioned Tier-0 coordinates to build a direct-mapped table of 2^16 = 65,536 spatial buckets.
 * **O(1) Candidate Pruning:** For incoming queries, probes the exact bucket and 16 Hamming-1 neighbor buckets, instantly eliminating 98%–99.9% of the search space before Hamming scans or sidecar reranking.
 * **Zero-Copy Container Format Integration:** Serialized as `SECTION_PREFIX_TABLE` inside `.pithos` single-file containers with 64-byte cache-line alignment and direct memory mapping via Java 25 FFM.
 
@@ -133,7 +133,7 @@ Named after the pithos (storage jar) of Diogenes of Sinope, embodying absolute a
 
 ### Technical Comparison with Existing Vector Databases
 
-| Feature | Milvus / Qdrant / Pinecone | FAISS (IVF-PQ) | USearch / HNSWLib | Pithos v1.2.1 |
+| Feature | Milvus / Qdrant / Pinecone | FAISS (IVF-PQ) | USearch / HNSWLib | Pithos v2.0.0 |
 | :--- | :--- | :--- | :--- | :--- |
 | **Indexing Paradigm** | Graph / HNSW clustering | Voronoi IVF partitions | HNSW graphs | **Model-Isomorphic Spectral Quantization** |
 | **Precision Sidecar** | Uncompressed FP32/FP16 | Float reconstruction table | Float vector array | **Blackwell FP8 (E4M3) / NVFP4 (E2M1)** |

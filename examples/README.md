@@ -1,4 +1,4 @@
-# ⚱ Pithos Examples & Developer SDK
+# Pithos Examples & Developer SDK
 
 This directory contains complete, up-to-date code examples demonstrating how to use Pithos across **Python**, **C/C++**, and **Java** for application development, real-time ingestion, and FPGA / DMA hardware co-design.
 

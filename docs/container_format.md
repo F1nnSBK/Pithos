@@ -1,4 +1,4 @@
-# Universal Single-File Container Format (.pithos) ⚱
+# Universal Single-File Container Format (.pithos)
 
 ---
 
