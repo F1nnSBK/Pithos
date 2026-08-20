@@ -64,6 +64,9 @@ jobs:
 
       - name: Install Python Dependencies & Test Suite
         run: |
+          mkdir -p src/pithos/lib
+          cp target/${{ matrix.artifact_name }} src/pithos/lib/${{ matrix.output_name }}
+          cp target/${{ matrix.artifact_name }} src/pithos/lib/libpithos.${{ matrix.os == 'macos-latest' && 'dylib' || 'so' }}
           python -m pip install --upgrade pip
           python -m pip install numpy build wheel
           python -m pip install -e .
