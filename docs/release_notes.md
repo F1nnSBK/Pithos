@@ -26,7 +26,8 @@ Pithos v2.0.0 is a milestone architectural overhaul designed to exceed 100,000 Q
 #### 3. Micro-Architecture: SIMD Register Tiling & Micro-Batching
 * **SIMD Register Tiling:** Amortizes database vector memory loads across 8 query vectors simultaneously held in SIMD registers.
 * **Aggressive Loop Unrolling & Popcount:** 8x unrolled NEON and AVX-512 popcount intrinsics maximizing CPU instruction-level parallelism (ILP).
-* **Flat FP8 LUT Reranking:** Computes exact FP8 L2 distances directly off-heap using precomputed flat query distance LUTs with zero heap allocation.
+* **Flat FP8 LUT Reranking & Early Distance Cutoff:** Computes exact FP8/FP4/FP16 L2 distances directly off-heap with zero heap allocations, early-terminating dimension loops when partial distance exceeds the bounded k-th best candidate threshold.
+* **Vectorized Zero-Copy Input FFI:** Bulk C-ABI memory transfer via `MemorySegment.copy` bypassing individual element pointer reads.
 
 #### 4. Async Out-of-Core I/O: Proactive Prefetching (MADV_WILLNEED / io_uring)
 * **Proactive Candidate Prefetching:** Dispatches asynchronous page prefetch hints (`posix_madvise(MADV_WILLNEED)`) for candidate prefix bucket postings and sidecar bytes ahead of SIMD compute cycles.

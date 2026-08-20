@@ -180,11 +180,11 @@ public class CApi {
             }
 
             int dim = index.getDimension();
+            long rawAddress = queries.rawValue();
+            MemorySegment querySegment = MemorySegment.ofAddress(rawAddress).reinterpret((long) numQueries * dim * 4L);
             float[][] javaQueries = new float[numQueries][dim];
             for (int q = 0; q < numQueries; q++) {
-                for (int j = 0; j < dim; j++) {
-                    javaQueries[q][j] = queries.read(q * dim + j);
-                }
+                MemorySegment.copy(querySegment, ValueLayout.JAVA_FLOAT, (long) q * dim * 4L, javaQueries[q], 0, dim);
             }
 
             List<Index.SearchResult>[] results = index.batchSearch(javaQueries, k);
