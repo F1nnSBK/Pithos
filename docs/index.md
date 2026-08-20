@@ -17,27 +17,28 @@
 
 **Pithos** is a **Model-Isomorphic Vector Database (MIDB)** built from the ground up to bypass traditional garbage collection overheads and runtime indirection. Instead of treating vectors as generic high-dimensional points, Pithos physically aligns its storage format with the embedding model's latent geometry:
 
-![Pithos 5-Lever Cascade Architecture](assets/pithos_cascade_architecture.svg)
+![Pithos 4-Gate Cascade Architecture](assets/pithos_cascade_architecture.svg)
 
 ---
 
 ## Key Features
 
 === "Hardware Co-Design"
-    - **Blackwell FP8 / NVFP4 Sidecar Engine:** Native E4M3 (1 B/dim) and NVFP4 (0.56 B/dim) sidecars for in-engine candidate reranking.
-    - **AVX-512 & ARM Neon Acceleration:** Hardware-accelerated bitwise Hamming distances using vectorized `VPOPCNTDQ` and ARM Neon intrinsics.
+    - **Blackwell FP8 / NVFP4 Sidecar Engine:** Native E4M3 (1 B/dim) and NVFP4 (0.56 B/dim) sidecars with Monotonic Early Distance Cutoff.
+    - **Gate 0 Multi-Index Hashing (MIH):** 4x8-Bit inverted CSR routing pruning 98.5% of database space in $O(1)$ sub-microsecond time.
+    - **AVX-512 & ARM Neon Acceleration:** Vectorized bitwise Hamming distance calculations using `VPOPCNTDQ` and Neon SIMD intrinsics.
     - **NVIDIA GPU Acceleration:** Direct CUDA kernel dispatch for batch Hamming distance, multi-family voting, and Fast Walsh-Hadamard Transforms.
 
 === "Model-Isomorphic Storage"
-    - **Universal Single-File Container (`.pithos`):** Schema-agnostic, zero-copy single-file database format with Apache Arrow IPC partition embedding.
+    - **Universal Single-File Container (`.pithos`):** Schema-agnostic, zero-copy single-file database format with embedded Apache Arrow IPC partition directory.
     - **Off-Heap Virtual Memory:** Direct POSIX-aligned columnar mapping via Java Panama FFM (Foreign Function & Memory API) and C-API shared memory.
-    - **Matryoshka Spectral Decomposition:** Energy-budgeted tiered binary indexing that prunes up to 99% of search space in Gate 1.
-    - **LSM-Tree Delta Buffer:** Real-time lock-free insertions and tombstone soft-deletes with zero-cost snapshots.
+    - **Zero-Copy NumPy FFI:** High-throughput `search_numpy()` and `batch_search_numpy()` methods returning direct memory views into native results.
+    - **LSM-Tree Delta Buffer & WAL:** Real-time lock-free insertions and tombstone soft-deletes with zero-cost snapshots.
 
 === "Asymmetric Search (ADC)"
     - **Continuous FP32 Fidelity:** Queries are evaluated in 100% continuous 32-bit floating point precision against compressed database records.
-    - **Precomputed Query LUTs (Lever 1):** Zero floating-point multiplication during Gate 3 candidate reranking.
-    - **100% Recall@1 on High-Dimensional Foundation Model Benchmarks.**
+    - **Precomputed Query LUTs:** Zero floating-point multiplication during Gate 3 candidate reranking.
+    - **100% Top-1 Exact Recall on High-Dimensional Foundation Model Benchmarks.**
 
 ---
 
@@ -46,34 +47,37 @@
 ### Python Installation & Usage
 
 ```bash
-pip install pithosdb numpy
+pip install pithosdb numpy pyarrow
 ```
 
 ```python
 import numpy as np
-from pithos import VectorDb, SidecarMode
+from pithos import VectorDb, SidecarMode, QuantizationMode
 
 dim = 384
 num_vectors = 50_000
 vectors = np.random.randn(num_vectors, dim).astype(np.float32)
 vectors /= np.linalg.norm(vectors, axis=1, keepdims=True)
 
-# 1. Compile into self-contained .pithos container with FP8 precision sidecar
+# 1. Compile into self-contained .pithos container with FP8 precision sidecar & MIH prefix table
 VectorDb.compile_container(
     path="dataset.pithos",
     records=vectors,
     tiers=[64, 128, 256, 384],
+    q_mode=QuantizationMode.ONE_BIT,
     sidecar_mode=SidecarMode.FP8,
     user_metadata={"dataset": "foundation_embeddings", "curator": "Diogenes"}
 )
 
-# 2. Memory-map index & run search
+# 2. Memory-map index & run zero-copy search
 with VectorDb() as db:
     index = db.load_index("dataset", "dataset.pithos")
     query = vectors[0]
-    results = index.search(query, k=10)
-    for res in results:
-        print(f"Match ID: {res.id}, Distance: {res.distance:.4f}")
+    
+    # Zero-copy NumPy FFI search (returns (ids_array, dists_array))
+    ids, dists = index.search_numpy(query, k=10)
+    for match_id, dist in zip(ids, dists):
+        print(f"Match ID: {match_id}, Scaled Distance: {dist}")
 ```
 
 ---
@@ -92,9 +96,9 @@ with VectorDb() as db:
 ## Documentation Sections
 
 - [**Universal Single-File Container (.pithos)**](container_format.md): Technical specification of the schema-agnostic DIOGENES container format.
-- [**Architectural Principles**](architecture.md): Deep dive into off-heap virtual memory, memory layouts, and LMAX Disruptor parallelism.
-- [**CUDA GPU Acceleration**](cuda_integration.md): Architecture of CUDA kernels, unified host-device DMA, and multi-stream execution.
+- [**Architectural Principles**](architecture.md): Deep dive into off-heap virtual memory, memory layouts, and 4-gate cascaded execution.
+- [**GPU Acceleration**](cuda_integration.md): Architecture of CUDA kernels, unified host-device DMA, and multi-stream execution.
 - [**C-API Reference**](c_api_reference.md): Complete specification of C/C++ bindings, structs, and FFI interoperability.
-- [**Mathematical Foundations**](math_theory.md): SVD spectral energy decay, Sylvester-Hadamard isometric rotations, and spherical pruning.
-- [**Release Notes**](release_notes.md): Detailed changelog for Pithos v2.0.0 and previous releases.
+- [**Mathematical Foundations**](math_theory.md): SVD spectral energy decay, Sylvester-Hadamard isometric rotations, and MIH collision bounds.
+- [**Release Notes**](release_notes.md): Detailed changelog for Pithos v2.0.0 and v2.1.0 releases.
 - [**Roadmap & Next Steps**](next_steps.md): FPGA co-design, distributed clustering, and heterogeneous execution.
