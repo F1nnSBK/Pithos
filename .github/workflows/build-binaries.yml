@@ -73,6 +73,8 @@ jobs:
           python tests/test_pithos_complete.py
           python tests/test_fpga_co_design.py
           python tests/test_pithos_fp8_sidecar.py
+          python tests/test_pithos_container.py
+          python tests/test_isolate_lifecycle.py
 
       - name: Run Verification Benchmarks
         run: |
