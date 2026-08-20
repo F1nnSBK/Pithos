@@ -766,17 +766,11 @@ public class FlatIndex implements Index {
                 return;
             }
 
-            // Gate 3: Precision Sidecar Reranking
-            class RerankedCandidate {
-                final long rowIdx;
-                final double distance;
-                RerankedCandidate(long rowIdx, double distance) {
-                    this.rowIdx = rowIdx;
-                    this.distance = distance;
-                }
-            }
+            // Gate 3: Precision Sidecar Reranking with Early Distance Cutoff
+            double[] bestDists = new double[k];
+            long[] bestRowIds = new long[k];
+            Arrays.fill(bestDists, Double.MAX_VALUE);
 
-            List<RerankedCandidate> reranked = new ArrayList<>(candidates.size());
             if (fp8Segment != null) {
                 float[] queryLut = new float[dimension * 256];
                 for (int d = 0; d < dimension; d++) {
@@ -788,22 +782,52 @@ public class FlatIndex implements Index {
                     }
                 }
                 for (long rowIdx : candidates) {
-                    double dist = computeExactL2FP8_LUT(queryLut, rowIdx);
-                    reranked.add(new RerankedCandidate(rowIdx, dist));
+                    double currentLimit = bestDists[k - 1];
+                    double dist = computeExactL2FP8_LUT(queryLut, rowIdx, currentLimit);
+                    if (dist < currentLimit) {
+                        int pos = k - 1;
+                        while (pos > 0 && dist < bestDists[pos - 1]) {
+                            bestDists[pos] = bestDists[pos - 1];
+                            bestRowIds[pos] = bestRowIds[pos - 1];
+                            pos--;
+                        }
+                        bestDists[pos] = dist;
+                        bestRowIds[pos] = rowIdx;
+                    }
                 }
             } else if (fp4Segment != null) {
                 int numBlocks = (dimension + 15) / 16;
                 int bytesPerRecord = numBlocks * 9;
                 byte[] localFp4 = new byte[bytesPerRecord];
                 for (long rowIdx : candidates) {
-                    double dist = computeExactL2FP4(query, rowIdx, localFp4, numBlocks);
-                    reranked.add(new RerankedCandidate(rowIdx, dist));
+                    double currentLimit = bestDists[k - 1];
+                    double dist = computeExactL2FP4(query, rowIdx, localFp4, numBlocks, currentLimit);
+                    if (dist < currentLimit) {
+                        int pos = k - 1;
+                        while (pos > 0 && dist < bestDists[pos - 1]) {
+                            bestDists[pos] = bestDists[pos - 1];
+                            bestRowIds[pos] = bestRowIds[pos - 1];
+                            pos--;
+                        }
+                        bestDists[pos] = dist;
+                        bestRowIds[pos] = rowIdx;
+                    }
                 }
             } else if (fp16Segment != null) {
                 short[] localFp16 = new short[dimension];
                 for (long rowIdx : candidates) {
-                    double dist = computeExactL2FP16(query, rowIdx, localFp16);
-                    reranked.add(new RerankedCandidate(rowIdx, dist));
+                    double currentLimit = bestDists[k - 1];
+                    double dist = computeExactL2FP16(query, rowIdx, localFp16, currentLimit);
+                    if (dist < currentLimit) {
+                        int pos = k - 1;
+                        while (pos > 0 && dist < bestDists[pos - 1]) {
+                            bestDists[pos] = bestDists[pos - 1];
+                            bestRowIds[pos] = bestRowIds[pos - 1];
+                            pos--;
+                        }
+                        bestDists[pos] = dist;
+                        bestRowIds[pos] = rowIdx;
+                    }
                 }
             } else {
                 double queryL2Norm = 0.0;
@@ -813,19 +837,27 @@ public class FlatIndex implements Index {
                     querySum += val;
                 }
                 for (long rowIdx : candidates) {
+                    double currentLimit = bestDists[k - 1];
                     double dist = computeAsymmetricL2DistanceOffHeap(zQuery, queryL2Norm, querySum, rowIdx);
-                    reranked.add(new RerankedCandidate(rowIdx, dist));
+                    if (dist < currentLimit) {
+                        int pos = k - 1;
+                        while (pos > 0 && dist < bestDists[pos - 1]) {
+                            bestDists[pos] = bestDists[pos - 1];
+                            bestRowIds[pos] = bestRowIds[pos - 1];
+                            pos--;
+                        }
+                        bestDists[pos] = dist;
+                        bestRowIds[pos] = rowIdx;
+                    }
                 }
             }
 
-            reranked.sort((c1, c2) -> Double.compare(c1.distance, c2.distance));
-
-            List<SearchResult> queryResults = new ArrayList<>();
-            int limit = Math.min(k, reranked.size());
-            for (int i = 0; i < limit; i++) {
-                RerankedCandidate c = reranked.get(i);
-                long recordId = idsSegment.get(ValueLayout.JAVA_LONG, c.rowIdx * 8L);
-                queryResults.add(new SearchResult(recordId, (int) (c.distance * 1000000.0)));
+            List<SearchResult> queryResults = new ArrayList<>(k);
+            for (int i = 0; i < k; i++) {
+                if (bestDists[i] != Double.MAX_VALUE) {
+                    long recordId = idsSegment.get(ValueLayout.JAVA_LONG, bestRowIds[i] * 8L);
+                    queryResults.add(new SearchResult(recordId, (int) (bestDists[i] * 1000000.0)));
+                }
             }
             finalResults[q] = queryResults;
         });
@@ -1089,17 +1121,11 @@ public class FlatIndex implements Index {
                 }
             }
 
-            // Gate 3: Precision Sidecar Reranking
-            class RerankedCandidate {
-                final long rowIdx;
-                final double distance;
-                RerankedCandidate(long rowIdx, double distance) {
-                    this.rowIdx = rowIdx;
-                    this.distance = distance;
-                }
-            }
+            // Gate 3: Precision Sidecar Reranking with Early Distance Cutoff
+            double[] bestDists = new double[k];
+            long[] bestRowIds = new long[k];
+            Arrays.fill(bestDists, Double.MAX_VALUE);
 
-            List<RerankedCandidate> reranked = new ArrayList<>(candidates.size());
             if (fp8Segment != null) {
                 float[] queryLut = new float[dimension * 256];
                 for (int d = 0; d < dimension; d++) {
@@ -1111,22 +1137,52 @@ public class FlatIndex implements Index {
                     }
                 }
                 for (long rowIdx : candidates) {
-                    double dist = computeExactL2FP8_LUT(queryLut, rowIdx);
-                    reranked.add(new RerankedCandidate(rowIdx, dist));
+                    double currentLimit = bestDists[k - 1];
+                    double dist = computeExactL2FP8_LUT(queryLut, rowIdx, currentLimit);
+                    if (dist < currentLimit) {
+                        int pos = k - 1;
+                        while (pos > 0 && dist < bestDists[pos - 1]) {
+                            bestDists[pos] = bestDists[pos - 1];
+                            bestRowIds[pos] = bestRowIds[pos - 1];
+                            pos--;
+                        }
+                        bestDists[pos] = dist;
+                        bestRowIds[pos] = rowIdx;
+                    }
                 }
             } else if (fp4Segment != null) {
                 int numBlocks = (dimension + 15) / 16;
                 int bytesPerRecord = numBlocks * 9;
                 byte[] localFp4 = new byte[bytesPerRecord];
                 for (long rowIdx : candidates) {
-                    double dist = computeExactL2FP4(query, rowIdx, localFp4, numBlocks);
-                    reranked.add(new RerankedCandidate(rowIdx, dist));
+                    double currentLimit = bestDists[k - 1];
+                    double dist = computeExactL2FP4(query, rowIdx, localFp4, numBlocks, currentLimit);
+                    if (dist < currentLimit) {
+                        int pos = k - 1;
+                        while (pos > 0 && dist < bestDists[pos - 1]) {
+                            bestDists[pos] = bestDists[pos - 1];
+                            bestRowIds[pos] = bestRowIds[pos - 1];
+                            pos--;
+                        }
+                        bestDists[pos] = dist;
+                        bestRowIds[pos] = rowIdx;
+                    }
                 }
             } else if (fp16Segment != null) {
                 short[] localFp16 = new short[dimension];
                 for (long rowIdx : candidates) {
-                    double dist = computeExactL2FP16(query, rowIdx, localFp16);
-                    reranked.add(new RerankedCandidate(rowIdx, dist));
+                    double currentLimit = bestDists[k - 1];
+                    double dist = computeExactL2FP16(query, rowIdx, localFp16, currentLimit);
+                    if (dist < currentLimit) {
+                        int pos = k - 1;
+                        while (pos > 0 && dist < bestDists[pos - 1]) {
+                            bestDists[pos] = bestDists[pos - 1];
+                            bestRowIds[pos] = bestRowIds[pos - 1];
+                            pos--;
+                        }
+                        bestDists[pos] = dist;
+                        bestRowIds[pos] = rowIdx;
+                    }
                 }
             } else {
                 double queryL2Norm = 0.0;
@@ -1136,19 +1192,27 @@ public class FlatIndex implements Index {
                     querySum += val;
                 }
                 for (long rowIdx : candidates) {
+                    double currentLimit = bestDists[k - 1];
                     double dist = computeAsymmetricL2DistanceOffHeap(zQuery, queryL2Norm, querySum, rowIdx);
-                    reranked.add(new RerankedCandidate(rowIdx, dist));
+                    if (dist < currentLimit) {
+                        int pos = k - 1;
+                        while (pos > 0 && dist < bestDists[pos - 1]) {
+                            bestDists[pos] = bestDists[pos - 1];
+                            bestRowIds[pos] = bestRowIds[pos - 1];
+                            pos--;
+                        }
+                        bestDists[pos] = dist;
+                        bestRowIds[pos] = rowIdx;
+                    }
                 }
             }
 
-            reranked.sort((c1, c2) -> Double.compare(c1.distance, c2.distance));
-
-            List<SearchResult> queryResults = new ArrayList<>();
-            int limit = Math.min(k, reranked.size());
-            for (int i = 0; i < limit; i++) {
-                RerankedCandidate c = reranked.get(i);
-                long recordId = idsSegment.get(ValueLayout.JAVA_LONG, c.rowIdx * 8L);
-                queryResults.add(new SearchResult(recordId, (int) (c.distance * 1000000.0)));
+            List<SearchResult> queryResults = new ArrayList<>(k);
+            for (int i = 0; i < k; i++) {
+                if (bestDists[i] != Double.MAX_VALUE) {
+                    long recordId = idsSegment.get(ValueLayout.JAVA_LONG, bestRowIds[i] * 8L);
+                    queryResults.add(new SearchResult(recordId, (int) (bestDists[i] * 1000000.0)));
+                }
             }
             finalResults[q] = queryResults;
         });
@@ -1335,7 +1399,7 @@ public class FlatIndex implements Index {
         }
     }
 
-    private double computeExactL2FP8_LUT(float[] queryLut, long rowIdx) {
+    private double computeExactL2FP8_LUT(float[] queryLut, long rowIdx, double currentLimit) {
         long rowOffset = rowIdx * (long) dimension;
         double sum = 0.0;
         int d = 0;
@@ -1352,6 +1416,9 @@ public class FlatIndex implements Index {
                  + queryLut[((d + 2) << 8) | b2] + queryLut[((d + 3) << 8) | b3]
                  + queryLut[((d + 4) << 8) | b4] + queryLut[((d + 5) << 8) | b5]
                  + queryLut[((d + 6) << 8) | b6] + queryLut[((d + 7) << 8) | b7];
+            if (sum > currentLimit) {
+                return sum;
+            }
         }
         for (; d < dimension; d++) {
             int b = fp8Segment.get(ValueLayout.JAVA_BYTE, rowOffset + d) & 0xFF;
@@ -1360,7 +1427,7 @@ public class FlatIndex implements Index {
         return sum;
     }
 
-    private double computeExactL2FP4(float[] rawQuery, long rowIdx, byte[] localFp4, int numBlocks) {
+    private double computeExactL2FP4(float[] rawQuery, long rowIdx, byte[] localFp4, int numBlocks, double currentLimit) {
         long rowOffset = rowIdx * (numBlocks * 9L);
         MemorySegment.copy(fp4Segment, ValueLayout.JAVA_BYTE, rowOffset, localFp4, 0, numBlocks * 9);
         double sum = 0.0;
@@ -1383,11 +1450,14 @@ public class FlatIndex implements Index {
                     sum += diff * diff;
                 }
             }
+            if (sum > currentLimit) {
+                return sum;
+            }
         }
         return sum;
     }
 
-    private double computeExactL2FP16(float[] rawQuery, long rowIdx, short[] localFp16) {
+    private double computeExactL2FP16(float[] rawQuery, long rowIdx, short[] localFp16, double currentLimit) {
         long rowOffset = rowIdx * dimension * 2L;
         MemorySegment.copy(fp16Segment, ValueLayout.JAVA_SHORT, rowOffset, localFp16, 0, dimension);
         double sum = 0.0;
@@ -1395,6 +1465,9 @@ public class FlatIndex implements Index {
             float dbVal = Float.float16ToFloat(localFp16[d]);
             double diff = rawQuery[d] - dbVal;
             sum += diff * diff;
+            if ((d & 7) == 7 && sum > currentLimit) {
+                return sum;
+            }
         }
         return sum;
     }

@@ -231,6 +231,70 @@ class TestPithosContainer(unittest.TestCase):
 
             db.drop_index("prefix_idx")
 
+    def test_05_legacy_v1_2_1_container_backward_compatibility(self):
+        """Tests that legacy Pithos v1.2.1 containers (without prefix table) load and query seamlessly."""
+        container_path = os.path.join(self.temp_dir, "legacy_v121_test.pithos")
+        n_records = 500
+        vecs = np.random.randn(n_records, self.dim).astype(np.float32)
+        vecs /= np.linalg.norm(vecs, axis=1, keepdims=True)
+        ids = np.arange(1000, 1000 + n_records, dtype=np.int64)
+
+        # 1. Compile standard container
+        VectorDb.compile_container(
+            path=container_path,
+            records=vecs,
+            ids=ids,
+            tiers=self.tiers,
+            metric="cosine",
+            q_mode=QuantizationMode.ONE_BIT,
+            sidecar_mode=SidecarMode.FP8
+        )
+
+        # 2. Simulate v1.2.1 format by zeroing prefix table in Superblock and removing it from TOC JSON
+        with open(container_path, "r+b") as f:
+            sb = bytearray(f.read(128))
+            toc_offset = int.from_bytes(sb[46:54], byteorder="little")
+            toc_len = int.from_bytes(sb[54:58], byteorder="little")
+            
+            # Zero out prefix_table_offset and prefix_table_len in superblock
+            sb[60:68] = b"\x00" * 8
+            sb[68:76] = b"\x00" * 8
+            f.seek(0)
+            f.write(sb)
+
+            # Rewrite TOC JSON without prefix_table entry
+            f.seek(toc_offset)
+            toc_dict = json.loads(f.read(toc_len).decode("utf-8"))
+            if "prefix_table" in toc_dict.get("sections", {}):
+                del toc_dict["sections"]["prefix_table"]
+            
+            new_toc_bytes = json.dumps(toc_dict).encode("utf-8")
+            # Pad with spaces to maintain exact TOC length
+            if len(new_toc_bytes) < toc_len:
+                new_toc_bytes += b" " * (toc_len - len(new_toc_bytes))
+            f.seek(toc_offset)
+            f.write(new_toc_bytes[:toc_len])
+
+        # 3. Load legacy container and verify search falls back to linear scan seamlessly
+        with VectorDb() as db:
+            idx = db.load_index("legacy_idx", container_path)
+            self.assertEqual(idx.size(), n_records)
+
+            for q_idx in [0, 50, 200, 450]:
+                q = vecs[q_idx]
+                res = idx.search(q, k=5)
+                self.assertEqual(len(res), 5)
+                self.assertEqual(res[0].id, ids[q_idx], f"Top 1 match for query {q_idx} must match in legacy v1.2.1 index")
+
+            # Verify Zero-Copy search_numpy on legacy v1.2.1 index
+            out_ids, out_dists = idx.search_numpy(vecs[:10], k=5)
+            self.assertEqual(out_ids.shape, (10, 5))
+            for i in range(10):
+                self.assertEqual(out_ids[i, 0], ids[i])
+
+            db.drop_index("legacy_idx")
+
 
 if __name__ == "__main__":
     unittest.main()
+
