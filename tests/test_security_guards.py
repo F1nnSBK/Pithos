@@ -144,8 +144,8 @@ class TestSecurityGuards(unittest.TestCase):
                 # Re-run Query 1 (must be bit-exact match, zero cross-query interference)
                 ids1_b, dists1_b = index.search_numpy(q1, k=5)
 
-                self.assertEqual(ids1_a, ids1_b)
-                self.assertEqual(dists1_a, dists1_b)
+                np.testing.assert_array_equal(ids1_a, ids1_b)
+                np.testing.assert_array_equal(dists1_a, dists1_b)
 
 
 if __name__ == "__main__":
