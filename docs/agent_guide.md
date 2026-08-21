@@ -31,6 +31,12 @@ Instead of applying dense matrix multiplications, Pithos applies recursive Sylve
 - Strictly preserves inner products and norms (isometric orthogonal transform).
 - Eliminates the need to store or compute large dense projection matrices.
 
+### 2.2.1 Arbitrary & Non-Power-of-Two Dimensions (Kronecker Rotation)
+Real-world embedding models frequently have dimensions that are not powers of two or multiples of 64 (e.g., $d = 384, 768, 960, 1536$):
+- **Kronecker-Factorized Rotation ($R = H_u \otimes \Omega_v$):** For any tier width $w$, Pithos factorizes $w = u \cdot v$ (where $u$ is the largest power-of-two divisor). It applies a fast $u$-point Walsh-Hadamard transform combined with a $v \times v$ orthonormal Discrete Cosine Transform (DCT-II) basis matrix $\Omega_v$. This guarantees 100% exact isometric norm preservation without zero-padding distortion.
+- **Bitpacking & SIMD Popcount Alignment:** Datasets whose dimensions are not divisible by 64 are packed into $\lceil d / 64 \rceil$ 64-bit words. Trailing padding bits are strictly zero-masked, ensuring zero corruption during bitwise SIMD Hamming distance calculations.
+- **Sidecar Handling:** FP8 and FP16 sidecars maintain exact continuous dimensions with 64-byte row-offset cache-line alignment; NVFP4 pads only the sub-16 dimension block boundary with 0.0 before scaling.
+
 ### 2.3 PolarQuant Binarization & Quantization Modes
 Transformed coordinates are converted into compact representations:
 - **1-Bit Mode (`ONE_BIT`):** Extracts the sign bit ($\ge 0 \to 1$, $< 0 \to 0$), packing 64 dimensions into a single 64-bit integer (`uint64_t`).

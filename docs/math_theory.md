@@ -34,6 +34,58 @@ $$
 
 ---
 
+## 1.2 Arbitrary & Non-Power-of-Two Dimensions: Kronecker Orthogonal Rotation
+
+While standard Walsh-Hadamard transforms require block dimensions to be exact powers of two ($d = 2^k$), modern representation models utilize arbitrary dimensionalities (e.g., $d = 384, 768, 960, 1536$). 
+
+Rather than zero-padding (which distorts angular distributions and wastes memory bandwidth), Pithos applies **Kronecker-Factorized Orthogonal Rotation**:
+
+### Theorem (Kronecker Isometry for Composite Dimensions)
+Let the block width $w$ be factorized into $w = u \cdot v$, where $u$ is the largest power-of-two divisor of $w$ and $v$ is the residual odd component. The composite rotation matrix $\mathbf{R} \in \mathbb{R}^{w \times w}$ is constructed as the Kronecker product:
+
+$$
+\mathbf{R} = \mathbf{H}_u \otimes \mathbf{\Omega}_v
+$$
+
+where $\mathbf{H}_u \in \mathbb{R}^{u \times u}$ is the normalized $u$-dimensional Walsh-Hadamard matrix, and $\mathbf{\Omega}_v \in \mathbb{R}^{v \times v}$ is an orthonormal Discrete Cosine Transform (DCT-II) basis matrix:
+
+$$
+\Omega_{0, j} = \frac{1}{\sqrt{v}}, \quad \Omega_{i, j} = \sqrt{\frac{2}{v}} \cos\left( \frac{\pi i (2j + 1)}{2v} \right) \quad \text{for } i \ge 1, \; 0 \le j < v
+$$
+
+### Proof of Exact Orthonormality & Norm Preservation
+By the mixed-product property of the Kronecker product:
+
+$$
+\mathbf{R}^T \mathbf{R} = (\mathbf{H}_u \otimes \mathbf{\Omega}_v)^T (\mathbf{H}_u \otimes \mathbf{\Omega}_v) = (\mathbf{H}_u^T \mathbf{H}_u) \otimes (\mathbf{\Omega}_v^T \mathbf{\Omega}_v) = \mathbf{I}_u \otimes \mathbf{I}_v = \mathbf{I}_w
+$$
+
+Consequently, for any input vector $\mathbf{x} \in \mathbb{R}^w$:
+
+$$
+\|\mathbf{R} \mathbf{x}\|_2 = \sqrt{\mathbf{x}^T \mathbf{R}^T \mathbf{R} \mathbf{x}} = \sqrt{\mathbf{x}^T \mathbf{I}_w \mathbf{x}} = \|\mathbf{x}\|_2
+$$
+
+and for any two vectors $\mathbf{x}, \mathbf{y} \in \mathbb{R}^w$, the inner product is strictly invariant: $\langle \mathbf{R}\mathbf{x}, \mathbf{R}\mathbf{y} \rangle = \langle \mathbf{x}, \mathbf{y} \rangle$.
+
+### Algorithmic Evaluation in $O(w \cdot (\log u + v))$ Time
+Pithos evaluates $\mathbf{R} \mathbf{x}$ without explicitly materializing the $w \times w$ matrix:
+1. Reshape the $w$-dimensional slice into a $u \times v$ row-major matrix $\mathbf{X}$.
+2. Apply the $v \times v$ DCT-II transform $\mathbf{\Omega}_v$ to each of the $u$ rows: $\mathbf{Y} = \mathbf{X} \mathbf{\Omega}_v^T$.
+3. Apply the Fast Walsh-Hadamard butterfly network $\mathbf{H}_u$ down each of the $v$ column vectors of length $u$: $\mathbf{Z} = \mathbf{H}_u \mathbf{Y}$.
+4. Flatten $\mathbf{Z}$ back into the continuous transformed coordinate array.
+
+---
+
+## 1.3 Quantization & Bitpacking Alignment for Non-Multiple-of-64 Dimensions
+
+For datasets where the total dimension $d$ is not a multiple of 64:
+- **1-Bit / 2-Bit Sign Packing:** Packed into $\lceil d / 64 \rceil$ 64-bit integer words (`uint64_t`). Trailing bits in the final word beyond $d$ are strictly zero-masked, ensuring zero corruption during SIMD popcount operations (`_mm512_popcnt_epi64` / `vaddlvq_u8`).
+- **Gate 3 NVFP4 Microscaling:** Sliced into $\lceil d / 16 \rceil$ blocks of 16 dimensions each. Unused trailing dimensions within the terminal block are padded with $0.0$ prior to scale extraction, and distance reranking accumulates only the valid active dimensions $[0, d)$.
+- **Gate 3 FP8 / FP16 Sidecars:** Serialized with exact element counts ($d \times 1$ Byte / $d \times 2$ Bytes per record) with 64-byte row-offset cache-line alignment.
+
+---
+
 ## 2. Energy Distribution & Peak-to-Average Flattening
 
 Raw neural network embeddings often exhibit high directional kurtosis and coordinate spikes (anisotropic cone distributions). Direct sign quantization $\text{sign}(\mathbf{x})$ on raw vectors causes severe information loss.
