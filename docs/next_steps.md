@@ -4,7 +4,7 @@
 
 ---
 
-## 1. Completed Core Milestones (v2.0 & v2.1)
+## 1. Completed Core Milestones (v2.0 – v2.2)
 
 | Feature Area | Status | Key Innovations |
 | :--- | :--- | :--- |
@@ -14,6 +14,10 @@
 | **LSM DeltaBuffer & WAL** | **Released (v2.0)** | Lock-free real-time insertions, tombstone soft-deletes, write-ahead log, and zero-cost binary compactions. |
 | **Zero-Copy NumPy FFI** | **Released (v2.1)** | Direct memory view returns (`search_numpy()`, `batch_search_numpy()`) bypassing Python wrapper conversions. |
 | **CUDA GPU Acceleration** | **Released (v2.0)** | Fused batch Hamming kernels, Fast Walsh-Hadamard transform, and multi-family resonant voting. |
+| **Real Foundation Model Recall**| **Released (v2.2)** | Validated $>92.3\%$ Recall@10 on real Matryoshka models (`nomic-embed-text`, `bge-base`, `text-embedding-3-small`). |
+| **Disruptor 4.0.0 & VarHandles**| **Released (v2.2)** | Replaced `sun.misc.Unsafe` with `java.lang.invoke.VarHandle`, 0 JVM deprecation warnings on Java 25+. |
+| **Zero-Allocation BitSets** | **Released (v2.2)** | `ThreadLocal<long[]>` scratch buffers with 0 heap bytes allocated during search queries. |
+| **Zero-Overhead Security** | **Released (v2.2)** | Defensive C-API pointer guards, Superblock/TOC bounds verification, and path traversal sanitization. |
 
 ---
 

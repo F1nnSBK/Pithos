@@ -212,7 +212,13 @@ public final class PithosContainer {
         }
 
         long numVectors = buf.getLong();
+        if (numVectors < 0 || numVectors > 10_000_000_000L) {
+            throw new IOException("Corrupt container: numVectors out of range: " + numVectors);
+        }
         int dimension = buf.getInt();
+        if (dimension <= 0 || dimension > 65536) {
+            throw new IOException("Corrupt container: dimension out of range: " + dimension);
+        }
         int metricType = buf.getShort() & 0xFFFF;
         int sidecarType = buf.getShort() & 0xFFFF;
         int numTiers = buf.getShort() & 0xFFFF;
@@ -222,15 +228,23 @@ public final class PithosContainer {
         }
 
         int[] tiers = new int[numTiers];
+        int prevT = 0;
         for (int i = 0; i < 8; i++) {
             int t = buf.getShort() & 0xFFFF;
             if (i < numTiers) {
+                if (t <= prevT || t > dimension) {
+                    throw new IOException("Corrupt container: Tier bounds must strictly increase and be <= dimension: " + t);
+                }
                 tiers[i] = t;
+                prevT = t;
             }
         }
 
         long tocOffset = buf.getLong();
         int tocLength = buf.getInt();
+        if (tocOffset <= 0 || tocLength <= 0 || tocLength > 10 * 1024 * 1024) {
+            throw new IOException("Corrupt container: TOC offset/length invalid (max TOC 10MB): offset=" + tocOffset + ", len=" + tocLength);
+        }
         int qMode = buf.getShort() & 0xFFFF;
 
         return new Superblock(version, numVectors, dimension, metricType, sidecarType, numTiers, tiers, tocOffset, tocLength, qMode);

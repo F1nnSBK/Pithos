@@ -66,6 +66,9 @@ public class CApi {
         if (db == null) {
             return -1;
         }
+        if (name.isNull() || path.isNull()) {
+            return -3;
+        }
         try {
             String indexName = CTypeConversion.toJavaString(name);
             String filePath = CTypeConversion.toJavaString(path);
@@ -95,6 +98,9 @@ public class CApi {
             CFloatPointer weights, int loraDim) {
         if (db == null) {
             return -1;
+        }
+        if (name.isNull() || path.isNull() || weights.isNull() || loraDim <= 0) {
+            return -3;
         }
         try {
             String indexName = CTypeConversion.toJavaString(name);
@@ -137,6 +143,10 @@ public class CApi {
         if (db == null) {
             return -1;
         }
+        if (indexName.isNull() || outDimension.isNull() || outSize.isNull() || outPlanetId.isNull()
+                || outPlanetRadius.isNull() || outTiersCount.isNull()) {
+            return -3;
+        }
         try {
             String idxName = CTypeConversion.toJavaString(indexName);
             Index index = db.getIndex(idxName);
@@ -172,6 +182,9 @@ public class CApi {
             CLongPointer outIds, CIntPointer outDistances) {
         if (db == null) {
             return -1;
+        }
+        if (indexName.isNull() || queries.isNull() || outIds.isNull() || outDistances.isNull() || numQueries <= 0 || k <= 0) {
+            return -3;
         }
         try {
             String idxName = CTypeConversion.toJavaString(indexName);
@@ -231,6 +244,10 @@ public class CApi {
         if (db == null) {
             return -1;
         }
+        if (indexName.isNull() || queries.isNull() || queryFamilies.isNull() || queryThresholds.isNull()
+                || votingMask.isNull() || numQueries <= 0) {
+            return -3;
+        }
         try {
             String idxName = CTypeConversion.toJavaString(indexName);
             Index index = db.getIndex(idxName);
@@ -268,6 +285,9 @@ public class CApi {
     public static int compileIndexFile(IsolateThread thread, CCharPointer path, byte planetId, long planetRadius,
             int dimension, CIntPointer tiers, int numTiers,
             CLongPointer ids, CFloatPointer vectors, int numRecords, int qMode) {
+        if (path.isNull() || tiers.isNull() || ids.isNull() || vectors.isNull() || dimension <= 0 || numTiers <= 0 || numRecords <= 0) {
+            return -3;
+        }
         try {
             String filePath = CTypeConversion.toJavaString(path);
 
@@ -299,6 +319,9 @@ public class CApi {
     public static int compileIndexFileExt(IsolateThread thread, CCharPointer path, byte planetId, long planetRadius,
             int dimension, CIntPointer tiers, int numTiers,
             CLongPointer ids, CFloatPointer vectors, int numRecords, int qMode, int sidecarMode) {
+        if (path.isNull() || tiers.isNull() || ids.isNull() || vectors.isNull() || dimension <= 0 || numTiers <= 0 || numRecords <= 0) {
+            return -3;
+        }
         try {
             String filePath = CTypeConversion.toJavaString(path);
 
@@ -330,6 +353,9 @@ public class CApi {
     public static int compileContainer(IsolateThread thread, CCharPointer path, int dimension, CIntPointer tiers, int numTiers,
             CLongPointer ids, CFloatPointer vectors, int numRecords, int metricType, int qMode, int sidecarMode,
             CCharPointer metadataPayload, int metadataLen, CCharPointer metadataFormat, CCharPointer userMetadataJson) {
+        if (path.isNull() || tiers.isNull() || ids.isNull() || vectors.isNull() || dimension <= 0 || numTiers <= 0 || numRecords <= 0) {
+            return -3;
+        }
         try {
             String filePath = CTypeConversion.toJavaString(path);
             int[] javaTiers = new int[numTiers];
@@ -371,6 +397,7 @@ public class CApi {
     @CEntryPoint(name = "vdb_get_user_metadata")
     public static int getUserMetadata(IsolateThread thread, CCharPointer indexName, CCharPointer outBuf, int maxLen) {
         if (db == null) return -1;
+        if (indexName.isNull() || outBuf.isNull() || maxLen <= 0) return -3;
         String idxName = CTypeConversion.toJavaString(indexName);
         String metaJson = db.getUserMetadata(idxName);
         if (metaJson == null) return 0;
@@ -389,6 +416,9 @@ public class CApi {
         if (db == null) {
             return -1;
         }
+        if (indexName.isNull()) {
+            return -3;
+        }
         String idxName = CTypeConversion.toJavaString(indexName);
         Index index = db.getIndex(idxName);
         if (index == null) {
@@ -402,6 +432,9 @@ public class CApi {
     public static long size(IsolateThread thread, CCharPointer indexName) {
         if (db == null) {
             return -1;
+        }
+        if (indexName.isNull()) {
+            return -3;
         }
         String idxName = CTypeConversion.toJavaString(indexName);
         Index index = db.getIndex(idxName);
@@ -417,6 +450,9 @@ public class CApi {
         if (db == null) {
             return -1;
         }
+        if (indexName.isNull()) {
+            return -3;
+        }
         String idxName = CTypeConversion.toJavaString(indexName);
         return db.dropIndex(idxName) ? 0 : -2;
     }
@@ -426,6 +462,9 @@ public class CApi {
     public static int setChunkSize(IsolateThread thread, CCharPointer indexName, long chunkSize) {
         if (db == null) {
             return -1;
+        }
+        if (indexName.isNull()) {
+            return -3;
         }
         try {
             String idxName = CTypeConversion.toJavaString(indexName);
@@ -447,9 +486,11 @@ public class CApi {
     /// Sets the dynamic target spectral energy budget threshold τ ∈ (0, 1] for Matryoshka early-exit tier truncation.
     @CEntryPoint(name = "vdb_set_energy_budget")
     public static int setEnergyBudget(IsolateThread thread, CCharPointer indexName, double tau) {
-
         if (db == null) {
             return -1;
+        }
+        if (indexName.isNull()) {
+            return -3;
         }
         try {
             String idxName = CTypeConversion.toJavaString(indexName);
@@ -475,6 +516,9 @@ public class CApi {
             CLongPointer outAddress, CLongPointer outLength) {
         if (db == null) {
             return -1;
+        }
+        if (indexName.isNull() || outAddress.isNull() || outLength.isNull()) {
+            return -3;
         }
         try {
             String idxName = CTypeConversion.toJavaString(indexName);
@@ -506,6 +550,9 @@ public class CApi {
         if (db == null) {
             return -1;
         }
+        if (indexName.isNull() || outAddress.isNull() || outLength.isNull()) {
+            return -3;
+        }
         try {
             String idxName = CTypeConversion.toJavaString(indexName);
             Index index = db.getIndex(idxName);
@@ -533,6 +580,9 @@ public class CApi {
         if (db == null) {
             return -1;
         }
+        if (indexName.isNull() || outAddress.isNull() || outLength.isNull()) {
+            return -3;
+        }
         try {
             String idxName = CTypeConversion.toJavaString(indexName);
             Index index = db.getIndex(idxName);
@@ -559,6 +609,9 @@ public class CApi {
             CLongPointer outPacked) {
         if (db == null) {
             return -1;
+        }
+        if (indexName.isNull() || inVector.isNull() || outPacked.isNull()) {
+            return -3;
         }
         try {
             String idxName = CTypeConversion.toJavaString(indexName);
@@ -621,6 +674,8 @@ public class CApi {
     public static int createDeltaBuffer(IsolateThread thread, CCharPointer indexName, int flushThreshold) {
         if (db == null)
             return -1;
+        if (indexName.isNull())
+            return -3;
         try {
             String idxName = CTypeConversion.toJavaString(indexName);
             db.createDeltaBuffer(idxName, flushThreshold);
@@ -639,6 +694,8 @@ public class CApi {
             CFloatPointer vector) {
         if (db == null)
             return -1;
+        if (indexName.isNull() || vector.isNull())
+            return -3;
         try {
             String idxName = CTypeConversion.toJavaString(indexName);
             Index index = db.getIndex(idxName);
@@ -662,6 +719,8 @@ public class CApi {
     public static int deleteFromDelta(IsolateThread thread, CCharPointer indexName, long id) {
         if (db == null)
             return -1;
+        if (indexName.isNull())
+            return -3;
         try {
             String idxName = CTypeConversion.toJavaString(indexName);
             if (db.getDeltaBuffer(idxName) == null)
@@ -678,6 +737,8 @@ public class CApi {
     public static long deltaSize(IsolateThread thread, CCharPointer indexName) {
         if (db == null)
             return -1;
+        if (indexName.isNull())
+            return -3;
         try {
             String idxName = CTypeConversion.toJavaString(indexName);
             DeltaBuffer buf = db.getDeltaBuffer(idxName);
@@ -695,6 +756,8 @@ public class CApi {
     public static int needsFlush(IsolateThread thread, CCharPointer indexName) {
         if (db == null)
             return -1;
+        if (indexName.isNull())
+            return -3;
         try {
             String idxName = CTypeConversion.toJavaString(indexName);
             DeltaBuffer buf = db.getDeltaBuffer(idxName);
@@ -714,6 +777,8 @@ public class CApi {
             CLongPointer outIds, CIntPointer outDistances) {
         if (db == null)
             return -1;
+        if (indexName.isNull() || query.isNull() || outIds.isNull() || outDistances.isNull() || k <= 0)
+            return -3;
         try {
             String idxName = CTypeConversion.toJavaString(indexName);
             Index index = db.getIndex(idxName);
@@ -749,6 +814,8 @@ public class CApi {
     public static int backupDelta(IsolateThread thread, CCharPointer indexName, CCharPointer path) {
         if (db == null)
             return -1;
+        if (indexName.isNull() || path.isNull())
+            return -3;
         try {
             String idxName = CTypeConversion.toJavaString(indexName);
             String filePath = CTypeConversion.toJavaString(path);
@@ -770,6 +837,8 @@ public class CApi {
             CCharPointer path, int flushThreshold) {
         if (db == null)
             return -1;
+        if (indexName.isNull() || path.isNull())
+            return -3;
         try {
             String idxName = CTypeConversion.toJavaString(indexName);
             if (db.getIndex(idxName) == null)
@@ -822,6 +891,7 @@ public class CApi {
     public static int cudaBatchSearch(IsolateThread thread, CCharPointer indexName, CFloatPointer queries, int numQueries,
             int k, CLongPointer outIds, CIntPointer outDistances) {
         if (db == null) return -1;
+        if (indexName.isNull() || queries.isNull() || outIds.isNull() || outDistances.isNull() || numQueries <= 0 || k <= 0) return -3;
         try {
             String idxName = CTypeConversion.toJavaString(indexName);
             Index index = db.getIndex(idxName);
@@ -864,6 +934,7 @@ public class CApi {
             CIntPointer queryFamilies, CIntPointer queryThresholds, int numQueries,
             CCharPointer votingMask) {
         if (db == null) return -1;
+        if (indexName.isNull() || queries.isNull() || queryFamilies.isNull() || queryThresholds.isNull() || votingMask.isNull() || numQueries <= 0) return -3;
         try {
             String idxName = CTypeConversion.toJavaString(indexName);
             Index index = db.getIndex(idxName);
@@ -897,6 +968,7 @@ public class CApi {
     /// Compacts multiple compiled indexes into a single consolidated index.
     @CEntryPoint(name = "vdb_compact_indexes")
     public static int compactIndexes(IsolateThread thread, CCharPointer sourcePathsJoined, CCharPointer targetPath) {
+        if (sourcePathsJoined.isNull() || targetPath.isNull()) return -3;
         try {
             String javaSourcePathsJoined = CTypeConversion.toJavaString(sourcePathsJoined);
             String javaTargetPath = CTypeConversion.toJavaString(targetPath);
