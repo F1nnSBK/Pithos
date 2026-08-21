@@ -79,6 +79,7 @@ jobs:
           python tests/test_pithos_fp8_sidecar.py
           python tests/test_pithos_container.py
           python tests/test_isolate_lifecycle.py
+          python tests/test_real_model_recall.py
 
       - name: Run Verification Benchmarks
         run: |
@@ -87,6 +88,8 @@ jobs:
           python benchmarks/verify_lsm.py
           python benchmarks/verify_optional_fp16.py
           python benchmarks/verify_fp8_sidecar.py
+          python benchmarks/verify_real_model_recall.py
+          python benchmarks/verify_efficiency_gains.py
 
       - name: Build Platform-Specific Python Wheel
         run: |
