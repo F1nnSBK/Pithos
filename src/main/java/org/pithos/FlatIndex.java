@@ -284,10 +284,14 @@ public class FlatIndex implements Index {
                 int qMode = sb.qMode();
                 int sidecarMode = sb.sidecarType();
 
-                MemorySegment containerSegment = channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size(), Arena.global());
+                long fileSize = channel.size();
+                MemorySegment containerSegment = channel.map(FileChannel.MapMode.READ_ONLY, 0, fileSize, Arena.global());
 
                 long idsOffset = PithosContainer.align64(PithosContainer.SUPERBLOCK_SIZE);
                 long idsLength = totalRecords * 8L;
+                if (idsOffset + idsLength > fileSize || idsOffset < 0 || idsLength < 0) {
+                    throw new IOException("Corrupt container: IDs segment exceeds file size (offset=" + idsOffset + ", len=" + idsLength + ", file=" + fileSize + ")");
+                }
                 MemorySegment idsSegment = containerSegment.asSlice(idsOffset, idsLength);
 
                 MemorySegment[] tierSegments = new MemorySegment[numTiers];
@@ -301,6 +305,9 @@ public class FlatIndex implements Index {
                         default -> (width / 8);
                     };
                     long tierLen = totalRecords * bytesPerRecord;
+                    if (currentOffset + tierLen > fileSize || currentOffset < 0 || tierLen < 0) {
+                        throw new IOException("Corrupt container: Tier " + k + " segment exceeds file size (offset=" + currentOffset + ", len=" + tierLen + ", file=" + fileSize + ")");
+                    }
                     tierSegments[k] = containerSegment.asSlice(currentOffset, tierLen);
                     currentOffset = PithosContainer.align64(currentOffset + tierLen);
                     prevBound = tiers[k];
@@ -311,16 +318,25 @@ public class FlatIndex implements Index {
                 MemorySegment fp4Segment = null;
                 if (sidecarMode == VectorDb.SIDECAR_FP16) {
                     long sidecarLen = totalRecords * dimension * 2L;
+                    if (currentOffset + sidecarLen > fileSize || currentOffset < 0 || sidecarLen < 0) {
+                        throw new IOException("Corrupt container: FP16 sidecar segment exceeds file size");
+                    }
                     fp16Segment = containerSegment.asSlice(currentOffset, sidecarLen);
                     currentOffset = PithosContainer.align64(currentOffset + sidecarLen);
                 } else if (sidecarMode == VectorDb.SIDECAR_FP8) {
                     long sidecarLen = totalRecords * dimension * 1L;
+                    if (currentOffset + sidecarLen > fileSize || currentOffset < 0 || sidecarLen < 0) {
+                        throw new IOException("Corrupt container: FP8 sidecar segment exceeds file size");
+                    }
                     fp8Segment = containerSegment.asSlice(currentOffset, sidecarLen);
                     currentOffset = PithosContainer.align64(currentOffset + sidecarLen);
                 } else if (sidecarMode == VectorDb.SIDECAR_FP4) {
                     int blockSize = 16;
                     int numBlocks = (dimension + blockSize - 1) / blockSize;
                     long sidecarLen = totalRecords * (numBlocks * 9L);
+                    if (currentOffset + sidecarLen > fileSize || currentOffset < 0 || sidecarLen < 0) {
+                        throw new IOException("Corrupt container: FP4 sidecar segment exceeds file size");
+                    }
                     fp4Segment = containerSegment.asSlice(currentOffset, sidecarLen);
                     currentOffset = PithosContainer.align64(currentOffset + sidecarLen);
                 }
@@ -331,6 +347,9 @@ public class FlatIndex implements Index {
                 if (prefixSec.offset() > 0 && prefixSec.length() >= PithosContainer.MIH_OFFSETS_BYTES) {
                     long offSegLen = PithosContainer.MIH_OFFSETS_BYTES;
                     long postSegLen = totalRecords * 4L * PithosContainer.NUM_MIH_CHUNKS;
+                    if (prefixSec.offset() + offSegLen + postSegLen > fileSize || prefixSec.offset() < 0) {
+                        throw new IOException("Corrupt container: Prefix table segment exceeds file size");
+                    }
                     prefixOffsetsSegment = containerSegment.asSlice(prefixSec.offset(), offSegLen);
                     prefixPostingsSegment = containerSegment.asSlice(prefixSec.offset() + offSegLen, postSegLen);
                 }
@@ -338,6 +357,9 @@ public class FlatIndex implements Index {
                 PithosContainer.Section metaSec = PithosContainer.extractMetadataSection(tocJson);
                 MemorySegment metadataPayloadSegment = null;
                 if (metaSec.offset() > 0 && metaSec.length() > 0) {
+                    if (metaSec.offset() + metaSec.length() > fileSize || metaSec.offset() < 0) {
+                        throw new IOException("Corrupt container: Metadata segment exceeds file size");
+                    }
                     metadataPayloadSegment = containerSegment.asSlice(metaSec.offset(), metaSec.length());
                 }
 

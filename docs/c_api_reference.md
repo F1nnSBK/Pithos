@@ -124,6 +124,22 @@ long long vdb_cuda_query_planetary_grid(graal_isolatethread_t* thread, char* ind
 
 ---
 
+## API Return Codes & Defensive Pointer Safety
+
+All C-API entry points feature defensive $< 0.2\,\text{ns}$ pointer and bounds validation. If a client passes a `NULL` pointer or an out-of-range argument ($k \le 0$, $D \le 0$), the function returns a negative error code without crashing or dereferencing invalid memory:
+
+| Code | Constant | Description |
+| :--- | :--- | :--- |
+| `0` | `SUCCESS` | Operation completed successfully. |
+| `-1` | `ERR_DB_NOT_INIT` | Database coordinator not initialized. Call `vdb_init()` first. |
+| `-2` | `ERR_INDEX_NOT_FOUND` | Specified logical index name is not registered. |
+| `-3` | `ERR_INVALID_OPERATION` | Invalid parameter, `NULL` pointer passed, or scalar out of range ($k \le 0$, $D \le 0$). |
+| `-4` | `ERR_INTERNAL_EXCEPTION` | Unexpected internal exception occurred. |
+| `-5` | `ERR_FILE_IO` | Could not read or write file(s) on disk. |
+| `-6` | `ERR_UNSUPPORTED_LAYOUT` | Index memory layout mismatch. |
+
+---
+
 ## Runtime Configuration Guide
 
 ### 1. Quantization & Formats (`qMode`)

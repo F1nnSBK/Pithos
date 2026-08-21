@@ -54,12 +54,16 @@ public class VectorDb {
     /// @return registered `Index` instance
     /// @throws IOException on I/O error
     public Index loadIndex(String name, String basePath, float[] weights, int loraDim) throws IOException {
-        if (name == null || name.isBlank()) {
-            throw new IllegalArgumentException("Index name cannot be empty");
+        if (name == null || name.isBlank() || name.contains("\0")) {
+            throw new IllegalArgumentException("Index name cannot be empty or contain null bytes");
         }
-        Index index = FlatIndex.mapFile(basePath, weights, loraDim);
+        if (basePath == null || basePath.isBlank() || basePath.contains("\0")) {
+            throw new IllegalArgumentException("Base path cannot be empty or contain null bytes");
+        }
+        String normalizedPath = java.nio.file.Path.of(basePath).normalize().toString();
+        Index index = FlatIndex.mapFile(normalizedPath, weights, loraDim);
         indices.put(name, index);
-        indexPaths.put(name, basePath);
+        indexPaths.put(name, normalizedPath);
         return index;
     }
 

@@ -213,3 +213,20 @@ int main() {
     return 0;
 }
 ```
+
+---
+
+## Container Integrity & Defensive Bounds Verification
+
+When mounting a `.pithos` single-file container via `FlatIndex.mapFile()`, Pithos performs $O(1)$ defensive integrity checks in $< 1\,\mu\text{s}$:
+
+1. **Superblock Signature & Schema Validation:**
+   Verifies the 8-byte ASCII signature `"DIOGENES"`, format version (`2`), dimension $D \in [1, 65536]$, and ensures that all tier step boundaries strictly increase ($0 < T_0 < T_1 < \dots \le D$).
+2. **Trailer Mirror Signature:**
+   Verifies the 8-byte trailer signature `"PITHOSDB"` at `fileSize - 20` and checks that the trailer TOC offset and length match the superblock header exactly.
+3. **Physical File Bounds Enforcement:**
+   Every section slice (`SECTION_IDS`, `SECTION_TIERS`, `SECTION_SIDECAR`, `SECTION_PREFIX_TABLE`, `SECTION_METADATA`) is verified against the physical file channel size:
+   $$\text{Offset}_{\text{section}} + \text{Length}_{\text{section}} \le \text{FileChannel.size()}$$
+4. **TOC Decompression Guard:**
+   Limits Table of Contents JSON strings to $\le 10\,\text{MB}$, protecting against malicious memory expansion payloads.
+

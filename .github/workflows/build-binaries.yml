@@ -81,6 +81,7 @@ jobs:
           python tests/test_pithos_container.py
           python tests/test_isolate_lifecycle.py
           python tests/test_real_model_recall.py
+          python tests/test_security_guards.py
 
       - name: Run Verification Benchmarks
         run: |
