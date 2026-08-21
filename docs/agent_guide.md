@@ -1,14 +1,14 @@
-# Pithos Vector Search Engine — System Architecture & Agent Guide
+# Pithos — Technical Architecture & Agent Guide
 
-This document is a technical reference designed for AI agents, developers, and system architects to understand what Pithos is, how its internal mechanics work, its key features, and how to integrate it across programming languages.
+This document is a complete architectural overview of the Pithos Vector Search Engine, written for AI agents, developers, and systems engineers. It explains Pithos' mechanics, features, and integration methods without unverified benchmark metrics.
 
 ---
 
-## 1. What is Pithos?
+## 1. System Overview
 
 Pithos is an Ahead-of-Time (AOT) compiled, model-isomorphic vector database (MIDB). Unlike conventional vector databases that treat embeddings as arbitrary geometric points and construct high-overhead graph structures (such as HNSW), Pithos physically aligns its in-memory and on-disk columnar structures with the underlying mathematical geometry of neural representation models.
 
-Key Architectural Characteristics:
+### Core Architectural Pillars
 - **Zero-GC Off-Heap Memory:** Uses Java 25 Foreign Function and Memory (FFM) API and POSIX virtual memory mapping (`mmap`) to operate directly in native off-heap memory, eliminating JVM garbage collection pauses and heap allocation overhead.
 - **Model-Isomorphic Layout:** Combines randomized sign preconditioning, block-diagonal Walsh-Hadamard rotations, and Matryoshka dimension tiers to project continuous vectors into cache-line aligned binary and low-precision float sidecar columns.
 - **Self-Contained Single-File Containers (`.pithos`):** Encapsulates vector IDs, quantization tiers, precision sidecars, inverted prefix hash tables, embedded Apache Arrow metadata, and JSON directories into a single portable binary file.
@@ -49,35 +49,17 @@ When adapter or projection weights are supplied at index load time, Pithos runs 
 
 Every search query cascades through four hardware-aligned evaluation gates:
 
-```
-[Continuous Query Vector q]
-            │
-            ▼
-┌────────────────────────────────────────────────────────┐
-│ Gate 0: 4x8-Bit Multi-Index Hashing (MIH) CSR          │
-│ Inverted prefix table lookup across 4 sub-word chunks  │
-└───────────────────────────┬────────────────────────────┘
-                            │ Candidate Postings
-                            ▼
-┌────────────────────────────────────────────────────────┐
-│ Gate 1: Tombstone & Liveliness Bitmask                 │
-│ Instant skip of deleted or inactive record entries     │
-└───────────────────────────┬────────────────────────────┘
-                            │ Active Candidates
-                            ▼
-┌────────────────────────────────────────────────────────┐
-│ Gate 2: Tiered Matryoshka SIMD POPC Scan               │
-│ AVX-512 / ARM Neon / CUDA bitwise Hamming sweep        │
-└───────────────────────────┬────────────────────────────┘
-                            │ Top Candidates
-                            ▼
-┌────────────────────────────────────────────────────────┐
-│ Gate 3: Asymmetric LUT Precision Sidecar Reranking     │
-│ Query LUT table lookup + Monotonic Early Cutoff        │
-└───────────────────────────┬────────────────────────────┘
-                            │
-                            ▼
-               [Exact Top-K Search Results]
+```mermaid
+graph TD
+    classDef query fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#f8fafc;
+    classDef gate fill:#1e293b,stroke:#6366f1,stroke-width:2px,color:#f8fafc;
+    classDef out fill:#1e293b,stroke:#10b981,stroke-width:2px,color:#f8fafc;
+
+    Q["Continuous Query Vector q"]:::query --> G0["Gate 0: 4x8-Bit Multi-Index Hashing (MIH) CSR"]:::gate
+    G0 -->|Candidate Postings| G1["Gate 1: Tombstone & Liveliness Bitmask"]:::gate
+    G1 -->|Active Candidates| G2["Gate 2: Tiered Matryoshka SIMD POPC Scan"]:::gate
+    G2 -->|Top Candidates| G3["Gate 3: Asymmetric LUT Precision Sidecar Rerank"]:::gate
+    G3 --> RES["Exact Top-K Search Results"]:::out
 ```
 
 ### Gate 0: 4x8-Bit Multi-Index Hashing (MIH) CSR
@@ -268,62 +250,3 @@ public class App {
     }
 }
 ```
-
----
-
-## 6. Codebase Architecture & File Mapping
-
-```
-lcvk/ (Pithos Root)
-├── pom.xml                               # Java 25 Maven build & GraalVM Native Image plugin config
-├── pyproject.toml                        # Python package configuration (pithosdb)
-├── Dockerfile.cuda                       # Multi-stage Docker build for CUDA kernels and GraalVM AOT
-├── include/
-│   ├── pithos.h                          # Public C-API header declarations
-│   └── graal_isolate.h                   # GraalVM Isolate lifecycle header
-├── src/
-│   ├── main/
-│   │   ├── java/org/pithos/
-│   │   │   ├── VectorDb.java             # Core database coordinator, index registry, SVD energy calculations
-│   │   │   ├── FlatIndex.java            # Memory-mapped index read path, 4-gate cascade, SIMD popcount
-│   │   │   ├── PithosContainer.java      # Single-file container compiler, Superblock & TOC deserializer
-│   │   │   ├── DeltaBuffer.java          # LSM real-time ring buffer, WAL persistence, tombstone filters
-│   │   │   ├── CApi.java                 # GraalVM @CEntryPoint bindings with defensive pointer guards
-│   │   │   ├── TransformOperator.java    # Rademacher signs, Walsh-Hadamard rotations, Jacobi SVD solver
-│   │   │   ├── SearchResult.java         # Record holding ID, distance score, and tier metadata
-│   │   │   └── VectorRecord.java         # Input record container holding ID and raw float vector
-│   │   └── cuda/
-│   │       ├── pithos_kernels.cu         # CUDA fused Hamming popcount and multi-family voting kernels
-│   │       └── pithos_cuda_memory.cu     # CUDA device memory allocators and zero-copy host pointers
-│   └── pithos/                           # Python client package
-│       ├── __init__.py                   # Package exports and version definition
-│       ├── core.py                       # Pythonic VectorDb, Index, DeltaBuffer, and container compiler
-│       ├── ffi.py                        # Thread-safe NativeBindings singleton and C-API bindings
-│       └── loader.py                     # Native shared library resolver and platform auto-detector
-├── docs/                                 # MkDocs documentation suite
-│   ├── index.md                          # Engine overview and quickstart
-│   ├── architecture.md                   # Detailed architectural principles and 4-gate cascade
-│   ├── container_format.md               # Binary specification of .pithos single-file containers
-│   ├── c_api_reference.md                # Complete C-API function signatures and return codes
-│   ├── cuda_integration.md               # GPU hardware acceleration and kernel architecture
-│   ├── math_theory.md                    # Mathematical derivations for transforms, SVD, and MIH
-│   ├── release_notes.md                  # Detailed changelog across all releases
-│   └── next_steps.md                     # Forward roadmap (FPGA DMA, distributed clustering)
-└── tests/                                # Automated verification test suite
-    ├── test_pithos_complete.py           # Core vector database operations, voting, and compactions
-    ├── test_fpga_co_design.py            # Zero-copy DMA memory address validation
-    ├── test_pithos_fp8_sidecar.py        # FP8 E4M3 encoding and LUT distance verification
-    ├── test_pithos_container.py          # Container parsing, Arrow IPC tables, and metadata
-    ├── test_isolate_lifecycle.py         # Ephemeral isolate creation and OS page reclamation
-    ├── test_real_model_recall.py         # Matryoshka covariance recall evaluation
-    └── test_security_guards.py           # Defensive pointer safety, corrupt headers, and path traversal
-```
-
----
-
-## 7. Development & Contribution Conventions
-
-1. **No Local Native Compilation:** Native shared libraries are built, tested, and packaged exclusively through automated GitHub Actions CI/CD matrix runners across macOS Apple Silicon, Linux x86_64, Linux ARM64, and NVIDIA CUDA targets.
-2. **Zero-Allocation Hot Paths:** Any modifications to Java read paths (`FlatIndex.java`) or C entry points must avoid on-heap allocations, using `MemorySegment` off-heap slicing and `ThreadLocal` scratch buffers.
-3. **Defense-in-Depth:** All new C entry points must include defensive pointer and range checks ($k > 0$, $D > 0$, non-null pointers) returning negative error codes rather than risking host process termination.
-4. **Schema-Agnostic Containers:** New container sections must maintain 64-byte cache-line alignment and update the Table of Contents JSON directory.
