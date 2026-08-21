@@ -331,17 +331,16 @@ public class CApi {
                 javaTiers[i] = tiers.read(i);
             }
 
-            VectorRecord[] recordsArray = new VectorRecord[numRecords];
-            java.util.stream.IntStream.range(0, numRecords).parallel().forEach(i -> {
+            List<VectorRecord> records = new ArrayList<>(numRecords);
+            for (int i = 0; i < numRecords; i++) {
                 long id = ids.read(i);
                 float[] vector = new float[dimension];
                 int offset = i * dimension;
                 for (int j = 0; j < dimension; j++) {
                     vector[j] = vectors.read(offset + j);
                 }
-                recordsArray[i] = new VectorRecord(id, vector);
-            });
-            List<VectorRecord> records = Arrays.asList(recordsArray);
+                records.add(new VectorRecord(id, vector));
+            }
 
             VectorDb.compileIndexFile(filePath, planetId, planetRadius, dimension, javaTiers, records, qMode, sidecarMode);
             return 0;
@@ -366,17 +365,16 @@ public class CApi {
                 javaTiers[i] = tiers.read(i);
             }
 
-            VectorRecord[] recordsArray = new VectorRecord[numRecords];
-            java.util.stream.IntStream.range(0, numRecords).parallel().forEach(i -> {
+            List<VectorRecord> records = new ArrayList<>(numRecords);
+            for (int i = 0; i < numRecords; i++) {
                 long id = ids.read(i);
                 float[] vector = new float[dimension];
                 int offset = i * dimension;
                 for (int j = 0; j < dimension; j++) {
                     vector[j] = vectors.read(offset + j);
                 }
-                recordsArray[i] = new VectorRecord(id, vector);
-            });
-            List<VectorRecord> records = Arrays.asList(recordsArray);
+                records.add(new VectorRecord(id, vector));
+            }
 
             byte[] metaBytes = null;
             if (metadataPayload.isNonNull() && metadataLen > 0) {
