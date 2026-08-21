@@ -962,76 +962,7 @@ class VectorDb:
 
     def _unpack_container_if_needed(self, base_path: str) -> str:
         actual_path = base_path if os.path.exists(base_path) else f"{base_path}.pithos"
-        if not os.path.isfile(actual_path):
-            return base_path
-
-        with open(actual_path, "rb") as f:
-            magic = f.read(8)
-        if magic != b"DIOGENES":
-            return base_path
-
-        toc = self._read_container_toc(actual_path)
-        if not toc or "sections" not in toc:
-            return base_path
-
-        import tempfile
-        tmp_dir = tempfile.mkdtemp(prefix="pithos_mmap_")
-        self._temp_dirs.append(tmp_dir)
-        tmp_base = os.path.join(tmp_dir, "idx")
-
-        sections = toc["sections"]
-        with open(actual_path, "rb") as f:
-            if "ids" in sections:
-                f.seek(sections["ids"]["offset"])
-                with open(f"{tmp_base}_ids.bin", "wb") as out_f:
-                    out_f.write(f.read(sections["ids"]["length"]))
-
-            tier_keys = [k for k in sections if k.startswith("tier_")]
-            tier_keys.sort(key=lambda k: int(k.split("_")[1]))
-            tiers_list = []
-            for tk in tier_keys:
-                sec = sections[tk]
-                tiers_list.append(sec["dim_boundary"])
-                f.seek(sec["offset"])
-                with open(f"{tmp_base}_{tk}.bin", "wb") as out_f:
-                    out_f.write(f.read(sec["length"]))
-
-            if "sidecar" in sections and sections["sidecar"]["length"] > 0:
-                sec = sections["sidecar"]
-                fmt = sec["format"]
-                fname = f"{tmp_base}_{fmt}.bin" if not fmt.startswith("fp8") else f"{tmp_base}_fp8.bin"
-                if fmt.startswith("nvfp4"):
-                    fname = f"{tmp_base}_fp4.bin"
-                f.seek(sec["offset"])
-                with open(fname, "wb") as out_f:
-                    out_f.write(f.read(sec["length"]))
-
-            num_vectors = sections["ids"]["length"] // 8
-            with open(f"{tmp_base}_metadata.bin", "wb") as out_f:
-                out_f.write(bytes(num_vectors * 8))
-
-            f.seek(12)
-            sb_rest = f.read(48)
-            dimension = int.from_bytes(sb_rest[8:12], byteorder="little")
-            sidecar_type = int.from_bytes(sb_rest[14:16], byteorder="little")
-            q_mode = int.from_bytes(sb_rest[46:48], byteorder="little")
-
-            plan = bytearray(64)
-            plan[0:4] = b"PLAN"
-            plan[4] = 1
-            plan[5:13] = int(num_vectors).to_bytes(8, byteorder="little")
-            plan[13:21] = int(1737400).to_bytes(8, byteorder="little")
-            plan[21:25] = int(dimension).to_bytes(4, byteorder="little")
-            plan[25:29] = int(len(tiers_list)).to_bytes(4, byteorder="little")
-            for i, t_val in enumerate(tiers_list):
-                plan[29 + i * 4 : 33 + i * 4] = int(t_val).to_bytes(4, byteorder="little")
-            plan[61] = q_mode
-            plan[62] = sidecar_type
-
-            with open(tmp_base, "wb") as out_f:
-                out_f.write(plan)
-
-        return tmp_base
+        return actual_path if os.path.exists(actual_path) else base_path
 
     def __enter__(self) -> VectorDb:
         return self

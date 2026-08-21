@@ -49,8 +49,8 @@ class TestSecurityGuards(unittest.TestCase):
             with open(valid_path, "rb") as f:
                 data = bytearray(f.read())
 
-            # Superblock TOC offset is at byte offset 36
-            struct.pack_into("<Q", data, 36, 999_999_999)
+            # Superblock TOC offset is at byte offset 46 (uint64_t)
+            struct.pack_into("<Q", data, 46, 999_999_999)
 
             tampered_path = os.path.join(tmp_dir, "tampered_toc.pithos")
             with open(tampered_path, "wb") as f:
@@ -75,8 +75,8 @@ class TestSecurityGuards(unittest.TestCase):
             with open(valid_path, "rb") as f:
                 data = bytearray(f.read())
 
-            # Superblock TOC length is at byte offset 44 (int32)
-            struct.pack_into("<I", data, 44, 25 * 1024 * 1024)  # 25 MB
+            # Superblock TOC length is at byte offset 54 (uint32_t)
+            struct.pack_into("<I", data, 54, 25 * 1024 * 1024)  # 25 MB
 
             tampered_path = os.path.join(tmp_dir, "large_toc.pithos")
             with open(tampered_path, "wb") as f:
