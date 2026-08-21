@@ -580,7 +580,11 @@ class Index:
             res = self._ffi.lib.vdb_get_user_metadata(self._ffi.thread, self._name.encode("utf-8"), buf, 65536)
             if res > 0:
                 try:
-                    return json.loads(buf.value.decode("utf-8"))
+                    parsed = json.loads(buf.value.decode("utf-8"))
+                    if isinstance(parsed, dict):
+                        if "user_metadata" in parsed and isinstance(parsed["user_metadata"], dict):
+                            return parsed["user_metadata"]
+                        return parsed
                 except Exception:
                     pass
         if self._base_path:
