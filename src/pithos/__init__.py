@@ -16,7 +16,7 @@ from .core import (
 )
 from .ffi import PithosNativeError
 
-__version__ = "2.2.0"
+__version__ = "2.2.1"
 __all__ = [
     "VectorDb",
     "Index",

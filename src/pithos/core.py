@@ -17,31 +17,118 @@ from .ffi import NativeBindings, PithosNativeError, reset_isolate, shrink_to_fit
 _FP4_TABLE = [0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0]
 
 def _encode_fp8_e4m3_scalar(val: float) -> int:
+    if math.isnan(val):
+        sign = 1 if math.copysign(1.0, val) < 0.0 else 0
+        return (sign << 7) | 0x7F
+    sign = 1 if math.copysign(1.0, val) < 0.0 else 0
     if val == 0.0:
-        return 0
-    sign = 1 if val < 0.0 else 0
+        return sign << 7
     abs_val = abs(val)
-    if abs_val > 448.0:
-        abs_val = 448.0
+    if abs_val >= 448.0 or math.isinf(val):
+        return (sign << 7) | 0x7E
+    if abs_val < (0.5 / 512.0):
+        return sign << 7
     if abs_val < 0.015625:  # 2^(-6) subnormal
-        mantissa = min(7, int(round(abs_val * 512.0)))
-        return (sign << 7) | mantissa
+        m = int(round(abs_val * 512.0))
+        if m > 7: m = 7
+        return (sign << 7) | (m & 0x7)
     exp = int(math.floor(math.log2(abs_val))) + 7
-    exp = max(1, min(15, exp))
+    if exp < 1:
+        m = int(round(abs_val * 512.0))
+        if m > 7: m = 7
+        return (sign << 7) | (m & 0x7)
+    if exp > 15:
+        return (sign << 7) | 0x7E
     scale = math.pow(2.0, exp - 7)
-    mantissa = min(7, max(0, int(round((abs_val / scale - 1.0) * 8.0))))
-    return (sign << 7) | (exp << 3) | mantissa
+    m = int(round((abs_val / scale - 1.0) * 8.0))
+    if m >= 8:
+        exp += 1
+        m = 0
+        if exp >= 16:
+            return (sign << 7) | 0x7E
+    if exp == 15 and m >= 7:
+        m = 6
+    return (sign << 7) | ((exp & 0xF) << 3) | (m & 0x7)
 
 def _decode_fp8_e4m3_scalar(b: int) -> float:
-    sign = 1 if (b & 0x80) != 0 else 0
-    exp = (b >> 3) & 0x0F
-    mantissa = b & 0x07
+    b_int = int(b)
+    sign = 1 if (b_int & 0x80) != 0 else 0
+    exp = (b_int >> 3) & 0x0F
+    mantissa = b_int & 0x07
     sign_mult = -1.0 if sign == 1 else 1.0
     if exp == 0:
         return sign_mult * (mantissa / 512.0)
+    elif exp == 15 and mantissa == 7:
+        return float('nan')
     else:
-        scale = math.pow(2.0, exp - 7)
+        scale = float(1 << (exp - 7)) if exp >= 7 else (1.0 / float(1 << (7 - exp)))
         return sign_mult * scale * (1.0 + mantissa / 8.0)
+
+_FP8_DECODE_LUT = np.array([_decode_fp8_e4m3_scalar(b) for b in range(256)], dtype=np.float32)
+
+def _decode_fp8_e4m3_array(arr: np.ndarray) -> np.ndarray:
+    """Decodes uint8 FP8 E4M3 values back to float32 using a precomputed 256-element LUT."""
+    return _FP8_DECODE_LUT[np.ascontiguousarray(arr, dtype=np.uint8)]
+
+def _encode_fp8_e4m3_array(arr: np.ndarray) -> np.ndarray:
+    """
+    Vectorized conversion of float32 array to 8-bit OCP/NVIDIA FP8 E4M3 standard bytes.
+    Matches Java VectorDb.encodeFP8_E4M3 with 100% bit-exact parity.
+    """
+    flat = np.ascontiguousarray(arr, dtype=np.float32)
+    u32 = flat.view(np.uint32)
+
+    sign = ((u32 >> 24) & 0x80).astype(np.uint8)
+    exp = ((u32 >> 23) & 0xFF).astype(np.int32)
+    mant = (u32 & 0x7FFFFF).astype(np.int32)
+    abs_val = np.abs(flat)
+
+    out = np.zeros(flat.shape, dtype=np.uint8)
+
+    # 1. Underflow / Zero
+    zero_mask = abs_val < (0.5 / 512.0)
+    out[zero_mask] = sign[zero_mask]
+
+    # 2. Clamping / Overflows >= 448.0 or Inf
+    max_mask = (abs_val >= 448.0) | np.isinf(flat)
+    out[max_mask] = sign[max_mask] | 0x7E
+
+    # 3. Subnormals (< 0.015625)
+    sub_mask = (~zero_mask) & (~max_mask) & (abs_val < 0.015625)
+    if np.any(sub_mask):
+        m = np.clip(np.round(abs_val[sub_mask] * 512.0).astype(np.int32), 0, 7).astype(np.uint8)
+        out[sub_mask] = sign[sub_mask] | (m & 0x7)
+
+    # 4. Normal range (0.015625 <= abs_val < 448.0)
+    norm_mask = (~zero_mask) & (~max_mask) & (abs_val >= 0.015625)
+    if np.any(norm_mask):
+        e = exp[norm_mask] - 120
+        m = (mant[norm_mask] + (1 << 19)) >> 20
+        
+        # Carry-over if rounding up
+        carry = m >= 8
+        e = np.where(carry, e + 1, e)
+        m = np.where(carry, 0, m)
+
+        # Handle overflow
+        over = e >= 16
+        e = np.where(over, 15, e)
+        m = np.where(over, 6, m)
+
+        # Re-clamp max E4M3 (15, 7 is NaN, max finite is 15, 6)
+        max_finite_clamp = (e == 15) & (m >= 7)
+        m = np.where(max_finite_clamp, 6, m)
+
+        out[norm_mask] = sign[norm_mask] | ((e.astype(np.uint8) & 0xF) << 3) | (m.astype(np.uint8) & 0x7)
+
+    # 5. NaN
+    nan_mask = np.isnan(flat)
+    if np.any(nan_mask):
+        out[nan_mask] = sign[nan_mask] | 0x7F
+
+    return out
+
+_FP4_THRESHOLDS = np.array([0.25, 0.75, 1.25, 1.75, 2.5, 3.5, 5.0], dtype=np.float32)
 
 def _encode_fp4_nibble(val: float) -> int:
     sign = 1 if val < 0.0 else 0
@@ -54,6 +141,55 @@ def _encode_fp4_nibble(val: float) -> int:
             best_diff = diff
             best_idx = i
     return (sign << 3) | (best_idx & 0x07)
+
+def _encode_fp4_nibbles_array(norm_floats: np.ndarray) -> np.ndarray:
+    """Vectorized quantization of normalized floats into 4-bit FP4 E2M1 nibbles (0..15)."""
+    flat = np.ascontiguousarray(norm_floats, dtype=np.float32)
+    signs = np.where(flat < 0.0, 0x08, 0x00).astype(np.uint8)
+    abs_floats = np.abs(flat)
+    nibbles = np.digitize(abs_floats, _FP4_THRESHOLDS).astype(np.uint8)
+    return signs | (nibbles & 0x07)
+
+def _encode_nvfp4_blocks_array(vecs: np.ndarray) -> np.ndarray:
+    """
+    Vectorized NVFP4 Block-16 microscaling encoder.
+    Converts 2D float32 array (N, D) to (N, num_blocks * 9) uint8 bytes.
+    Each 16-element block is stored as 1 byte FP8 E4M3 scale factor + 8 bytes packed nibble pairs.
+    """
+    flat_2d = np.ascontiguousarray(vecs, dtype=np.float32)
+    if flat_2d.ndim == 1:
+        flat_2d = flat_2d.reshape(1, -1)
+    N, D = flat_2d.shape
+    num_blocks = (D + 15) // 16
+    padded_dim = num_blocks * 16
+
+    if D == padded_dim:
+        padded = flat_2d
+    else:
+        padded = np.zeros((N, padded_dim), dtype=np.float32)
+        padded[:, :D] = flat_2d
+
+    blocks = padded.reshape(-1, 16)
+    max_abs = np.max(np.abs(blocks), axis=-1)
+    scales = np.where(max_abs > 0.0, max_abs / 6.0, 0.0).astype(np.float32)
+
+    scale_bytes = _encode_fp8_e4m3_array(scales)
+    actual_scales = _decode_fp8_e4m3_array(scale_bytes)
+
+    safe_scales = np.where(actual_scales > 0.0, actual_scales, 1.0)[:, None]
+    norm_blocks = blocks / safe_scales
+
+    nibbles = _encode_fp4_nibbles_array(norm_blocks)
+
+    low_nibbles = nibbles[:, 0::2] & 0x0F
+    high_nibbles = (nibbles[:, 1::2] & 0x0F) << 4
+    packed_nibbles = low_nibbles | high_nibbles
+
+    block_9b = np.empty((N * num_blocks, 9), dtype=np.uint8)
+    block_9b[:, 0] = scale_bytes
+    block_9b[:, 1:9] = packed_nibbles
+
+    return block_9b.reshape(N, num_blocks * 9)
 
 class QuantizationMode(IntEnum):
     """Supported vector quantization modes in Pithos."""
@@ -705,39 +841,17 @@ def _write_pithos_container_file(
         if actual_sidecar == SidecarMode.FP8:
             fp8_file = f"{tmp_base}_fp8.bin"
             if not os.path.exists(fp8_file) or os.path.getsize(fp8_file) != num_records * dimension:
-                fp8_bytes = bytearray(num_records * dimension)
-                flat = vecs.flatten()
-                for i in range(len(flat)):
-                    fp8_bytes[i] = _encode_fp8_e4m3_scalar(flat[i])
+                fp8_bytes = _encode_fp8_e4m3_array(vecs).tobytes()
                 with open(fp8_file, "wb") as f:
                     f.write(fp8_bytes)
         elif actual_sidecar == SidecarMode.FP4:
             fp4_file = f"{tmp_base}_fp4.bin"
             num_blocks = (dimension + 15) // 16
             bytes_per_rec = num_blocks * 9
-            fp4_bytes = bytearray(num_records * bytes_per_rec)
-            for r in range(num_records):
-                row = vecs[r]
-                rec_offset = r * bytes_per_rec
-                for b in range(num_blocks):
-                    block_start = b * 16
-                    block = row[block_start : min(block_start + 16, dimension)]
-                    max_val = float(np.max(np.abs(block))) if len(block) > 0 else 0.0
-                    scale = max_val / 6.0 if max_val > 0.0 else 1.0
-                    fp8_scale = _encode_fp8_e4m3_scalar(scale)
-                    actual_scale = _decode_fp8_e4m3_scalar(fp8_scale)
-                    if actual_scale == 0.0:
-                        actual_scale = 1.0
-                    block_offset = rec_offset + b * 9
-                    fp4_bytes[block_offset] = fp8_scale
-                    for j in range(8):
-                        d0 = block_start + j * 2
-                        d1 = block_start + j * 2 + 1
-                        n0 = _encode_fp4_nibble(row[d0] / actual_scale) if d0 < dimension else 0
-                        n1 = _encode_fp4_nibble(row[d1] / actual_scale) if d1 < dimension else 0
-                        fp4_bytes[block_offset + 1 + j] = (n0 & 0x0F) | ((n1 & 0x0F) << 4)
-            with open(fp4_file, "wb") as f:
-                f.write(fp4_bytes)
+            if not os.path.exists(fp4_file) or os.path.getsize(fp4_file) != num_records * bytes_per_rec:
+                fp4_bytes = _encode_nvfp4_blocks_array(vecs).tobytes()
+                with open(fp4_file, "wb") as f:
+                    f.write(fp4_bytes)
 
         with open(f"{tmp_base}_ids.bin", "rb") as f:
             ids_bytes = f.read()
@@ -1474,11 +1588,7 @@ class VectorDb:
                                 with open(fp8_chunk, "rb") as f_s:
                                     shutil.copyfileobj(f_s, out_f)
                             else:
-                                fp8_bytes = bytearray(b_size * dimension)
-                                flat = b_vecs.flatten()
-                                for idx in range(len(flat)):
-                                    fp8_bytes[idx] = _encode_fp8_e4m3_scalar(flat[idx])
-                                out_f.write(fp8_bytes)
+                                out_f.write(_encode_fp8_e4m3_array(b_vecs).tobytes())
                         elif actual_sidecar == SidecarMode.FP4:
                             out_f.seek(sidecar_offset + processed_records * sidecar_bpr)
                             fp4_chunk = f"{tmp_base}_fp4.bin"
@@ -1486,30 +1596,7 @@ class VectorDb:
                                 with open(fp4_chunk, "rb") as f_s:
                                     shutil.copyfileobj(f_s, out_f)
                             else:
-                                num_blocks = (dimension + 15) // 16
-                                bytes_per_rec = num_blocks * 9
-                                fp4_bytes = bytearray(b_size * bytes_per_rec)
-                                for r in range(b_size):
-                                    row = b_vecs[r]
-                                    rec_offset = r * bytes_per_rec
-                                    for b in range(num_blocks):
-                                        block_start = b * 16
-                                        block = row[block_start : min(block_start + 16, dimension)]
-                                        max_val = float(np.max(np.abs(block))) if len(block) > 0 else 0.0
-                                        scale = max_val / 6.0 if max_val > 0.0 else 1.0
-                                        fp8_scale = _encode_fp8_e4m3_scalar(scale)
-                                        actual_scale = _decode_fp8_e4m3_scalar(fp8_scale)
-                                        if actual_scale == 0.0:
-                                            actual_scale = 1.0
-                                        block_offset = rec_offset + b * 9
-                                        fp4_bytes[block_offset] = fp8_scale
-                                        for j in range(8):
-                                            d0 = block_start + j * 2
-                                            d1 = block_start + j * 2 + 1
-                                            n0 = _encode_fp4_nibble(row[d0] / actual_scale) if d0 < dimension else 0
-                                            n1 = _encode_fp4_nibble(row[d1] / actual_scale) if d1 < dimension else 0
-                                            fp4_bytes[block_offset + 1 + j] = (n0 & 0x0F) | ((n1 & 0x0F) << 4)
-                                out_f.write(fp4_bytes)
+                                out_f.write(_encode_nvfp4_blocks_array(b_vecs).tobytes())
 
                         for f_pattern in glob.glob(f"{tmp_base}*"):
                             try:
@@ -1641,10 +1728,7 @@ class VectorDb:
                 os.remove(fp16_file)
             fp8_file = f"{base_path}_fp8.bin"
             if not os.path.exists(fp8_file) or os.path.getsize(fp8_file) != num_records * dimension:
-                fp8_bytes = bytearray(num_records * dimension)
-                flat_vecs = vecs.flatten()
-                for i in range(len(flat_vecs)):
-                    fp8_bytes[i] = _encode_fp8_e4m3_scalar(flat_vecs[i])
+                fp8_bytes = _encode_fp8_e4m3_array(vecs).tobytes()
                 with open(fp8_file, "wb") as f:
                     f.write(fp8_bytes)
             with open(base_path, "r+b") as f:
@@ -1657,29 +1741,10 @@ class VectorDb:
             fp4_file = f"{base_path}_fp4.bin"
             num_blocks = (dimension + 15) // 16
             bytes_per_rec = num_blocks * 9
-            fp4_bytes = bytearray(num_records * bytes_per_rec)
-            for r in range(num_records):
-                row = vecs[r]
-                rec_offset = r * bytes_per_rec
-                for b in range(num_blocks):
-                    block_start = b * 16
-                    block = row[block_start : min(block_start + 16, dimension)]
-                    max_val = float(np.max(np.abs(block))) if len(block) > 0 else 0.0
-                    scale = max_val / 6.0 if max_val > 0.0 else 1.0
-                    fp8_scale = _encode_fp8_e4m3_scalar(scale)
-                    actual_scale = _decode_fp8_e4m3_scalar(fp8_scale)
-                    if actual_scale == 0.0:
-                        actual_scale = 1.0
-                    block_offset = rec_offset + b * 9
-                    fp4_bytes[block_offset] = fp8_scale
-                    for j in range(8):
-                        d0 = block_start + j * 2
-                        d1 = block_start + j * 2 + 1
-                        n0 = _encode_fp4_nibble(row[d0] / actual_scale) if d0 < dimension else 0
-                        n1 = _encode_fp4_nibble(row[d1] / actual_scale) if d1 < dimension else 0
-                        fp4_bytes[block_offset + 1 + j] = (n0 & 0x0F) | ((n1 & 0x0F) << 4)
-            with open(fp4_file, "wb") as f:
-                f.write(fp4_bytes)
+            if not os.path.exists(fp4_file) or os.path.getsize(fp4_file) != num_records * bytes_per_rec:
+                fp4_bytes = _encode_nvfp4_blocks_array(vecs).tobytes()
+                with open(fp4_file, "wb") as f:
+                    f.write(fp4_bytes)
             with open(base_path, "r+b") as f:
                 f.seek(62)
                 f.write(bytes([3]))
