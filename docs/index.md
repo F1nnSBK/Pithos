@@ -15,9 +15,20 @@
 
 ## What is Pithos?
 
-**Pithos** is a **Model-Isomorphic Vector Database (MIDB)** built from the ground up to bypass traditional garbage collection overheads and runtime indirection. Instead of treating vectors as generic high-dimensional points, Pithos physically aligns its storage format with the embedding model's latent geometry:
+```mermaid
+graph TD
+    Query["Query Vector q (Continuous FP32 Precision)"] --> Gate0["Gate 0: Multi-Index Hashing (MIH 4x8-Bit CSR)<br/>O(1) Direct-Mapped Bucket Collision Filter"]
+    Gate0 --> Gate1["Gate 1: Liveliness & Saliency Metadata Filter<br/>64-Bit Metadata Word • Zero-Cycle Pruning"]
+    Gate1 --> Gate2["Gate 2: Matryoshka Sign-Bit Quantization Filter<br/>Hamming Distance via AVX-512 VPOPCNTDQ / ARM Neon"]
+    Gate2 --> Gate3["Gate 3: Continuous Asymmetric Distance Computation (ADC)<br/>Blackwell FP8 (E4M3) / NVFP4 (E2M1) Sidecar with Early Cutoff"]
+    Gate3 --> TopK["Exact Top-K Search Results<br/>Zero-Copy NumPy FFI / C-API Return"]
 
-![Pithos 4-Gate Cascade Architecture](assets/pithos_cascade_architecture.svg)
+    classDef default fill:#1e293b,stroke:#475569,stroke-width:1.5px,color:#f8fafc;
+    classDef highlight fill:#1e1b4b,stroke:#6366f1,stroke-width:2px,color:#e0e7ff;
+    classDef output fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5;
+    class Query,Gate2 highlight;
+    class TopK output;
+```
 
 ---
 

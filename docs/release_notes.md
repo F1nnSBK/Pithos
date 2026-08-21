@@ -144,7 +144,20 @@ Pithos v1.2.0 ("Diogenes Autarky") introduces the Universal Schema-Agnostic Sing
 
 By natively integrating the neural embedding model's latent geometry, SVD spectral energy decay (Phi(k)), and randomized isometric transforms with hardware co-design on the NVIDIA Grace Blackwell architecture, Pithos achieves 50% to 75% index storage reduction while preserving >= 99.8% KNN retrieval accuracy and delivering up to 32,000 vectors/s tensor core throughput.
 
-![Pithos 5-Lever Cascade Architecture](assets/pithos_cascade_architecture.svg)
+```mermaid
+graph TD
+    Query["Query Vector q (Continuous FP32 Precision)"] --> Gate0["Gate 0: Multi-Index Hashing (MIH 4x8-Bit CSR)<br/>O(1) Direct-Mapped Bucket Collision Filter"]
+    Gate0 --> Gate1["Gate 1: Liveliness & Saliency Metadata Filter<br/>64-Bit Metadata Word • Zero-Cycle Pruning"]
+    Gate1 --> Gate2["Gate 2: Matryoshka Sign-Bit Quantization Filter<br/>Hamming Distance via AVX-512 VPOPCNTDQ / ARM Neon"]
+    Gate2 --> Gate3["Gate 3: Continuous Asymmetric Distance Computation (ADC)<br/>Blackwell FP8 (E4M3) / NVFP4 (E2M1) Sidecar with Early Cutoff"]
+    Gate3 --> TopK["Exact Top-K Search Results<br/>Zero-Copy NumPy FFI / C-API Return"]
+
+    classDef default fill:#1e293b,stroke:#475569,stroke-width:1.5px,color:#f8fafc;
+    classDef highlight fill:#1e1b4b,stroke:#6366f1,stroke-width:2px,color:#e0e7ff;
+    classDef output fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5;
+    class Query,Gate2 highlight;
+    class TopK output;
+```
 
 ---
 

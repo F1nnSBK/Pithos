@@ -15,9 +15,21 @@ The `.pithos` single-file container format embodies this exact philosophy:
 
 ## Binary Memory Specification (Version 2)
 
-A `.pithos` file is structured into 64-byte cache-line aligned sections with a 128-byte Superblock and a 20-byte Trailer:
+```mermaid
+graph LR
+    SB["Superblock (128 B)<br/>'DIOGENES'"] --> S0["Section 0: IDs<br/>(N × 8 B)"]
+    S0 --> S1["Section 1: Tiers<br/>(Quantized Bits)"]
+    S1 --> S2["Section 2: Delta Log<br/>(Append Buffer)"]
+    S2 --> S3["Section 3: Sidecar<br/>(FP8 / NVFP4 / FP16)"]
+    S3 --> S4["Section 4: Prefix Table<br/>(MIH 4x8-Bit CSR)"]
+    S4 --> S5["Section 5: Metadata<br/>(JSONL / Arrow IPC)"]
+    S5 --> TOC["Table of Contents<br/>(JSON Directory)"]
+    TOC --> TR["Trailer (20 B)<br/>'PITHOSDB'"]
 
-![Pithos Container Layout](assets/pithos_container_layout.svg)
+    classDef default fill:#1e293b,stroke:#475569,stroke-width:1.5px,color:#f8fafc;
+    classDef magic fill:#1e1b4b,stroke:#6366f1,stroke-width:2px,color:#e0e7ff;
+    class SB,TR magic;
+```
 
 ### Superblock Layout (128 Bytes, Offset `0x0000`)
 
