@@ -515,7 +515,7 @@ public class VectorDb {
         }
 
         try {
-            for (int i = 0; i < totalRecords; i++) {
+            java.util.stream.IntStream.range(0, (int) totalRecords).parallel().forEach(i -> {
                 VectorRecord rec = records.get(i);
                 if (qMode == 1) { // 2-bit mode
                     float[] z = transformer.preconditionAndRotate(rec.vector());
@@ -527,7 +527,7 @@ public class VectorDb {
                     int longOffset = 0;
                     for (int k = 0; k < numTiers; k++) {
                         int count = tierLongs[k];
-                        long baseOffset = i * (count * 16L);
+                        long baseOffset = (long) i * (count * 16L);
                         for (int l = 0; l < count; l++) {
                             tierMappeds[k].set(ValueLayout.JAVA_LONG, baseOffset + (l * 8L), signPacked[longOffset + l]);
                             tierMappeds[k].set(ValueLayout.JAVA_LONG, baseOffset + (count * 8L) + (l * 8L),
@@ -542,7 +542,7 @@ public class VectorDb {
                         int count = tierLongs[k];
                         int startDim = (k == 0) ? 0 : tiers[k - 1];
                         int width = tiers[k] - startDim;
-                        long baseOffset = (long) i * width * 4;
+                        long baseOffset = (long) i * width * 4L;
                         for (int l = 0; l < width; l++) {
                             int raw = Float.floatToRawIntBits(z[startDim + l]);
                             tierMappeds[k].set(ValueLayout.JAVA_INT_UNALIGNED, baseOffset + (l * 4L), raw);
@@ -554,14 +554,14 @@ public class VectorDb {
                     int longOffset = 0;
                     for (int k = 0; k < numTiers; k++) {
                         int count = tierLongs[k];
-                        long baseOffset = i * (count * 8L);
+                        long baseOffset = (long) i * (count * 8L);
                         for (int l = 0; l < count; l++) {
                             tierMappeds[k].set(ValueLayout.JAVA_LONG, baseOffset + (l * 8L), packed[longOffset + l]);
                         }
                         longOffset += count;
                     }
                 }
-            }
+            });
             for (int k = 0; k < numTiers; k++) {
                 tierMappeds[k].force();
             }
@@ -573,7 +573,7 @@ public class VectorDb {
             }
         }
 
-        // 5. Write Sidecar Files (FP16, FP8 E4M3, or FP4 NVFP4)
+        // 5. Write Sidecar Files (FP16, FP8 E4M3, or FP4 NVFP4) in parallel
         if (sidecarMode == SIDECAR_FP16) {
             Path fp16Path = Path.of(basePath + "_fp16.bin");
             try (FileChannel channel = FileChannel.open(fp16Path,
@@ -583,14 +583,14 @@ public class VectorDb {
                     StandardOpenOption.TRUNCATE_EXISTING)) {
                 long fp16Bytes = totalRecords * dimension * 2L;
                 MemorySegment fp16Mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, fp16Bytes, Arena.global());
-                for (int i = 0; i < totalRecords; i++) {
+                java.util.stream.IntStream.range(0, (int) totalRecords).parallel().forEach(i -> {
                     float[] vec = records.get(i).vector();
                     long rowOffset = (long) i * dimension * 2L;
                     for (int d = 0; d < dimension; d++) {
                         short fp16 = Float.floatToFloat16(vec[d]);
                         fp16Mapped.set(ValueLayout.JAVA_SHORT_UNALIGNED, rowOffset + d * 2L, fp16);
                     }
-                }
+                });
                 fp16Mapped.force();
             }
         } else if (sidecarMode == SIDECAR_FP8) {
@@ -602,14 +602,14 @@ public class VectorDb {
                     StandardOpenOption.TRUNCATE_EXISTING)) {
                 long fp8Bytes = totalRecords * dimension * 1L;
                 MemorySegment fp8Mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, fp8Bytes, Arena.global());
-                for (int i = 0; i < totalRecords; i++) {
+                java.util.stream.IntStream.range(0, (int) totalRecords).parallel().forEach(i -> {
                     float[] vec = records.get(i).vector();
                     long rowOffset = (long) i * dimension;
                     for (int d = 0; d < dimension; d++) {
                         byte fp8 = encodeFP8_E4M3(vec[d]);
                         fp8Mapped.set(ValueLayout.JAVA_BYTE, rowOffset + d, fp8);
                     }
-                }
+                });
                 fp8Mapped.force();
             }
         } else if (sidecarMode == SIDECAR_FP4) {
@@ -624,7 +624,7 @@ public class VectorDb {
                     StandardOpenOption.TRUNCATE_EXISTING)) {
                 long fp4Bytes = totalRecords * (long) bytesPerRecord;
                 MemorySegment fp4Mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, fp4Bytes, Arena.global());
-                for (int i = 0; i < totalRecords; i++) {
+                java.util.stream.IntStream.range(0, (int) totalRecords).parallel().forEach(i -> {
                     float[] vec = records.get(i).vector();
                     long rowOffset = (long) i * bytesPerRecord;
                     for (int b = 0; b < numBlocks; b++) {
@@ -654,7 +654,7 @@ public class VectorDb {
                             fp4Mapped.set(ValueLayout.JAVA_BYTE, blockOffset + 1 + j, packed);
                         }
                     }
-                }
+                });
                 fp4Mapped.force();
             }
         }

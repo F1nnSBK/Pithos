@@ -342,28 +342,33 @@ public final class PithosContainer {
         }
 
         // Sidecar section
-        long sidecarOffset = 0;
-        long sidecarLength = 0;
-        String sidecarFormat = "none";
+        final long sidecarOffset = (sidecarMode != VectorDb.SIDECAR_NONE) ? currentOffset : 0;
+        final long sidecarLength;
+        final String sidecarFormat;
 
-        if (sidecarMode == VectorDb.SIDECAR_FP16) {
-            sidecarOffset = currentOffset;
-            sidecarLength = numVectors * dimension * 2L;
-            sidecarFormat = "fp16";
-            currentOffset = align64(currentOffset + sidecarLength);
-        } else if (sidecarMode == VectorDb.SIDECAR_FP8) {
-            sidecarOffset = currentOffset;
-            sidecarLength = numVectors * dimension * 1L;
-            sidecarFormat = "fp8_e4m3";
-            currentOffset = align64(currentOffset + sidecarLength);
-        } else if (sidecarMode == VectorDb.SIDECAR_FP4) {
-            int blockSize = 16;
-            int numBlocks = (dimension + blockSize - 1) / blockSize;
-            int bytesPerRecord = numBlocks * 9;
-            sidecarOffset = currentOffset;
-            sidecarLength = numVectors * (long) bytesPerRecord;
-            sidecarFormat = "nvfp4_e2m1";
-            currentOffset = align64(currentOffset + sidecarLength);
+        switch (sidecarMode) {
+            case VectorDb.SIDECAR_FP16 -> {
+                sidecarLength = numVectors * dimension * 2L;
+                sidecarFormat = "fp16";
+                currentOffset = align64(currentOffset + sidecarLength);
+            }
+            case VectorDb.SIDECAR_FP8 -> {
+                sidecarLength = numVectors * dimension * 1L;
+                sidecarFormat = "fp8_e4m3";
+                currentOffset = align64(currentOffset + sidecarLength);
+            }
+            case VectorDb.SIDECAR_FP4 -> {
+                int blockSize = 16;
+                int numBlocks = (dimension + blockSize - 1) / blockSize;
+                int bytesPerRecord = numBlocks * 9;
+                sidecarLength = numVectors * (long) bytesPerRecord;
+                sidecarFormat = "nvfp4_e2m1";
+                currentOffset = align64(currentOffset + sidecarLength);
+            }
+            default -> {
+                sidecarLength = 0;
+                sidecarFormat = "none";
+            }
         }
 
         // Multi-Index Hashing (MIH) Section (4 chunks x 256 buckets CSR)
@@ -445,17 +450,17 @@ public final class PithosContainer {
                 mapped.set(ValueLayout.JAVA_BYTE, p, (byte) 0);
             }
 
-            // 2. Write IDs Section
-            for (int i = 0; i < numVectors; i++) {
+            // 2. Write IDs Section in parallel
+            java.util.stream.IntStream.range(0, (int) numVectors).parallel().forEach(i -> {
                 mapped.set(ValueLayout.JAVA_LONG, idsOffset + (i * 8L), records.get(i).id());
-            }
+            });
 
-            // 3. Write Quantization Tiers Section & Compute 4x8 MIH Chunk Postings
+            // 3. Write Quantization Tiers Section & Compute 4x8 MIH Chunk Postings in parallel
             int[][] chunkBucketKeys = new int[NUM_MIH_CHUNKS][(int) numVectors];
             int[][] chunkBucketCounts = new int[NUM_MIH_CHUNKS][NUM_MIH_BUCKETS];
 
             TransformOperator transformer = new TransformOperator(dimension, tiers);
-            for (int i = 0; i < numVectors; i++) {
+            java.util.stream.IntStream.range(0, (int) numVectors).parallel().forEach(i -> {
                 VectorRecord rec = records.get(i);
                 int[] keys = new int[4];
                 if (qMode == 1) { // 2-bit QJL Residuals
@@ -473,7 +478,7 @@ public final class PithosContainer {
                     int longOffset = 0;
                     for (int k = 0; k < numTiers; k++) {
                         int count = tierLongs[k];
-                        long baseOffset = tierOffsets[k] + (i * (count * 16L));
+                        long baseOffset = tierOffsets[k] + ((long) i * (count * 16L));
                         for (int l = 0; l < count; l++) {
                             mapped.set(ValueLayout.JAVA_LONG, baseOffset + (l * 8L), signPacked[longOffset + l]);
                             mapped.set(ValueLayout.JAVA_LONG, baseOffset + (count * 8L) + (l * 8L), maskPacked[longOffset + l]);
@@ -498,7 +503,7 @@ public final class PithosContainer {
                         int count = tierLongs[k];
                         int startDim = (k == 0) ? 0 : tiers[k - 1];
                         int width = tiers[k] - startDim;
-                        long baseOffset = tierOffsets[k] + ((long) i * width * 4);
+                        long baseOffset = tierOffsets[k] + ((long) i * width * 4L);
                         for (int l = 0; l < width; l++) {
                             int raw = Float.floatToRawIntBits(z[startDim + l]);
                             mapped.set(ValueLayout.JAVA_INT_UNALIGNED, baseOffset + (l * 4L), raw);
@@ -516,7 +521,7 @@ public final class PithosContainer {
                     int longOffset = 0;
                     for (int k = 0; k < numTiers; k++) {
                         int count = tierLongs[k];
-                        long baseOffset = tierOffsets[k] + (i * (count * 8L));
+                        long baseOffset = tierOffsets[k] + ((long) i * (count * 8L));
                         for (int l = 0; l < count; l++) {
                             mapped.set(ValueLayout.JAVA_LONG, baseOffset + (l * 8L), packed[longOffset + l]);
                         }
@@ -525,11 +530,17 @@ public final class PithosContainer {
                 }
                 for (int c = 0; c < NUM_MIH_CHUNKS; c++) {
                     chunkBucketKeys[c][i] = keys[c];
-                    chunkBucketCounts[c][keys[c]]++;
+                }
+            });
+
+            // Compute bucket counts
+            for (int c = 0; c < NUM_MIH_CHUNKS; c++) {
+                for (int i = 0; i < numVectors; i++) {
+                    chunkBucketCounts[c][chunkBucketKeys[c][i]]++;
                 }
             }
 
-            // 4. Write Direct-Mapped Multi-Index Hashing (MIH) Tables (4 x CSR)
+            // 4. Write Direct-Mapped Multi-Index Hashing (MIH) Tables (4 x CSR) in parallel
             int[][] chunkBucketOffsets = new int[NUM_MIH_CHUNKS][NUM_MIH_BUCKETS + 1];
             for (int c = 0; c < NUM_MIH_CHUNKS; c++) {
                 int runningOffset = 0;
@@ -548,8 +559,8 @@ public final class PithosContainer {
                 }
             }
 
-            // Write Postings for each chunk
-            for (int c = 0; c < NUM_MIH_CHUNKS; c++) {
+            // Write Postings for each chunk in parallel
+            java.util.stream.IntStream.range(0, NUM_MIH_CHUNKS).parallel().forEach(c -> {
                 int[] currentPtrs = Arrays.copyOf(chunkBucketOffsets[c], NUM_MIH_BUCKETS);
                 int[] chunkPostings = new int[(int) numVectors];
                 for (int i = 0; i < numVectors; i++) {
@@ -561,32 +572,32 @@ public final class PithosContainer {
                 for (int i = 0; i < numVectors; i++) {
                     mapped.set(ValueLayout.JAVA_INT_UNALIGNED, postBase + (i * 4L), chunkPostings[i]);
                 }
-            }
+            });
 
-            // 5. Write Precision Sidecar Section
+            // 5. Write Precision Sidecar Section in parallel
             if (sidecarMode == VectorDb.SIDECAR_FP16) {
-                for (int i = 0; i < numVectors; i++) {
+                java.util.stream.IntStream.range(0, (int) numVectors).parallel().forEach(i -> {
                     float[] vec = records.get(i).vector();
                     long rowOffset = sidecarOffset + ((long) i * dimension * 2L);
                     for (int d = 0; d < dimension; d++) {
                         short fp16 = Float.floatToFloat16(vec[d]);
                         mapped.set(ValueLayout.JAVA_SHORT_UNALIGNED, rowOffset + d * 2L, fp16);
                     }
-                }
+                });
             } else if (sidecarMode == VectorDb.SIDECAR_FP8) {
-                for (int i = 0; i < numVectors; i++) {
+                java.util.stream.IntStream.range(0, (int) numVectors).parallel().forEach(i -> {
                     float[] vec = records.get(i).vector();
                     long rowOffset = sidecarOffset + ((long) i * dimension);
                     for (int d = 0; d < dimension; d++) {
                         byte fp8 = VectorDb.encodeFP8_E4M3(vec[d]);
                         mapped.set(ValueLayout.JAVA_BYTE, rowOffset + d, fp8);
                     }
-                }
+                });
             } else if (sidecarMode == VectorDb.SIDECAR_FP4) {
                 int blockSize = 16;
                 int numBlocks = (dimension + blockSize - 1) / blockSize;
                 int bytesPerRecord = numBlocks * 9;
-                for (int i = 0; i < numVectors; i++) {
+                java.util.stream.IntStream.range(0, (int) numVectors).parallel().forEach(i -> {
                     float[] vec = records.get(i).vector();
                     long rowOffset = sidecarOffset + ((long) i * bytesPerRecord);
                     for (int b = 0; b < numBlocks; b++) {
@@ -616,7 +627,7 @@ public final class PithosContainer {
                             mapped.set(ValueLayout.JAVA_BYTE, blockOffset + 1 + j, packed);
                         }
                     }
-                }
+                });
             }
 
             // 5. Write Generic Metadata Payload Section

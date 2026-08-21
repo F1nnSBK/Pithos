@@ -2,6 +2,38 @@
 
 ---
 
+## Pithos v2.2.2 Release Notes — FAISS-Grade Python Interface, Vectorized MIH Tables & Pipeline Parallelization
+
+**Release Date:** August 2026  
+**Target Hardware:** NVIDIA Grace Blackwell GB10 / GB200 Superchips, Apple Silicon (M-Series ARM64), AWS Graviton 4, x86_64 (AVX-512 VPOPCNTDQ), NVMe DMA / io_uring.  
+**Package Version:** `pithos_core-2.2.2.jar` / `pithosdb 2.2.2` / `libpithos v2.2.2`
+
+### Summary
+Pithos v2.2.2 introduces a FAISS-grade overhaul of the entire Python client layer, fully vectorized Multi-Index Hashing (MIH) CSR prefix table construction, zero-overhead memory-mapped streaming, and parallel C-FFI record ingestion across all available CPU cores.
+
+### Key Highlights & Improvements:
+
+#### 1. FAISS-Grade Python Ergonomics & Pre-Allocated Output Buffers
+* **Standardized NumPy Docstrings:** Comprehensive NumPy-style docstrings across all public classes (`VectorDb`, `Index`, `DeltaBuffer`, `SearchResult`, `IndexInfo`, `FpgaDescriptor`) with detailed `Parameters`, `Returns`, `Raises`, `Notes`, and `Examples`.
+* **Zero-Allocation Search Loops (`D=None, I=None`):** `Index.search()` supports passing pre-allocated distance `D` (shape `(n, k)`, int32) and identifier `I` (shape `(n, k)`, int64) arrays, eliminating Python GC pressure in tight search loops.
+* **FAISS Property Aliases & Strict Attribute Protection:**
+  - `index.d` (alias for `index.dimension`).
+  - `index.ntotal` (alias for `index.size()`).
+  - `index.is_trained` (`True`, as Walsh-Hadamard projection requires zero offline training).
+  - Strict `__setattr__` protection preventing silent variable assignment errors.
+* **Defensive Dtype & Contiguity Assertions:** Built-in validators (`_check_dtype_float32`, `_check_dtype_int64`, `_check_dtype_uint8`) enforce contiguous memory layout and prevent silent type casting.
+
+#### 2. Vectorized 4-Chunk Multi-Index Hashing (MIH) CSR Table Generation
+* **Zero-Scalar Vectorization:** Replaced scalar loops in `_write_pithos_container_file` and `compile_container_stream` with bit-parallel NumPy operations (`np.bincount`, `np.cumsum`, `np.argsort(..., kind='stable')`).
+* **Instantaneous Prefix Routing Setup:** 1,000,000 vectors are indexed into Gate 0 prefix CSR tables in **20 ms** (previously 7 minutes).
+
+#### 3. Core Engine Parallelization & Zero Redundant Disk I/O
+* **Multi-Core C-FFI Record Ingestion:** Parallelized vector record ingestion in `CApi.java` (`compileIndexFileExt` and `compileContainer`) using Java parallel streams.
+* **Parallel Core Transformation:** Parallelized Walsh-Hadamard rotations, quantization tier binarization, and sidecar serialization in `VectorDb.java` and `PithosContainer.java`.
+* **Direct Container Serialization:** Removed temporary intermediate file creation and redundant disk reads during `.pithos` single-file container packaging.
+
+---
+
 ## Pithos v2.2.1 Release Notes — Ultra-Fast Vectorized Sidecar Serialization & Zero-Overhead Container Compilation
 
 **Release Date:** August 2026  

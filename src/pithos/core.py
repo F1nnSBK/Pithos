@@ -1,22 +1,142 @@
+# Copyright (c) 2026 Pithos Authors and contributors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""
+================================================================================
+Pithos Vector Database Engine -- Python High-Performance Client Interface
+================================================================================
+
+This module exposes the official Python client bindings for Pithos, designed
+with FAISS-grade performance, rigorous NumPy shape/type safety, and zero-copy
+off-heap memory execution.
+
+Key Architectural Guarantees:
+-----------------------------
+1. Zero-Copy Ingestion & Querying:
+   Direct C-FFI / Native Image dispatch with pre-allocated buffer support (D, I).
+2. Hardware Microscaling & Precision Sidecars:
+   Vectorized OCP/NVIDIA FP8 E4M3 and Block-16 NVFP4 codecs in NumPy SIMD.
+3. Multi-Index Hashing (MIH):
+   Vectorized CSR routing table generation for sub-millisecond prefix candidate pruning.
+4. Universal Single-File Format (.pithos):
+   Schema-agnostic DIOGENES container format with self-contained TOC and Arrow metadata.
+"""
+
 from __future__ import annotations
 
 import ctypes
-import os
+import glob
 import io
 import json
 import math
+import os
 import shutil
+import tempfile
 import threading
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import List, Optional, Union, Dict, Any, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+
 import numpy as np
 
 from .ffi import NativeBindings, PithosNativeError, reset_isolate, shrink_to_fit
 
+# ==============================================================================
+# Type Checking & Array Invariant Validators (FAISS Standard)
+# ==============================================================================
+
+def _check_dtype_uint8(codes: np.ndarray, name: str = "codes") -> np.ndarray:
+    """Validates that input array is ndarray of dtype uint8 and contiguous.
+
+    Parameters
+    ----------
+    codes : ndarray
+        Input byte array.
+    name : str, default="codes"
+        Argument name for descriptive error reporting.
+
+    Returns
+    -------
+    ndarray
+        Contiguous uint8 ndarray.
+
+    Raises
+    ------
+    TypeError
+        If dtype is not uint8.
+    """
+    if codes.dtype != np.uint8:
+        raise TypeError(
+            f"Input argument '{name}' must be ndarray of dtype uint8, but found {codes.dtype}"
+        )
+    return np.ascontiguousarray(codes)
+
+
+def _check_dtype_float32(x: np.ndarray, name: str = "x") -> np.ndarray:
+    """Ensures input vector array is contiguous float32.
+
+    Parameters
+    ----------
+    x : array_like
+        Input vector array.
+    name : str, default="x"
+        Argument name for error reporting.
+
+    Returns
+    -------
+    ndarray
+        Contiguous float32 ndarray.
+    """
+    if not isinstance(x, np.ndarray):
+        x = np.asarray(x, dtype=np.float32)
+    elif x.dtype != np.float32:
+        x = x.astype(np.float32)
+    return np.ascontiguousarray(x)
+
+
+def _check_dtype_int64(ids: np.ndarray, name: str = "ids") -> np.ndarray:
+    """Ensures input ID array is contiguous int64.
+
+    Parameters
+    ----------
+    ids : array_like
+        Input identifier array.
+    name : str, default="ids"
+        Argument name for error reporting.
+
+    Returns
+    -------
+    ndarray
+        Contiguous int64 ndarray.
+    """
+    if not isinstance(ids, np.ndarray):
+        ids = np.asarray(ids, dtype=np.int64)
+    elif ids.dtype != np.int64:
+        ids = ids.astype(np.int64)
+    return np.ascontiguousarray(ids)
+
+
+# ==============================================================================
+# Precision Sidecar Codecs (FP8 E4M3 & Block-16 NVFP4)
+# ==============================================================================
+
 _FP4_TABLE = [0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0]
+_FP4_THRESHOLDS = np.array([0.25, 0.75, 1.25, 1.75, 2.5, 3.5, 5.0], dtype=np.float32)
+
 
 def _encode_fp8_e4m3_scalar(val: float) -> int:
+    """Encodes a single float into an 8-bit OCP/NVIDIA FP8 E4M3 byte."""
     if math.isnan(val):
         sign = 1 if math.copysign(1.0, val) < 0.0 else 0
         return (sign << 7) | 0x7F
@@ -30,12 +150,14 @@ def _encode_fp8_e4m3_scalar(val: float) -> int:
         return sign << 7
     if abs_val < 0.015625:  # 2^(-6) subnormal
         m = int(round(abs_val * 512.0))
-        if m > 7: m = 7
+        if m > 7:
+            m = 7
         return (sign << 7) | (m & 0x7)
     exp = int(math.floor(math.log2(abs_val))) + 7
     if exp < 1:
         m = int(round(abs_val * 512.0))
-        if m > 7: m = 7
+        if m > 7:
+            m = 7
         return (sign << 7) | (m & 0x7)
     if exp > 15:
         return (sign << 7) | 0x7E
@@ -50,7 +172,23 @@ def _encode_fp8_e4m3_scalar(val: float) -> int:
         m = 6
     return (sign << 7) | ((exp & 0xF) << 3) | (m & 0x7)
 
+
+def _encode_fp4_nibble(val: float) -> int:
+    """Encodes a single float value into a 4-bit NVFP4 E2M1 nibble."""
+    sign = 1 if val < 0.0 else 0
+    abs_val = abs(val)
+    best_idx = 0
+    best_diff = abs_val
+    for i in range(1, 8):
+        diff = abs(abs_val - _FP4_TABLE[i])
+        if diff < best_diff:
+            best_diff = diff
+            best_idx = i
+    return (sign << 3) | (best_idx & 0x07)
+
+
 def _decode_fp8_e4m3_scalar(b: int) -> float:
+    """Decodes a single 8-bit OCP/NVIDIA FP8 E4M3 value into 32-bit float."""
     b_int = int(b)
     sign = 1 if (b_int & 0x80) != 0 else 0
     exp = (b_int >> 3) & 0x0F
@@ -59,21 +197,45 @@ def _decode_fp8_e4m3_scalar(b: int) -> float:
     if exp == 0:
         return sign_mult * (mantissa / 512.0)
     elif exp == 15 and mantissa == 7:
-        return float('nan')
+        return float("nan")
     else:
         scale = float(1 << (exp - 7)) if exp >= 7 else (1.0 / float(1 << (7 - exp)))
         return sign_mult * scale * (1.0 + mantissa / 8.0)
 
+
 _FP8_DECODE_LUT = np.array([_decode_fp8_e4m3_scalar(b) for b in range(256)], dtype=np.float32)
 
+
 def _decode_fp8_e4m3_array(arr: np.ndarray) -> np.ndarray:
-    """Decodes uint8 FP8 E4M3 values back to float32 using a precomputed 256-element LUT."""
+    """Decodes uint8 FP8 E4M3 values back to float32 using a precomputed 256-element LUT.
+
+    Parameters
+    ----------
+    arr : ndarray
+        Quantized uint8 array of FP8 E4M3 bytes.
+
+    Returns
+    -------
+    ndarray
+        Reconstructed float32 array.
+    """
     return _FP8_DECODE_LUT[np.ascontiguousarray(arr, dtype=np.uint8)]
 
+
 def _encode_fp8_e4m3_array(arr: np.ndarray) -> np.ndarray:
-    """
-    Vectorized conversion of float32 array to 8-bit OCP/NVIDIA FP8 E4M3 standard bytes.
+    """Vectorized conversion of float32 array to 8-bit OCP/NVIDIA FP8 E4M3 standard bytes.
+
     Matches Java VectorDb.encodeFP8_E4M3 with 100% bit-exact parity.
+
+    Parameters
+    ----------
+    arr : ndarray
+        Input float32 array of arbitrary shape.
+
+    Returns
+    -------
+    ndarray
+        Quantized uint8 array with same shape as input.
     """
     flat = np.ascontiguousarray(arr, dtype=np.float32)
     u32 = flat.view(np.uint32)
@@ -85,7 +247,7 @@ def _encode_fp8_e4m3_array(arr: np.ndarray) -> np.ndarray:
 
     out = np.zeros(flat.shape, dtype=np.uint8)
 
-    # 1. Underflow / Zero
+    # 1. Underflow / Zero (< 0.5 * 2^-9)
     zero_mask = abs_val < (0.5 / 512.0)
     out[zero_mask] = sign[zero_mask]
 
@@ -104,7 +266,7 @@ def _encode_fp8_e4m3_array(arr: np.ndarray) -> np.ndarray:
     if np.any(norm_mask):
         e = exp[norm_mask] - 120
         m = (mant[norm_mask] + (1 << 19)) >> 20
-        
+
         # Carry-over if rounding up
         carry = m >= 8
         e = np.where(carry, e + 1, e)
@@ -128,33 +290,42 @@ def _encode_fp8_e4m3_array(arr: np.ndarray) -> np.ndarray:
 
     return out
 
-_FP4_THRESHOLDS = np.array([0.25, 0.75, 1.25, 1.75, 2.5, 3.5, 5.0], dtype=np.float32)
-
-def _encode_fp4_nibble(val: float) -> int:
-    sign = 1 if val < 0.0 else 0
-    abs_val = abs(val)
-    best_idx = 0
-    best_diff = abs_val
-    for i in range(1, 8):
-        diff = abs(abs_val - _FP4_TABLE[i])
-        if diff < best_diff:
-            best_diff = diff
-            best_idx = i
-    return (sign << 3) | (best_idx & 0x07)
 
 def _encode_fp4_nibbles_array(norm_floats: np.ndarray) -> np.ndarray:
-    """Vectorized quantization of normalized floats into 4-bit FP4 E2M1 nibbles (0..15)."""
+    """Vectorized quantization of normalized floats into 4-bit FP4 E2M1 nibbles (0..15).
+
+    Parameters
+    ----------
+    norm_floats : ndarray
+        Float array scaled by block microscaling factor.
+
+    Returns
+    -------
+    ndarray
+        4-bit nibbles stored in lower 4 bits of uint8 array.
+    """
     flat = np.ascontiguousarray(norm_floats, dtype=np.float32)
     signs = np.where(flat < 0.0, 0x08, 0x00).astype(np.uint8)
     abs_floats = np.abs(flat)
     nibbles = np.digitize(abs_floats, _FP4_THRESHOLDS).astype(np.uint8)
     return signs | (nibbles & 0x07)
 
+
 def _encode_nvfp4_blocks_array(vecs: np.ndarray) -> np.ndarray:
-    """
-    Vectorized NVFP4 Block-16 microscaling encoder.
+    """Vectorized NVFP4 Block-16 microscaling encoder.
+
     Converts 2D float32 array (N, D) to (N, num_blocks * 9) uint8 bytes.
     Each 16-element block is stored as 1 byte FP8 E4M3 scale factor + 8 bytes packed nibble pairs.
+
+    Parameters
+    ----------
+    vecs : ndarray
+        Continuous float embeddings of shape (N, D).
+
+    Returns
+    -------
+    ndarray
+        NVFP4 encoded byte matrix of shape (N, ((D + 15) // 16) * 9).
     """
     flat_2d = np.ascontiguousarray(vecs, dtype=np.float32)
     if flat_2d.ndim == 1:
@@ -191,33 +362,141 @@ def _encode_nvfp4_blocks_array(vecs: np.ndarray) -> np.ndarray:
 
     return block_9b.reshape(N, num_blocks * 9)
 
+
+def _build_mih_csr_table(tier0_bytes: bytes, num_records: int) -> bytes:
+    """Vectorized construction of 4-chunk Multi-Index Hashing (MIH) CSR prefix table.
+
+    Produces offsets array of shape (4, 257) int32 and postings array of shape (4, N) int32.
+    Achieves 100% bit-exact parity with zero scalar loops.
+
+    Parameters
+    ----------
+    tier0_bytes : bytes
+        Raw bytes of Tier 0 quantized vectors.
+    num_records : int
+        Total number of vectors in the dataset.
+
+    Returns
+    -------
+    bytes
+        Concatenated offsets and postings binary payload.
+    """
+    NUM_MIH_CHUNKS = 4
+    NUM_MIH_BUCKETS = 256
+    bytes_per_rec_t0 = len(tier0_bytes) // num_records if num_records > 0 else 0
+
+    if num_records == 0 or bytes_per_rec_t0 < 4:
+        empty_offsets = np.zeros((NUM_MIH_CHUNKS, NUM_MIH_BUCKETS + 1), dtype=np.int32)
+        empty_postings = np.empty((NUM_MIH_CHUNKS, num_records), dtype=np.int32)
+        return empty_offsets.tobytes() + empty_postings.tobytes()
+
+    t0_arr = np.frombuffer(tier0_bytes, dtype=np.uint8).reshape(num_records, bytes_per_rec_t0)
+    keys_4c = t0_arr[:, :4]  # shape (N, 4)
+
+    offsets_arr = np.zeros((NUM_MIH_CHUNKS, NUM_MIH_BUCKETS + 1), dtype=np.int32)
+    postings_arr = np.empty((NUM_MIH_CHUNKS, num_records), dtype=np.int32)
+
+    for c in range(NUM_MIH_CHUNKS):
+        chunk_keys = keys_4c[:, c]
+        counts = np.bincount(chunk_keys, minlength=NUM_MIH_BUCKETS)
+        offsets_arr[c, 1:] = np.cumsum(counts, dtype=np.int32)
+        postings_arr[c, :] = np.argsort(chunk_keys, kind="stable").astype(np.int32)
+
+    return offsets_arr.tobytes() + postings_arr.tobytes()
+
+
+def _align64(offset: int) -> int:
+    """Aligns an integer byte offset upwards to the next 64-byte boundary."""
+    return (offset + 63) & ~63
+
+
+def _pad_to(file_obj, target_offset: int) -> None:
+    """Pads file object with zero bytes until reaching target offset."""
+    cur = file_obj.tell()
+    if cur < target_offset:
+        file_obj.write(bytes(target_offset - cur))
+
+
+# ==============================================================================
+# Enumerations & Data Classes
+# ==============================================================================
+
 class QuantizationMode(IntEnum):
-    """Supported vector quantization modes in Pithos."""
-    ONE_BIT = 0       # 1-bit sign quantization (1 bit per dimension)
-    TWO_BIT = 1       # 2-bit ternary / QJL residual quantization (2 bits per dimension)
-    FLOAT32 = 2       # Unquantized 32-bit float bypass
+    """Supported vector quantization modes in Pithos.
+
+    Attributes
+    ----------
+    ONE_BIT : int
+        1-bit sign binarization (1 bit per dimension).
+    TWO_BIT : int
+        2-bit ternary / QJL residual quantization (2 bits per dimension).
+    FLOAT32 : int
+        Unquantized 32-bit float bypass.
+    """
+    ONE_BIT = 0
+    TWO_BIT = 1
+    FLOAT32 = 2
+
 
 class SidecarMode(IntEnum):
-    """Supported float sidecar storage formats in Pithos."""
-    NONE = 0          # No float sidecar (asymmetric rotated L2 fallback)
-    FP16 = 1          # IEEE 754 half-precision float sidecar (_fp16.bin, 2 B/dim)
-    FP8  = 2          # OCP/NVIDIA Blackwell FP8 E4M3 sidecar (_fp8.bin, 1 B/dim)
-    FP4  = 3          # Blackwell NVFP4 E2M1 block microscaling (_fp4.bin, 0.5 B/dim + scale)
+    """Supported float sidecar storage formats in Pithos.
+
+    Attributes
+    ----------
+    NONE : int
+        No float sidecar (asymmetric rotated L2 fallback).
+    FP16 : int
+        IEEE 754 half-precision float sidecar (_fp16.bin, 2 B/dim).
+    FP8 : int
+        OCP/NVIDIA Blackwell FP8 E4M3 sidecar (_fp8.bin, 1 B/dim).
+    FP4 : int
+        Blackwell NVFP4 E2M1 block microscaling (_fp4.bin, 0.5 B/dim + scale).
+    """
+    NONE = 0
+    FP16 = 1
+    FP8 = 2
+    FP4 = 3
+
 
 @dataclass(frozen=True)
 class SearchResult:
-    """A single nearest neighbor search result."""
+    """Represents a single nearest neighbor search result.
+
+    Attributes
+    ----------
+    id : int
+        Unique 64-bit integer identifier of the vector record.
+    score : int
+        Raw integer score (Hamming distance or scaled float distance).
+    """
     id: int
     score: int
-    
+
     @property
     def distance(self) -> float:
-        """Returns the scaled float distance."""
+        """Scaled float distance (divided by 1,000,000)."""
         return self.score / 1_000_000.0
+
 
 @dataclass(frozen=True)
 class IndexInfo:
-    """Metadata attributes of a loaded Pithos index."""
+    """Metadata attributes of a loaded Pithos index.
+
+    Attributes
+    ----------
+    dimension : int
+        Total vector dimensionality (D).
+    size : int
+        Total number of records in the index (N).
+    planet_id : int
+        Planetary body identifier code.
+    planet_radius : int
+        Equatorial planetary radius in meters.
+    tiers_count : int
+        Number of configured Matryoshka tiers.
+    sidecar_mode : SidecarMode
+        Precision sidecar format attached to index.
+    """
     dimension: int
     size: int
     planet_id: int
@@ -229,6 +508,7 @@ class IndexInfo:
         return getattr(self, item)
 
     def to_dict(self) -> Dict[str, Any]:
+        """Serializes IndexInfo to a standard Python dictionary."""
         return {
             "dimension": self.dimension,
             "size": self.size,
@@ -239,78 +519,32 @@ class IndexInfo:
         }
 
 
-class DeltaBuffer:
-    """
-    Log-Structured Merge (LSM) in-memory write buffer for real-time inserts.
-    """
-    def __init__(self, db: VectorDb, index_name: str):
-        self._db = db
-        self._name = index_name
-        self._ffi = db._ffi
-
-    @property
-    def name(self) -> str:
-        return self._name
-
-    def insert(self, record_id: int, vector: Union[np.ndarray, Sequence[float]]) -> None:
-        """Inserts a new vector into the delta buffer."""
-        vec = np.ascontiguousarray(vector, dtype=np.float32)
-        status = self._ffi.lib.vdb_insert(
-            self._ffi.thread,
-            self._name.encode("utf-8"),
-            ctypes.c_longlong(record_id),
-            vec.ctypes.data_as(ctypes.c_void_p)
-        )
-        self._ffi.check_status(status, "insert into DeltaBuffer")
-
-    def delete(self, record_id: int) -> bool:
-        """Soft-deletes a record from the delta buffer (tombstone)."""
-        ret = self._ffi.lib.vdb_delete_from_delta(
-            self._ffi.thread,
-            self._name.encode("utf-8"),
-            ctypes.c_longlong(record_id)
-        )
-        if ret < 0:
-            raise PithosNativeError(ret, f"Failed to delete record {record_id} from delta buffer.")
-        return ret == 1
-
-    def size(self) -> int:
-        """Returns the number of live (non-tombstoned) records in the delta buffer."""
-        size = self._ffi.lib.vdb_delta_size(self._ffi.thread, self._name.encode("utf-8"))
-        if size < 0:
-            raise PithosNativeError(int(size), "Failed to retrieve delta buffer size.")
-        return int(size)
-
-    def needs_flush(self) -> bool:
-        """Returns True if the live count has exceeded the configured flush threshold."""
-        ret = self._ffi.lib.vdb_needs_flush(self._ffi.thread, self._name.encode("utf-8"))
-        if ret < 0:
-            raise PithosNativeError(ret, "Failed to check flush state.")
-        return ret == 1
-
-    def backup(self, path: str) -> None:
-        """Serializes the live delta entries to a binary backup file."""
-        status = self._ffi.lib.vdb_backup_delta(
-            self._ffi.thread,
-            self._name.encode("utf-8"),
-            path.encode("utf-8")
-        )
-        self._ffi.check_status(status, "backup DeltaBuffer")
-
-    def restore(self, path: str, flush_threshold: int = 10000) -> None:
-        """Restores delta entries from a binary backup file."""
-        status = self._ffi.lib.vdb_restore_delta(
-            self._ffi.thread,
-            self._name.encode("utf-8"),
-            path.encode("utf-8"),
-            ctypes.c_int(flush_threshold)
-        )
-        self._ffi.check_status(status, "restore DeltaBuffer")
-
 @dataclass(frozen=True)
 class FpgaDescriptor:
-    """
-    Hardware descriptor for direct FPGA DMA streaming and MMIO register configuration.
+    """Hardware descriptor for direct FPGA DMA streaming and MMIO register configuration.
+
+    Attributes
+    ----------
+    tier_index : int
+        Zero-based index of the target tier.
+    tier_dimension : int
+        Bit dimension of the tier.
+    record_count : int
+        Total number of records to stream.
+    tier_base_address : int
+        Raw 64-bit off-heap virtual address of the tier bit vectors.
+    tier_byte_length : int
+        Byte length of the tier buffer.
+    metadata_base_address : int
+        Virtual address of metadata bitmask segment.
+    metadata_byte_length : int
+        Byte length of metadata buffer.
+    ids_base_address : int
+        Virtual address of record ID segment.
+    ids_byte_length : int
+        Byte length of record ID buffer.
+    words_per_record : int
+        Number of 64-bit words per record vector.
     """
     tier_index: int
     tier_dimension: int
@@ -323,28 +557,212 @@ class FpgaDescriptor:
     ids_byte_length: int
     words_per_record: int
 
-class Index:
-    """
-    Handle to an off-heap memory-mapped multi-tier vector index.
-    """
-    def __init__(self, db: VectorDb, name: str, base_path: str):
 
+# ==============================================================================
+# DeltaBuffer (LSM Real-Time Ingest)
+# ==============================================================================
+
+class DeltaBuffer:
+    """Log-Structured Merge (LSM) in-memory write buffer for real-time inserts.
+
+    Parameters
+    ----------
+    db : VectorDb
+        Parent VectorDb instance.
+    index_name : str
+        Target index identifier.
+    """
+
+    def __init__(self, db: VectorDb, index_name: str):
+        self._db = db
+        self._name = index_name
+        self._ffi = db._ffi
+
+    @property
+    def name(self) -> str:
+        """Name of the attached index."""
+        return self._name
+
+    def insert(self, record_id: int, vector: Union[np.ndarray, Sequence[float]]) -> None:
+        """Inserts a single vector record into the active delta buffer.
+
+        Parameters
+        ----------
+        record_id : int
+            Unique 64-bit integer identifier for the vector.
+        vector : array_like
+            Float vector of shape (D,).
+        """
+        vec = _check_dtype_float32(np.asarray(vector).flatten(), "vector")
+        status = self._ffi.lib.vdb_insert(
+            self._ffi.thread,
+            self._name.encode("utf-8"),
+            ctypes.c_longlong(record_id),
+            vec.ctypes.data_as(ctypes.c_void_p),
+        )
+        self._ffi.check_status(status, "insert into DeltaBuffer")
+
+    def delete(self, record_id: int) -> bool:
+        """Soft-deletes a record from the delta buffer via tombstone masking.
+
+        Parameters
+        ----------
+        record_id : int
+            Identifier of record to mark as tombstone.
+
+        Returns
+        -------
+        bool
+            True if record was marked deleted, False otherwise.
+        """
+        ret = self._ffi.lib.vdb_delete_from_delta(
+            self._ffi.thread,
+            self._name.encode("utf-8"),
+            ctypes.c_longlong(record_id),
+        )
+        if ret < 0:
+            raise PithosNativeError(ret, f"Failed to delete record {record_id} from delta buffer.")
+        return ret == 1
+
+    def size(self) -> int:
+        """Returns the number of live (non-tombstoned) records in the delta buffer."""
+        sz = self._ffi.lib.vdb_delta_size(self._ffi.thread, self._name.encode("utf-8"))
+        if sz < 0:
+            raise PithosNativeError(int(sz), "Failed to retrieve delta buffer size.")
+        return int(sz)
+
+    def needs_flush(self) -> bool:
+        """Returns True if live count has exceeded configured flush threshold."""
+        ret = self._ffi.lib.vdb_needs_flush(self._ffi.thread, self._name.encode("utf-8"))
+        if ret < 0:
+            raise PithosNativeError(ret, "Failed to check flush state.")
+        return ret == 1
+
+    def backup(self, path: str) -> None:
+        """Serializes live delta entries to a binary backup file.
+
+        Parameters
+        ----------
+        path : str
+            Destination filepath for backup binary.
+        """
+        status = self._ffi.lib.vdb_backup_delta(
+            self._ffi.thread,
+            self._name.encode("utf-8"),
+            path.encode("utf-8"),
+        )
+        self._ffi.check_status(status, "backup DeltaBuffer")
+
+    def restore(self, path: str, flush_threshold: int = 10000) -> None:
+        """Restores delta entries from a binary backup file.
+
+        Parameters
+        ----------
+        path : str
+            Source backup filepath.
+        flush_threshold : int, default=10000
+            Max live entries before trigger threshold.
+        """
+        status = self._ffi.lib.vdb_restore_delta(
+            self._ffi.thread,
+            self._name.encode("utf-8"),
+            path.encode("utf-8"),
+            ctypes.c_int(flush_threshold),
+        )
+        self._ffi.check_status(status, "restore DeltaBuffer")
+
+
+# ==============================================================================
+# Index (FAISS-Grade High-Performance Handle)
+# ==============================================================================
+
+class Index:
+    """Handle to an off-heap memory-mapped multi-tier vector index.
+
+    Supports FAISS-compatible query conventions, pre-allocated zero-allocation
+    numpy output arrays, hardware DMA descriptors, and precision sidecar reranking.
+    """
+
+    def __init__(self, db: VectorDb, name: str, base_path: str):
         self._db = db
         self._name = name
         self._base_path = base_path
         self._ffi = db._ffi
         self._info: Optional[IndexInfo] = None
 
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Protects Index attributes against silent assignment bugs (FAISS standard)."""
+        valid_slots = {
+            "_db", "_name", "_base_path", "_ffi", "_info", "d", "ntotal",
+            "referenced_objects"
+        }
+        if name.startswith("_") or name in valid_slots or hasattr(self, name) or hasattr(self.__class__, name):
+            super().__setattr__(name, value)
+        else:
+            raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'.")
+
+    # --------------------------------------------------------------------------
+    # FAISS-Standard Properties & Aliases
+    # --------------------------------------------------------------------------
+    @property
+    def d(self) -> int:
+        """Vector dimensionality D (FAISS compatibility alias)."""
+        return self.info().dimension
+
+    @property
+    def dimension(self) -> int:
+        """Vector dimensionality D."""
+        return self.d
+
+    @property
+    def ntotal(self) -> int:
+        """Total number of vectors in index N (FAISS compatibility alias)."""
+        return len(self)
+
+    @property
+    def is_trained(self) -> bool:
+        """Always True: Pithos isometric WHT projection requires zero offline training."""
+        return True
+
     @property
     def name(self) -> str:
+        """Index identifier name."""
         return self._name
 
     @property
     def base_path(self) -> str:
+        """Base filesystem path of the index or container."""
         return self._base_path
 
+    @property
+    def planet_id(self) -> int:
+        """Planetary body identifier code."""
+        return self.info().planet_id
+
+    @property
+    def planet_radius(self) -> int:
+        """Equatorial planetary radius in meters."""
+        return self.info().planet_radius
+
+    @property
+    def tier_count(self) -> int:
+        """Number of configured Matryoshka tiers."""
+        return self.info().tiers_count
+
+    @property
+    def is_cuda_capable(self) -> bool:
+        """Returns True if loaded native binary supports CUDA GPU acceleration."""
+        return self._ffi._has_cuda
+
+    def __len__(self) -> int:
+        return int(self._ffi.lib.vdb_size(self._ffi.thread, self._name.encode("utf-8")))
+
+    def size(self) -> int:
+        """Returns total number of records in index N."""
+        return len(self)
+
     def info(self) -> IndexInfo:
-        """Retrieves index metadata (dimension, size, tiers, planetId)."""
+        """Retrieves complete index metadata descriptor."""
         dim = ctypes.c_int()
         sz = ctypes.c_longlong()
         pid = ctypes.c_byte()
@@ -358,10 +776,10 @@ class Index:
             ctypes.byref(sz),
             ctypes.byref(pid),
             ctypes.byref(prad),
-            ctypes.byref(tcount)
+            ctypes.byref(tcount),
         )
         self._ffi.check_status(status, "get index info")
-        
+
         if hasattr(self._ffi.lib, "vdb_get_sidecar_mode"):
             sidecar_code = self._ffi.lib.vdb_get_sidecar_mode(self._ffi.thread, self._name.encode("utf-8"))
             sidecar_mode = SidecarMode(sidecar_code) if sidecar_code >= 0 else SidecarMode.NONE
@@ -393,70 +811,99 @@ class Index:
             planet_id=pid.value,
             planet_radius=prad.value,
             tiers_count=tcount.value,
-            sidecar_mode=sidecar_mode
+            sidecar_mode=sidecar_mode,
         )
         return self._info
 
-    def __len__(self) -> int:
-        return int(self._ffi.lib.vdb_size(self._ffi.thread, self._name.encode("utf-8")))
-
-    def size(self) -> int:
-        """Returns the total number of records in the index."""
-        return len(self)
-
-    @property
-    def dimension(self) -> int:
-        return self.info().dimension
-
-    @property
-    def planet_id(self) -> int:
-        return self.info().planet_id
-
-    @property
-    def planet_radius(self) -> int:
-        return self.info().planet_radius
-
-    @property
-    def tier_count(self) -> int:
-        return self.info().tiers_count
-
     def set_chunk_size(self, chunk_size: int) -> None:
-        """Configures the parallel record chunk size for Disruptor worker threads."""
+        """Configures parallel record chunk size for Disruptor worker threads.
+
+        Parameters
+        ----------
+        chunk_size : int
+            Number of vector records per worker chunk batch.
+        """
         status = self._ffi.lib.vdb_set_chunk_size(
             self._ffi.thread,
             self._name.encode("utf-8"),
-            ctypes.c_longlong(chunk_size)
+            ctypes.c_longlong(chunk_size),
         )
         self._ffi.check_status(status, "set chunk size")
 
     def set_energy_budget(self, tau: float) -> None:
-        """Sets the Matryoshka early-exit cumulative spectral energy budget tau in (0, 1]."""
+        """Sets Matryoshka early-exit cumulative spectral energy budget tau in (0, 1].
+
+        Parameters
+        ----------
+        tau : float
+            Energy cutoff ratio between 0.0 and 1.0.
+        """
         status = self._ffi.lib.vdb_set_energy_budget(
             self._ffi.thread,
             self._name.encode("utf-8"),
-            ctypes.c_double(tau)
+            ctypes.c_double(tau),
         )
         self._ffi.check_status(status, "set energy budget")
 
+    # --------------------------------------------------------------------------
+    # Search & Query Methods (FAISS NumPy Standard)
+    # --------------------------------------------------------------------------
     def search(
         self,
         queries: Union[np.ndarray, Sequence[float], Sequence[Sequence[float]]],
         k: int = 10,
+        *,
+        D: Optional[np.ndarray] = None,
+        I: Optional[np.ndarray] = None,
         cuda: bool = False,
-        return_numpy: bool = False
+        return_numpy: bool = False,
     ) -> Union[List[SearchResult], List[List[SearchResult]], Tuple[np.ndarray, np.ndarray]]:
+        """Finds the k nearest neighbors of query vectors x.
+
+        Supports FAISS-style pre-allocated arrays (D, I) for zero-allocation loops.
+
+        Parameters
+        ----------
+        queries : array_like
+            Query vectors, shape (n, d) or 1D shape (d,). `dtype` must be float32.
+        k : int, default=10
+            Number of nearest neighbors to return. Must be > 0.
+        D : ndarray, optional
+            Pre-allocated distance array of shape (n, k) and dtype int32.
+        I : ndarray, optional
+            Pre-allocated label array of shape (n, k) and dtype int64.
+        cuda : bool, default=False
+            Whether to dispatch to CUDA GPU kernel if available.
+        return_numpy : bool, default=False
+            If True, returns tuple (I, D) as flat NumPy arrays.
+
+        Returns
+        -------
+        results : list of SearchResult, list of list of SearchResult, or tuple (I, D)
+            Nearest neighbor results.
         """
-        Performs high-performance batch k-NN search across multi-tier vectors.
-        If return_numpy=True, returns (out_ids, out_distances) directly as flat numpy arrays (zero-copy).
-        """
-        q_arr = np.ascontiguousarray(queries, dtype=np.float32)
+        q_arr = _check_dtype_float32(np.asarray(queries), "queries")
         is_single = q_arr.ndim == 1
         if is_single:
             q_arr = q_arr.reshape(1, -1)
-            
+
         num_queries, dim = q_arr.shape
-        out_ids = np.empty((num_queries, k), dtype=np.int64)
-        out_dists = np.empty((num_queries, k), dtype=np.int32)
+        if dim != self.dimension:
+            raise ValueError(f"Query dimension {dim} does not match index dimension {self.dimension}")
+        if k <= 0:
+            raise ValueError(f"k must be > 0, got {k}")
+
+        if I is None:
+            out_ids = np.empty((num_queries, k), dtype=np.int64)
+        else:
+            assert I.shape == (num_queries, k)
+            out_ids = _check_dtype_int64(I, "I")
+
+        if D is None:
+            out_dists = np.empty((num_queries, k), dtype=np.int32)
+        else:
+            assert D.shape == (num_queries, k)
+            out_dists = np.ascontiguousarray(D, dtype=np.int32)
 
         if cuda and self._ffi._has_cuda:
             status = self._ffi.lib.vdb_cuda_batch_search(
@@ -466,7 +913,7 @@ class Index:
                 ctypes.c_int(num_queries),
                 ctypes.c_int(k),
                 out_ids.ctypes.data_as(ctypes.c_void_p),
-                out_dists.ctypes.data_as(ctypes.c_void_p)
+                out_dists.ctypes.data_as(ctypes.c_void_p),
             )
         else:
             status = self._ffi.lib.vdb_batch_search(
@@ -476,12 +923,12 @@ class Index:
                 ctypes.c_int(num_queries),
                 ctypes.c_int(k),
                 out_ids.ctypes.data_as(ctypes.c_void_p),
-                out_dists.ctypes.data_as(ctypes.c_void_p)
+                out_dists.ctypes.data_as(ctypes.c_void_p),
             )
         self._ffi.check_status(status, "search")
 
-        if return_numpy:
-            return (out_ids[0], out_dists[0]) if is_single else (out_ids, out_dists)
+        if return_numpy or D is not None or I is not None:
+            return (out_ids[0], out_dists[0]) if is_single and D is None else (out_ids, out_dists)
 
         results: List[List[SearchResult]] = []
         for q_idx in range(num_queries):
@@ -499,11 +946,27 @@ class Index:
         self,
         queries: Union[np.ndarray, Sequence[float], Sequence[Sequence[float]]],
         k: int = 10,
-        cuda: bool = False
+        cuda: bool = False,
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Zero-Copy batch k-NN search returning flat numpy arrays (out_ids, out_distances).
+        """Zero-Copy batch k-NN search returning flat numpy arrays (out_ids, out_distances).
+
         Completely bypasses Python object allocation and GC overhead.
+
+        Parameters
+        ----------
+        queries : array_like
+            Query vectors of shape (n, d) or (d,).
+        k : int, default=10
+            Number of nearest neighbors to retrieve.
+        cuda : bool, default=False
+            Whether to use CUDA acceleration.
+
+        Returns
+        -------
+        out_ids : ndarray
+            Int64 array of shape (n, k) with neighbor IDs.
+        out_distances : ndarray
+            Int32 array of shape (n, k) with neighbor distances.
         """
         return self.search(queries, k=k, cuda=cuda, return_numpy=True)
 
@@ -512,34 +975,40 @@ class Index:
         queries: Union[np.ndarray, Sequence[float], Sequence[Sequence[float]]],
         k: int = 10,
         cuda: bool = False,
-        return_numpy: bool = False
+        return_numpy: bool = False,
     ) -> Union[List[SearchResult], List[List[SearchResult]], Tuple[np.ndarray, np.ndarray]]:
-        """
-        Alias for search() performing batch k-NN search across multi-tier vectors.
-        """
+        """Alias for search() performing batch k-NN search across multi-tier vectors."""
         return self.search(queries, k=k, cuda=cuda, return_numpy=return_numpy)
 
     def batch_search_numpy(
         self,
         queries: Union[np.ndarray, Sequence[float], Sequence[Sequence[float]]],
         k: int = 10,
-        cuda: bool = False
+        cuda: bool = False,
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Zero-Copy batch k-NN search returning flat numpy arrays (out_ids, out_distances).
-        """
+        """Zero-Copy batch k-NN search returning flat numpy arrays (out_ids, out_distances)."""
         return self.search(queries, k=k, cuda=cuda, return_numpy=True)
 
     def search_merged(
         self,
         query: Union[np.ndarray, Sequence[float]],
-        k: int = 10
+        k: int = 10,
     ) -> List[SearchResult]:
+        """Queries both the base memory-mapped index and the active DeltaBuffer, merging results.
+
+        Parameters
+        ----------
+        query : array_like
+            Query vector of shape (d,).
+        k : int, default=10
+            Number of nearest neighbors to retrieve.
+
+        Returns
+        -------
+        List[SearchResult]
+            Merged and deduplicated search results.
         """
-        Queries both the base memory-mapped index and the active DeltaBuffer,
-        merging and deduplicating results.
-        """
-        q_arr = np.ascontiguousarray(query, dtype=np.float32).flatten()
+        q_arr = _check_dtype_float32(np.asarray(query).flatten(), "query")
         out_ids = np.empty(k, dtype=np.int64)
         out_dists = np.empty(k, dtype=np.int32)
 
@@ -549,7 +1018,7 @@ class Index:
             q_arr.ctypes.data_as(ctypes.c_void_p),
             ctypes.c_int(k),
             out_ids.ctypes.data_as(ctypes.c_void_p),
-            out_dists.ctypes.data_as(ctypes.c_void_p)
+            out_dists.ctypes.data_as(ctypes.c_void_p),
         )
         self._ffi.check_status(status, "search merged (base + delta)")
 
@@ -568,23 +1037,42 @@ class Index:
         thresholds: np.ndarray,
         out_voting_mask: Optional[np.ndarray] = None,
         voting_mask: Optional[np.ndarray] = None,
-        cuda: bool = False
-    ) -> tuple[int, np.ndarray]:
+        cuda: bool = False,
+    ) -> Tuple[int, np.ndarray]:
+        """Performs multi-family resonant voting across scientific criteria.
+
+        Parameters
+        ----------
+        queries : ndarray
+            Query vectors, shape (num_queries, D).
+        families : ndarray
+            Semantic family identifiers (0..7), shape (num_queries,).
+        thresholds : ndarray
+            Cutoff thresholds, shape (num_queries,).
+        voting_mask : ndarray, optional
+            Pre-allocated byte mask of size N.
+        cuda : bool, default=False
+            Whether to use CUDA acceleration.
+
+        Returns
+        -------
+        resonant_count : int
+            Number of candidate records exceeding resonance threshold.
+        voting_mask : ndarray
+            Binary voting mask array.
         """
-        Performs multi-family resonant voting across scientific criteria.
-        """
-        q_arr = np.ascontiguousarray(queries, dtype=np.float32)
+        q_arr = _check_dtype_float32(queries, "queries")
         f_arr = np.ascontiguousarray(families, dtype=np.int32)
         t_arr = np.ascontiguousarray(thresholds, dtype=np.int32)
-        
+
         num_queries = q_arr.shape[0]
         total_records = len(self)
-        
+
         mask = voting_mask if voting_mask is not None else out_voting_mask
         if mask is None:
             mask = np.zeros(total_records, dtype=np.uint8)
         else:
-            mask = np.ascontiguousarray(mask, dtype=np.uint8)
+            mask = _check_dtype_uint8(mask, "voting_mask")
 
         if cuda and self._ffi._has_cuda:
             resonant_count = self._ffi.lib.vdb_cuda_query_planetary_grid(
@@ -594,7 +1082,7 @@ class Index:
                 f_arr.ctypes.data_as(ctypes.c_void_p),
                 t_arr.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(num_queries),
-                mask.ctypes.data_as(ctypes.c_void_p)
+                mask.ctypes.data_as(ctypes.c_void_p),
             )
         else:
             resonant_count = self._ffi.lib.vdb_query_planetary_grid(
@@ -604,16 +1092,18 @@ class Index:
                 f_arr.ctypes.data_as(ctypes.c_void_p),
                 t_arr.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(num_queries),
-                mask.ctypes.data_as(ctypes.c_void_p)
+                mask.ctypes.data_as(ctypes.c_void_p),
             )
-            
+
         if resonant_count < 0:
             self._ffi.check_status(resonant_count, "query planetary grid")
         return int(resonant_count), mask
 
-    def get_tier_memory_address(self, tier_idx: int) -> tuple[int, int]:
-        """Returns the raw virtual address and byte length of a tier segment for direct DMA/FPGA execution."""
-
+    # --------------------------------------------------------------------------
+    # Off-Heap Memory Buffers & Hardware Descriptors
+    # --------------------------------------------------------------------------
+    def get_tier_address(self, tier_idx: int) -> Tuple[int, int]:
+        """Returns the raw virtual address and byte length of a tier segment."""
         addr = ctypes.c_longlong()
         length = ctypes.c_longlong()
         status = self._ffi.lib.vdb_get_tier_address(
@@ -621,14 +1111,14 @@ class Index:
             self._name.encode("utf-8"),
             ctypes.c_int(tier_idx),
             ctypes.byref(addr),
-            ctypes.byref(length)
+            ctypes.byref(length),
         )
         self._ffi.check_status(status, "get tier memory address")
         return addr.value, length.value
 
-    get_tier_address = get_tier_memory_address
+    get_tier_memory_address = get_tier_address
 
-    def get_metadata_address(self) -> tuple[int, int]:
+    def get_metadata_address(self) -> Tuple[int, int]:
         """Returns the raw off-heap address and byte length of the metadata sidecar segment."""
         addr = ctypes.c_longlong()
         length = ctypes.c_longlong()
@@ -636,12 +1126,12 @@ class Index:
             self._ffi.thread,
             self._name.encode("utf-8"),
             ctypes.byref(addr),
-            ctypes.byref(length)
+            ctypes.byref(length),
         )
         self._ffi.check_status(status, "get metadata address")
         return addr.value, length.value
 
-    def get_ids_address(self) -> tuple[int, int]:
+    def get_ids_address(self) -> Tuple[int, int]:
         """Returns the raw off-heap address and byte length of the record IDs segment."""
         addr = ctypes.c_longlong()
         length = ctypes.c_longlong()
@@ -649,43 +1139,35 @@ class Index:
             self._ffi.thread,
             self._name.encode("utf-8"),
             ctypes.byref(addr),
-            ctypes.byref(length)
+            ctypes.byref(length),
         )
         self._ffi.check_status(status, "get IDs address")
         return addr.value, length.value
 
     def get_tier_buffer(self, tier_idx: int = 0) -> np.ndarray:
-        """
-        Returns a zero-copy NumPy ndarray viewing the raw off-heap memory-mapped tier bit vectors.
-        """
+        """Returns a zero-copy uint8 NumPy ndarray viewing the raw off-heap tier bit vectors."""
         addr, length = self.get_tier_address(tier_idx)
         c_arr = (ctypes.c_uint8 * length).from_address(addr)
         return np.ctypeslib.as_array(c_arr)
 
     def get_metadata_buffer(self) -> np.ndarray:
-        """
-        Returns a zero-copy uint64 NumPy ndarray viewing the raw off-heap metadata bitmask flags.
-        """
+        """Returns a zero-copy uint64 NumPy ndarray viewing the raw off-heap metadata bitmask flags."""
         addr, length = self.get_metadata_address()
         c_arr = (ctypes.c_uint64 * (length // 8)).from_address(addr)
         return np.ctypeslib.as_array(c_arr)
 
     def get_ids_buffer(self) -> np.ndarray:
-        """
-        Returns a zero-copy int64 NumPy ndarray viewing the raw off-heap record IDs.
-        """
+        """Returns a zero-copy int64 NumPy ndarray viewing the raw off-heap record IDs."""
         addr, length = self.get_ids_address()
         c_arr = (ctypes.c_int64 * (length // 8)).from_address(addr)
         return np.ctypeslib.as_array(c_arr)
 
     def get_fpga_descriptor(self, tier_idx: int = 0) -> FpgaDescriptor:
-        """
-        Generates a complete hardware descriptor for FPGA DMA engines and PCIe MMIO registers.
-        """
+        """Generates a complete hardware descriptor for FPGA DMA engines and PCIe MMIO registers."""
         tier_addr, tier_len = self.get_tier_address(tier_idx)
         meta_addr, meta_len = self.get_metadata_address()
         ids_addr, ids_len = self.get_ids_address()
-        
+
         num_recs = self.size()
         if num_recs > 0 and tier_len > 0:
             bytes_per_rec = int(tier_len // num_recs)
@@ -694,7 +1176,7 @@ class Index:
         else:
             tier_dim = self.dimension
             words_per_record = (tier_dim + 63) // 64
-        
+
         return FpgaDescriptor(
             tier_index=tier_idx,
             tier_dimension=tier_dim,
@@ -705,12 +1187,15 @@ class Index:
             metadata_byte_length=meta_len,
             ids_base_address=ids_addr,
             ids_byte_length=ids_len,
-            words_per_record=words_per_record
+            words_per_record=words_per_record,
         )
 
+    # --------------------------------------------------------------------------
+    # Single-File Container Metadata & Partitions
+    # --------------------------------------------------------------------------
     @property
     def user_metadata(self) -> dict:
-        """Returns the user metadata dictionary embedded in the .pithos single-file container."""
+        """User metadata dictionary embedded in the single-file container."""
         if hasattr(self._ffi.lib, "vdb_get_user_metadata"):
             buf = ctypes.create_string_buffer(65536)
             res = self._ffi.lib.vdb_get_user_metadata(self._ffi.thread, self._name.encode("utf-8"), buf, 65536)
@@ -731,7 +1216,7 @@ class Index:
         return {}
 
     @property
-    def arrow_table(self):
+    def arrow_table(self) -> Any:
         """Reads Section 4 metadata payload as an Apache Arrow Table if formatted as 'arrow'."""
         if not self._base_path:
             return None
@@ -754,7 +1239,7 @@ class Index:
 
     @property
     def partitions(self) -> dict:
-        """Returns partition metadata dictionary from the container's Table of Contents or Arrow table."""
+        """Partition metadata dictionary from Table of Contents or Arrow payload."""
         user_meta = self.user_metadata
         if "partitions" in user_meta:
             return user_meta["partitions"]
@@ -763,44 +1248,40 @@ class Index:
             return tbl.to_pydict()
         return {}
 
-    @property
-    def is_cuda_capable(self) -> bool:
-        """Returns True if the loaded native library includes CUDA hardware acceleration symbols."""
-        return self._ffi._has_cuda
-
-
     def transform_and_quantize(self, vector: Union[np.ndarray, Sequence[float]]) -> np.ndarray:
+        """Transforms a continuous float vector through Rademacher preconditioning & Fast Walsh-Hadamard rotation.
+
+        Parameters
+        ----------
+        vector : array_like
+            Input continuous vector of shape (D,).
+
+        Returns
+        -------
+        ndarray
+            Quantized 64-bit uint64 packed word array of length `(D + 63) // 64`.
         """
-        Transforms a continuous float vector through Rademacher sign preconditioning
-        and block-diagonal Fast Walsh-Hadamard rotation, returning packed 64-bit uint64 words.
-        """
-        vec = np.ascontiguousarray(vector, dtype=np.float32).flatten()
+        vec = _check_dtype_float32(np.asarray(vector).flatten(), "vector")
         dim = self.dimension
         if vec.shape[0] != dim:
             raise ValueError(f"Vector dimension {vec.shape[0]} does not match index dimension {dim}")
-        
+
         words_count = (dim + 63) // 64
         out_packed = np.zeros(words_count, dtype=np.uint64)
-        
+
         status = self._ffi.lib.vdb_transform_and_quantize(
             self._ffi.thread,
             self._name.encode("utf-8"),
             vec.ctypes.data_as(ctypes.c_void_p),
-            out_packed.ctypes.data_as(ctypes.c_void_p)
+            out_packed.ctypes.data_as(ctypes.c_void_p),
         )
         self._ffi.check_status(status, "transform and quantize vector")
         return out_packed
 
 
-
-
-def _align64(offset: int) -> int:
-    return (offset + 63) & ~63
-
-def _pad_to(file_obj, target_offset: int) -> None:
-    cur = file_obj.tell()
-    if cur < target_offset:
-        file_obj.write(bytes(target_offset - cur))
+# ==============================================================================
+# Container Writing Core
+# ==============================================================================
 
 def _write_pithos_container_file(
     path: str,
@@ -813,9 +1294,9 @@ def _write_pithos_container_file(
     metadata_payload: Optional[bytes],
     metadata_format: str,
     user_metadata: Optional[dict],
-    ffi: NativeBindings
+    ffi: NativeBindings,
 ) -> None:
-    import tempfile
+    """Internal builder compiling vectors directly into a single .pithos container."""
     num_records, dimension = vecs.shape
     num_tiers = len(tiers_arr)
 
@@ -834,27 +1315,11 @@ def _write_pithos_container_file(
                 vecs.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(num_records),
                 ctypes.c_int(int(q_mode)),
-                ctypes.c_int(int(actual_sidecar))
+                ctypes.c_int(int(actual_sidecar)),
             )
             ffi.check_status(status, "compile temporary index files")
 
-        if actual_sidecar == SidecarMode.FP8:
-            fp8_file = f"{tmp_base}_fp8.bin"
-            if not os.path.exists(fp8_file) or os.path.getsize(fp8_file) != num_records * dimension:
-                fp8_bytes = _encode_fp8_e4m3_array(vecs).tobytes()
-                with open(fp8_file, "wb") as f:
-                    f.write(fp8_bytes)
-        elif actual_sidecar == SidecarMode.FP4:
-            fp4_file = f"{tmp_base}_fp4.bin"
-            num_blocks = (dimension + 15) // 16
-            bytes_per_rec = num_blocks * 9
-            if not os.path.exists(fp4_file) or os.path.getsize(fp4_file) != num_records * bytes_per_rec:
-                fp4_bytes = _encode_nvfp4_blocks_array(vecs).tobytes()
-                with open(fp4_file, "wb") as f:
-                    f.write(fp4_bytes)
-
-        with open(f"{tmp_base}_ids.bin", "rb") as f:
-            ids_bytes = f.read()
+        ids_bytes = ids_arr.tobytes()
 
         tier_bytes_list = []
         for k in range(num_tiers):
@@ -863,17 +1328,31 @@ def _write_pithos_container_file(
 
         sidecar_bytes = b""
         sidecar_format = "none"
-        if actual_sidecar == SidecarMode.FP16 and os.path.exists(f"{tmp_base}_fp16.bin"):
-            with open(f"{tmp_base}_fp16.bin", "rb") as f:
-                sidecar_bytes = f.read()
+        if actual_sidecar == SidecarMode.FP16:
+            fp16_file = f"{tmp_base}_fp16.bin"
+            if os.path.exists(fp16_file) and os.path.getsize(fp16_file) == num_records * dimension * 2:
+                with open(fp16_file, "rb") as f:
+                    sidecar_bytes = f.read()
+            else:
+                sidecar_bytes = vecs.astype(np.float16).tobytes()
             sidecar_format = "fp16"
-        elif actual_sidecar == SidecarMode.FP8 and os.path.exists(f"{tmp_base}_fp8.bin"):
-            with open(f"{tmp_base}_fp8.bin", "rb") as f:
-                sidecar_bytes = f.read()
+        elif actual_sidecar == SidecarMode.FP8:
+            fp8_file = f"{tmp_base}_fp8.bin"
+            if os.path.exists(fp8_file) and os.path.getsize(fp8_file) == num_records * dimension:
+                with open(fp8_file, "rb") as f:
+                    sidecar_bytes = f.read()
+            else:
+                sidecar_bytes = _encode_fp8_e4m3_array(vecs).tobytes()
             sidecar_format = "fp8_e4m3"
-        elif actual_sidecar == SidecarMode.FP4 and os.path.exists(f"{tmp_base}_fp4.bin"):
-            with open(f"{tmp_base}_fp4.bin", "rb") as f:
-                sidecar_bytes = f.read()
+        elif actual_sidecar == SidecarMode.FP4:
+            fp4_file = f"{tmp_base}_fp4.bin"
+            num_blocks = (dimension + 15) // 16
+            bytes_per_rec = num_blocks * 9
+            if os.path.exists(fp4_file) and os.path.getsize(fp4_file) == num_records * bytes_per_rec:
+                with open(fp4_file, "rb") as f:
+                    sidecar_bytes = f.read()
+            else:
+                sidecar_bytes = _encode_nvfp4_blocks_array(vecs).tobytes()
             sidecar_format = "nvfp4_e2m1"
 
         meta_bytes = metadata_payload if metadata_payload else b""
@@ -899,51 +1378,7 @@ def _write_pithos_container_file(
             current_offset = _align64(current_offset + sidecar_len)
 
         # Multi-Index Hashing (MIH) Section (4 chunks x 256 buckets CSR)
-        NUM_MIH_CHUNKS = 4
-        NUM_MIH_BUCKETS = 256
-        MIH_OFFSETS_COUNT = NUM_MIH_CHUNKS * (NUM_MIH_BUCKETS + 1)
-        MIH_OFFSETS_BYTES = MIH_OFFSETS_COUNT * 4
-
-        chunk_bucket_keys = [[0] * num_records for _ in range(NUM_MIH_CHUNKS)]
-        chunk_bucket_counts = [[0] * NUM_MIH_BUCKETS for _ in range(NUM_MIH_CHUNKS)]
-
-        bytes_per_rec_t0 = len(tier_bytes_list[0]) // num_records if num_records > 0 else 0
-        tier0_raw = tier_bytes_list[0]
-        for i in range(num_records):
-            rec_off = i * bytes_per_rec_t0
-            k0 = tier0_raw[rec_off] if bytes_per_rec_t0 > 0 else 0
-            k1 = tier0_raw[rec_off + 1] if bytes_per_rec_t0 > 1 else 0
-            k2 = tier0_raw[rec_off + 2] if bytes_per_rec_t0 > 2 else 0
-            k3 = tier0_raw[rec_off + 3] if bytes_per_rec_t0 > 3 else 0
-            keys = [k0, k1, k2, k3]
-            for c in range(NUM_MIH_CHUNKS):
-                chunk_bucket_keys[c][i] = keys[c]
-                chunk_bucket_counts[c][keys[c]] += 1
-
-        prefix_offsets_bytes = bytearray(MIH_OFFSETS_BYTES)
-        prefix_postings_bytes = bytearray(NUM_MIH_CHUNKS * num_records * 4)
-
-        for c in range(NUM_MIH_CHUNKS):
-            bucket_offsets = [0] * (NUM_MIH_BUCKETS + 1)
-            running = 0
-            for b in range(NUM_MIH_BUCKETS):
-                bucket_offsets[b] = running
-                running += chunk_bucket_counts[c][b]
-            bucket_offsets[NUM_MIH_BUCKETS] = num_records
-
-            off_base = c * (NUM_MIH_BUCKETS + 1) * 4
-            for b in range(NUM_MIH_BUCKETS + 1):
-                prefix_offsets_bytes[off_base + b*4 : off_base + (b+1)*4] = int(bucket_offsets[b]).to_bytes(4, byteorder="little", signed=True)
-
-            current_ptrs = list(bucket_offsets)
-            post_base = c * num_records * 4
-            for i in range(num_records):
-                b = chunk_bucket_keys[c][i]
-                dest = current_ptrs[b]
-                prefix_postings_bytes[post_base + dest*4 : post_base + (dest+1)*4] = int(i).to_bytes(4, byteorder="little", signed=True)
-                current_ptrs[b] += 1
-
-        prefix_table_bytes = prefix_offsets_bytes + prefix_postings_bytes
+        prefix_table_bytes = _build_mih_csr_table(tier_bytes_list[0], num_records)
         prefix_table_offset = current_offset
         prefix_table_len = len(prefix_table_bytes)
         current_offset = _align64(current_offset + prefix_table_len)
@@ -961,37 +1396,35 @@ def _write_pithos_container_file(
             "sections": {
                 "ids": {"offset": ids_offset, "length": ids_len, "dtype": "uint64"}
             },
-            "user_metadata": user_metadata if user_metadata else {}
+            "user_metadata": user_metadata if user_metadata else {},
         }
         for k in range(num_tiers):
             toc_dict["sections"][f"tier_{k}"] = {
                 "offset": tier_offsets[k],
                 "length": tier_lengths[k],
-                "dim_boundary": int(tiers_arr[k])
+                "dim_boundary": int(tiers_arr[k]),
             }
         toc_dict["sections"]["sidecar"] = {
             "offset": sidecar_offset,
             "length": sidecar_len,
-            "format": sidecar_format
+            "format": sidecar_format,
         }
         toc_dict["sections"]["prefix_table"] = {
             "offset": prefix_table_offset,
             "length": prefix_table_len,
             "num_chunks": 4,
             "num_buckets_per_chunk": 256,
-            "format": "mih_csr_4x8"
+            "format": "mih_csr_4x8",
         }
         toc_dict["sections"]["metadata"] = {
             "offset": metadata_offset,
             "length": metadata_len,
-            "format": meta_format
+            "format": meta_format,
         }
         toc_bytes = json.dumps(toc_dict, indent=2).encode("utf-8")
         toc_offset = current_offset
         toc_len = len(toc_bytes)
         current_offset = _align64(current_offset + toc_len)
-
-        total_file_size = current_offset + 20
 
         sb = bytearray(SUPERBLOCK_SIZE)
         sb[0:8] = b"DIOGENES"
@@ -1036,10 +1469,21 @@ def _write_pithos_container_file(
             out_f.write(trailer)
 
 
+# ==============================================================================
+# VectorDb (Engine Coordinator & Factory)
+# ==============================================================================
+
 class VectorDb:
+    """Pythonic interface to the Pithos Vector Database Engine.
+
+    Manages loaded multi-tier indices, DeltaBuffers, index compilation, and CUDA runtimes.
+
+    Parameters
+    ----------
+    lib_path : str, optional
+        Explicit path to native shared library (`libpithos.so` / `libpithos.dylib` / `pithos.dll`).
     """
-    Pythonic interface to the Pithos Vector Database Engine.
-    """
+
     _active_instances = 0
     _lock = threading.Lock()
 
@@ -1060,6 +1504,7 @@ class VectorDb:
         return self._ffi._has_cuda
 
     def _read_container_toc(self, container_path: str) -> dict:
+        """Parses the TOC JSON payload from the trailer of a single-file .pithos container."""
         try:
             with open(container_path, "rb") as f:
                 f.seek(0, os.SEEK_END)
@@ -1112,17 +1557,11 @@ class VectorDb:
         self._ffi.shrink_to_fit()
 
     def shrink_to_fit(self) -> None:
-        """
-        Explicitly triggers GraalVM GC, OS memory release (malloc_trim),
-        and Python garbage collection.
-        """
+        """Explicitly triggers GraalVM GC, OS memory release (malloc_trim), and Python GC."""
         self._ffi.shrink_to_fit()
 
     def reset_isolate(self) -> None:
-        """
-        Drops all loaded indices, cleans temp directories, and re-initializes
-        a fresh GraalVM isolate and coordinator.
-        """
+        """Drops all loaded indices, cleans temp directories, and re-initializes GraalVM isolate."""
         for name in list(self._indices.keys()):
             try:
                 self.drop_index(name)
@@ -1143,26 +1582,41 @@ class VectorDb:
         name: str,
         base_path: str,
         weights: Optional[np.ndarray] = None,
-        lora_dim: int = 0
+        lora_dim: int = 0,
     ) -> Index:
-        """
-        Maps an existing multi-tier index into memory off-heap.
+        """Maps an existing multi-tier index or .pithos single-file container into memory off-heap.
+
+        Parameters
+        ----------
+        name : str
+            Unique registry identifier name for the index.
+        base_path : str
+            Filepath of the compiled index or .pithos container.
+        weights : ndarray, optional
+            Projection or LoRA weight matrix for Matryoshka spectral energy profiling.
+        lora_dim : int, default=0
+            Bottleneck rank dimension of LoRA matrix.
+
+        Returns
+        -------
+        Index
+            Off-heap index handle.
         """
         effective_path = self._unpack_container_if_needed(base_path)
         if weights is not None:
-            w_arr = np.ascontiguousarray(weights, dtype=np.float32)
+            w_arr = _check_dtype_float32(weights, "weights")
             status = self._ffi.lib.vdb_load_index_with_weights(
                 self._ffi.thread,
                 name.encode("utf-8"),
                 effective_path.encode("utf-8"),
                 w_arr.ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(lora_dim)
+                ctypes.c_int(lora_dim),
             )
         else:
             status = self._ffi.lib.vdb_load_index(
                 self._ffi.thread,
                 name.encode("utf-8"),
-                effective_path.encode("utf-8")
+                effective_path.encode("utf-8"),
             )
         self._ffi.check_status(status, f"load index '{name}'")
         idx = Index(self, name, base_path)
@@ -1170,11 +1624,11 @@ class VectorDb:
         return idx
 
     def get_index(self, name: str) -> Optional[Index]:
-        """Returns the loaded index handle by name, or None."""
+        """Returns the loaded index handle by name, or None if not found."""
         return self._indices.get(name)
 
     def drop_index(self, name: str) -> bool:
-        """Unmaps and drops an index and its attached DeltaBuffer."""
+        """Unmaps and drops an index and its attached DeltaBuffer from memory."""
         self._delta_buffers.pop(name, None)
         self._indices.pop(name, None)
         status = self._ffi.lib.vdb_drop_index(self._ffi.thread, name.encode("utf-8"))
@@ -1185,7 +1639,7 @@ class VectorDb:
         status = self._ffi.lib.vdb_create_delta_buffer(
             self._ffi.thread,
             index_name.encode("utf-8"),
-            ctypes.c_int(flush_threshold)
+            ctypes.c_int(flush_threshold),
         )
         self._ffi.check_status(status, f"create DeltaBuffer for '{index_name}'")
         buf = DeltaBuffer(self, index_name)
@@ -1196,9 +1650,9 @@ class VectorDb:
         """Returns the active DeltaBuffer for the given index, or None."""
         return self._delta_buffers.get(index_name)
 
-    # -------------------------------------------------------------------------
-    # Index Compilation & Compaction
-    # -------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
+    # Index Compilation & Packaging
+    # --------------------------------------------------------------------------
     @staticmethod
     def compile_container(
         path: str,
@@ -1212,13 +1666,39 @@ class VectorDb:
         metadata_format: str = "raw",
         arrow_table: Optional[Any] = None,
         user_metadata: Optional[dict] = None,
-        lib_path: Optional[str] = None
+        lib_path: Optional[str] = None,
     ) -> None:
-        """
-        Compiles raw continuous float embeddings into a universal schema-agnostic single-file .pithos container (DIOGENES format).
+        """Compiles continuous float embeddings into a universal single-file .pithos container (DIOGENES format).
+
+        Parameters
+        ----------
+        path : str
+            Destination filepath for the compiled .pithos container.
+        records : array_like
+            Input continuous float vectors, shape (N, D).
+        ids : array_like, optional
+            Explicit 64-bit integer IDs of shape (N,). If None, defaults to `0..N-1`.
+        tiers : array_like, optional
+            Matryoshka tier boundary steps (e.g. `[64, 128, 256, 768]`).
+        metric : str, default="cosine"
+            Distance metric ('cosine', 'l2', 'euclidean', 'dot').
+        q_mode : QuantizationMode, default=QuantizationMode.ONE_BIT
+            Quantization format (ONE_BIT, TWO_BIT, FLOAT32).
+        sidecar_mode : SidecarMode or str, default=SidecarMode.FP8
+            Precision sidecar format ('none', 'fp16', 'fp8', 'fp4').
+        metadata_payload : bytes, optional
+            Arbitrary user metadata binary payload (Section 4).
+        metadata_format : str, default="raw"
+            Format tag for Section 4 payload ('raw', 'jsonl', 'arrow').
+        arrow_table : pyarrow.Table, optional
+            Apache Arrow Table to embed directly into Section 4.
+        user_metadata : dict, optional
+            Arbitrary JSON-serializable dictionary embedded into container Table of Contents.
+        lib_path : str, optional
+            Path to native shared library.
         """
         ffi = NativeBindings(lib_path)
-        vecs = np.ascontiguousarray(records, dtype=np.float32)
+        vecs = _check_dtype_float32(records, "records")
         num_records, dimension = vecs.shape
 
         if arrow_table is not None:
@@ -1235,7 +1715,7 @@ class VectorDb:
         if ids is None:
             ids_arr = np.arange(num_records, dtype=np.int64)
         else:
-            ids_arr = np.ascontiguousarray(ids, dtype=np.int64)
+            ids_arr = _check_dtype_int64(ids, "ids")
 
         if tiers is None:
             tiers_arr = np.array([dimension], dtype=np.int32)
@@ -1247,7 +1727,7 @@ class VectorDb:
                 "none": SidecarMode.NONE,
                 "fp16": SidecarMode.FP16,
                 "fp8": SidecarMode.FP8,
-                "fp4": SidecarMode.FP4
+                "fp4": SidecarMode.FP4,
             }
             actual_sidecar = sidecar_map.get(sidecar_mode.lower(), SidecarMode.FP8)
         else:
@@ -1278,7 +1758,7 @@ class VectorDb:
                     meta_bytes_ptr,
                     ctypes.c_int(meta_len),
                     meta_fmt_ptr,
-                    user_json_str
+                    user_json_str,
                 )
                 ffi.check_status(status, "compile single-file container")
         else:
@@ -1293,7 +1773,7 @@ class VectorDb:
                 metadata_payload=metadata_payload,
                 metadata_format=metadata_format,
                 user_metadata=user_metadata,
-                ffi=ffi
+                ffi=ffi,
             )
 
     @staticmethod
@@ -1310,15 +1790,41 @@ class VectorDb:
         metadata_format: str = "raw",
         user_metadata: Optional[dict] = None,
         lib_path: Optional[str] = None,
-        chunk_size: int = 5000
+        chunk_size: int = 5000,
     ) -> None:
-        """
-        Compiles continuous float vectors from a streaming iterator/generator directly into a
-        universal single-file .pithos container (DIOGENES format) on disk with constant O(1) RAM.
-        """
-        import tempfile
-        import glob
+        """Compiles continuous float vectors from a streaming iterator directly into a .pithos container on disk.
 
+        Operates with strictly constant O(1) RAM consumption.
+
+        Parameters
+        ----------
+        path : str
+            Destination filepath for container.
+        record_stream : iterator
+            Iterator or generator yielding batches of `(ids, vecs)` or `vecs`.
+        total_records : int
+            Total expected record count across entire stream.
+        dimension : int
+            Vector dimension D.
+        tiers : array_like, optional
+            Matryoshka tier boundary steps.
+        metric : str, default="cosine"
+            Distance metric code.
+        q_mode : QuantizationMode, default=QuantizationMode.ONE_BIT
+            Quantization mode.
+        sidecar_mode : SidecarMode or str, default=SidecarMode.FP8
+            Precision sidecar format.
+        metadata_payload : bytes, optional
+            Metadata binary blob.
+        metadata_format : str, default="raw"
+            Format tag for metadata payload.
+        user_metadata : dict, optional
+            User metadata dictionary.
+        lib_path : str, optional
+            Path to native shared library.
+        chunk_size : int, default=5000
+            Record count per streaming chunk batch.
+        """
         ffi = NativeBindings(lib_path)
         if total_records <= 0:
             raise ValueError(f"total_records must be > 0, got {total_records}")
@@ -1334,7 +1840,7 @@ class VectorDb:
                 "none": SidecarMode.NONE,
                 "fp16": SidecarMode.FP16,
                 "fp8": SidecarMode.FP8,
-                "fp4": SidecarMode.FP4
+                "fp4": SidecarMode.FP4,
             }
             actual_sidecar = sidecar_map.get(sidecar_mode.lower(), SidecarMode.FP8)
         else:
@@ -1417,30 +1923,30 @@ class VectorDb:
             "sections": {
                 "ids": {"offset": ids_offset, "length": ids_len, "dtype": "uint64"}
             },
-            "user_metadata": user_metadata if user_metadata else {}
+            "user_metadata": user_metadata if user_metadata else {},
         }
         for k in range(num_tiers):
             toc_dict["sections"][f"tier_{k}"] = {
                 "offset": tier_offsets[k],
                 "length": tier_lengths[k],
-                "dim_boundary": int(tiers_arr[k])
+                "dim_boundary": int(tiers_arr[k]),
             }
         toc_dict["sections"]["sidecar"] = {
             "offset": sidecar_offset,
             "length": sidecar_len,
-            "format": sidecar_format
+            "format": sidecar_format,
         }
         toc_dict["sections"]["prefix_table"] = {
             "offset": prefix_table_offset,
             "length": prefix_table_length,
             "num_chunks": 4,
             "num_buckets_per_chunk": 256,
-            "format": "mih_csr_4x8"
+            "format": "mih_csr_4x8",
         }
         toc_dict["sections"]["metadata"] = {
             "offset": metadata_offset,
             "length": metadata_len,
-            "format": meta_format
+            "format": meta_format,
         }
         toc_bytes = json.dumps(toc_dict, indent=2).encode("utf-8")
         toc_offset = current_offset
@@ -1491,19 +1997,19 @@ class VectorDb:
                 buffer_ids = []
                 for item in stream:
                     if isinstance(item, (tuple, list)) and len(item) == 2 and isinstance(item[0], (np.ndarray, list, range)) and isinstance(item[1], (np.ndarray, list)):
-                        b_ids = np.ascontiguousarray(item[0], dtype=np.int64)
-                        b_vecs = np.ascontiguousarray(item[1], dtype=np.float32)
+                        b_ids = _check_dtype_int64(item[0], "b_ids")
+                        b_vecs = _check_dtype_float32(item[1], "b_vecs")
                         if b_vecs.ndim == 1:
                             b_vecs = b_vecs.reshape(1, -1)
                         current_id += b_vecs.shape[0]
                         yield b_ids, b_vecs
                     elif isinstance(item, np.ndarray) and item.ndim == 2:
-                        b_vecs = np.ascontiguousarray(item, dtype=np.float32)
+                        b_vecs = _check_dtype_float32(item, "b_vecs")
                         b_ids = np.arange(current_id, current_id + b_vecs.shape[0], dtype=np.int64)
                         current_id += b_vecs.shape[0]
                         yield b_ids, b_vecs
                     elif isinstance(item, (list, tuple)) and len(item) > 0 and isinstance(item[0], (list, tuple, np.ndarray)):
-                        b_vecs = np.ascontiguousarray(item, dtype=np.float32)
+                        b_vecs = _check_dtype_float32(item, "b_vecs")
                         b_ids = np.arange(current_id, current_id + b_vecs.shape[0], dtype=np.int64)
                         current_id += b_vecs.shape[0]
                         yield b_ids, b_vecs
@@ -1516,19 +2022,19 @@ class VectorDb:
                             buffer_ids.append(current_id + len(buffer_vecs))
                             buffer_vecs.append(item)
                         if len(buffer_vecs) >= chunk_sz:
-                            b_vecs = np.ascontiguousarray(buffer_vecs, dtype=np.float32)
-                            b_ids = np.ascontiguousarray(buffer_ids, dtype=np.int64)
+                            b_vecs = _check_dtype_float32(buffer_vecs, "buffer_vecs")
+                            b_ids = _check_dtype_int64(buffer_ids, "buffer_ids")
                             current_id += len(buffer_vecs)
                             buffer_vecs.clear()
                             buffer_ids.clear()
                             yield b_ids, b_vecs
                 if len(buffer_vecs) > 0:
-                    b_vecs = np.ascontiguousarray(buffer_vecs, dtype=np.float32)
-                    b_ids = np.ascontiguousarray(buffer_ids, dtype=np.int64)
+                    b_vecs = _check_dtype_float32(buffer_vecs, "buffer_vecs")
+                    b_ids = _check_dtype_int64(buffer_ids, "buffer_ids")
                     yield b_ids, b_vecs
 
             processed_records = 0
-            all_vector_chunk_keys = [[] for _ in range(NUM_MIH_CHUNKS)]
+            all_t0_chunks = []
             with tempfile.TemporaryDirectory() as tmpdir:
                 with ffi.isolated_context() as temp_thread:
                     chunk_idx = 0
@@ -1550,7 +2056,7 @@ class VectorDb:
                             b_vecs.ctypes.data_as(ctypes.c_void_p),
                             ctypes.c_int(b_size),
                             ctypes.c_int(int(q_mode)),
-                            ctypes.c_int(int(actual_sidecar))
+                            ctypes.c_int(int(actual_sidecar)),
                         )
                         ffi.check_status(status, "compile stream chunk")
 
@@ -1565,15 +2071,9 @@ class VectorDb:
                                     t0_data = f_t.read()
                                     out_f.write(t0_data)
                                     bpr_t0 = len(t0_data) // b_size if b_size > 0 else 0
-                                    for r in range(b_size):
-                                        r_off = r * bpr_t0
-                                        k0 = t0_data[r_off] if bpr_t0 > 0 else 0
-                                        k1 = t0_data[r_off + 1] if bpr_t0 > 1 else 0
-                                        k2 = t0_data[r_off + 2] if bpr_t0 > 2 else 0
-                                        k3 = t0_data[r_off + 3] if bpr_t0 > 3 else 0
-                                        keys = [k0, k1, k2, k3]
-                                        for c in range(NUM_MIH_CHUNKS):
-                                            all_vector_chunk_keys[c].append(keys[c])
+                                    if b_size > 0 and bpr_t0 >= 4:
+                                        chunk_t0 = np.frombuffer(t0_data, dtype=np.uint8).reshape(b_size, bpr_t0)[:, :4]
+                                        all_t0_chunks.append(chunk_t0)
                                 else:
                                     shutil.copyfileobj(f_t, out_f)
 
@@ -1608,36 +2108,24 @@ class VectorDb:
                         chunk_idx += 1
 
             # Write Multi-Index Hashing (MIH) Prefix Table (4 x CSR)
-            actual_total = len(all_vector_chunk_keys[0])
-            prefix_offsets_bytes = bytearray(MIH_OFFSETS_BYTES)
-            prefix_postings_bytes = bytearray(NUM_MIH_CHUNKS * actual_total * 4)
+            if len(all_t0_chunks) > 0:
+                keys_4c = np.concatenate(all_t0_chunks, axis=0)
+            else:
+                keys_4c = np.empty((0, 4), dtype=np.uint8)
+
+            actual_total = keys_4c.shape[0]
+            offsets_arr = np.zeros((NUM_MIH_CHUNKS, NUM_MIH_BUCKETS + 1), dtype=np.int32)
+            postings_arr = np.empty((NUM_MIH_CHUNKS, actual_total), dtype=np.int32)
 
             for c in range(NUM_MIH_CHUNKS):
-                bucket_counts = [0] * NUM_MIH_BUCKETS
-                for b_key in all_vector_chunk_keys[c]:
-                    bucket_counts[b_key] += 1
-
-                bucket_offsets = [0] * (NUM_MIH_BUCKETS + 1)
-                running = 0
-                for b in range(NUM_MIH_BUCKETS):
-                    bucket_offsets[b] = running
-                    running += bucket_counts[b]
-                bucket_offsets[NUM_MIH_BUCKETS] = actual_total
-
-                off_base = c * (NUM_MIH_BUCKETS + 1) * 4
-                for b in range(NUM_MIH_BUCKETS + 1):
-                    prefix_offsets_bytes[off_base + b*4 : off_base + (b+1)*4] = int(bucket_offsets[b]).to_bytes(4, byteorder="little", signed=True)
-
-                current_ptrs = list(bucket_offsets)
-                post_base = c * actual_total * 4
-                for i, b_key in enumerate(all_vector_chunk_keys[c]):
-                    dest = current_ptrs[b_key]
-                    prefix_postings_bytes[post_base + dest*4 : post_base + (dest+1)*4] = int(i).to_bytes(4, byteorder="little", signed=True)
-                    current_ptrs[b_key] += 1
+                chunk_keys = keys_4c[:, c]
+                counts = np.bincount(chunk_keys, minlength=NUM_MIH_BUCKETS)
+                offsets_arr[c, 1:] = np.cumsum(counts, dtype=np.int32)
+                postings_arr[c, :] = np.argsort(chunk_keys, kind="stable").astype(np.int32)
 
             out_f.seek(prefix_table_offset)
-            out_f.write(prefix_offsets_bytes)
-            out_f.write(prefix_postings_bytes)
+            out_f.write(offsets_arr.tobytes())
+            out_f.write(postings_arr.tobytes())
 
             if processed_records != total_records:
                 out_f.seek(12)
@@ -1661,10 +2149,36 @@ class VectorDb:
         write_fp16: Optional[bool] = None,
         use_container: bool = False,
         user_metadata: Optional[dict] = None,
-        lib_path: Optional[str] = None
+        lib_path: Optional[str] = None,
     ) -> None:
-        """
-        Compiles raw continuous float embeddings into a multi-tier binary columnar Pithos index on disk.
+        """Compiles raw continuous float embeddings into a multi-tier binary columnar Pithos index on disk.
+
+        Parameters
+        ----------
+        base_path : str
+            Base filepath prefix for the index files.
+        records : array_like
+            Input continuous float vectors of shape (N, D).
+        ids : array_like, optional
+            Explicit 64-bit integer IDs of shape (N,).
+        tiers : array_like, optional
+            Matryoshka tier boundary steps.
+        planet_id : int, default=1
+            Planetary body identifier code.
+        planet_radius : int, default=1737400
+            Equatorial planetary radius in meters.
+        q_mode : QuantizationMode, default=QuantizationMode.ONE_BIT
+            Quantization mode.
+        sidecar_mode : SidecarMode or str, default=SidecarMode.FP8
+            Precision sidecar format ('none', 'fp16', 'fp8', 'fp4').
+        write_fp16 : bool, optional
+            Legacy flag for FP16 sidecar generation.
+        use_container : bool, default=False
+            If True, outputs a single-file `.pithos` container instead of multi-file layout.
+        user_metadata : dict, optional
+            User metadata dictionary.
+        lib_path : str, optional
+            Path to native shared library.
         """
         if use_container or base_path.endswith(".pithos"):
             return VectorDb.compile_container(
@@ -1675,16 +2189,16 @@ class VectorDb:
                 q_mode=q_mode,
                 sidecar_mode=sidecar_mode,
                 user_metadata=user_metadata,
-                lib_path=lib_path
+                lib_path=lib_path,
             )
         ffi = NativeBindings(lib_path)
-        vecs = np.ascontiguousarray(records, dtype=np.float32)
+        vecs = _check_dtype_float32(records, "records")
         num_records, dimension = vecs.shape
 
         if ids is None:
             ids_arr = np.arange(num_records, dtype=np.int64)
         else:
-            ids_arr = np.ascontiguousarray(ids, dtype=np.int64)
+            ids_arr = _check_dtype_int64(ids, "ids")
 
         if tiers is None:
             tiers_arr = np.array([dimension], dtype=np.int32)
@@ -1698,7 +2212,7 @@ class VectorDb:
                 "none": SidecarMode.NONE,
                 "fp16": SidecarMode.FP16,
                 "fp8": SidecarMode.FP8,
-                "fp4": SidecarMode.FP4
+                "fp4": SidecarMode.FP4,
             }
             actual_sidecar = sidecar_map.get(sidecar_mode.lower(), SidecarMode.FP8)
         else:
@@ -1717,7 +2231,7 @@ class VectorDb:
                 vecs.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(num_records),
                 ctypes.c_int(int(q_mode)),
-                ctypes.c_int(int(actual_sidecar))
+                ctypes.c_int(int(actual_sidecar)),
             )
             ffi.check_status(status, "compile index file")
 
@@ -1760,17 +2274,25 @@ class VectorDb:
     def compact_indices(
         source_paths: Sequence[str],
         target_path: str,
-        lib_path: Optional[str] = None
+        lib_path: Optional[str] = None,
     ) -> None:
-        """
-        Compacts multiple compiled Pithos indices into a consolidated index file.
+        """Compacts multiple compiled Pithos indices into a consolidated index file.
+
+        Parameters
+        ----------
+        source_paths : sequence of str
+            List of source index base paths.
+        target_path : str
+            Consolidated target base path.
+        lib_path : str, optional
+            Path to native shared library.
         """
         ffi = NativeBindings(lib_path)
         joined = ";".join(source_paths)
         status = ffi.lib.vdb_compact_indexes(
             ffi.thread,
             joined.encode("utf-8"),
-            target_path.encode("utf-8")
+            target_path.encode("utf-8"),
         )
         ffi.check_status(status, "compact indices")
 
@@ -1798,11 +2320,17 @@ class VectorDb:
                 f.seek(62)
                 f.write(bytes([3]))
 
-    # -------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     # CUDA Acceleration Management
-    # -------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     def cuda_init(self, device_id: int = 0) -> None:
-        """Initializes CUDA hardware acceleration runtime."""
+        """Initializes CUDA hardware acceleration runtime.
+
+        Parameters
+        ----------
+        device_id : int, default=0
+            Target NVIDIA GPU device ordinal.
+        """
         if not self._ffi._has_cuda:
             raise RuntimeError("Pithos native library was compiled without CUDA support.")
         status = self._ffi.lib.vdb_cuda_init(self._ffi.thread, ctypes.c_int(device_id))
@@ -1814,7 +2342,7 @@ class VectorDb:
             self._ffi.lib.vdb_cuda_shutdown(self._ffi.thread)
 
     def cuda_is_available(self) -> bool:
-        """Returns True if a compatible CUDA runtime is active."""
+        """Returns True if a compatible CUDA runtime is active and initialized."""
         if not self._ffi._has_cuda:
             return False
         return self._ffi.lib.vdb_cuda_is_available(self._ffi.thread) == 1
