@@ -52,6 +52,8 @@ import numpy as np
 
 from .ffi import NativeBindings, PithosNativeError, reset_isolate, shrink_to_fit
 
+_BIT_COUNTS = np.array([bin(i).count("1") for i in range(256)], dtype=np.uint8)
+
 # ==============================================================================
 # Type Checking & Array Invariant Validators (FAISS Standard)
 # ==============================================================================
@@ -363,6 +365,56 @@ def _encode_nvfp4_blocks_array(vecs: np.ndarray) -> np.ndarray:
     return block_9b.reshape(N, num_blocks * 9)
 
 
+_FP4_DECODE_LUT = np.array(_FP4_TABLE, dtype=np.float32)
+
+
+def _decode_nvfp4_blocks_array(encoded_bytes: np.ndarray, dimension: int) -> np.ndarray:
+    """Vectorized NVFP4 Block-16 microscaling decoder.
+
+    Converts (N, num_blocks * 9) uint8 bytes back to (N, dimension) float32 array.
+
+    Parameters
+    ----------
+    encoded_bytes : ndarray
+        NVFP4 encoded byte matrix.
+    dimension : int
+        Target embedding dimension D.
+
+    Returns
+    -------
+    ndarray
+        Reconstructed float32 embeddings of shape (N, dimension).
+    """
+    raw = np.ascontiguousarray(encoded_bytes, dtype=np.uint8)
+    if raw.ndim == 1:
+        raw = raw.reshape(1, -1)
+    N = raw.shape[0]
+    num_blocks = (dimension + 15) // 16
+    expected_len = num_blocks * 9
+    if raw.shape[1] != expected_len:
+        raise ValueError(f"Expected {expected_len} bytes per vector for dim={dimension}, got {raw.shape[1]}")
+
+    blocks = raw.reshape(N * num_blocks, 9)
+    scale_bytes = blocks[:, 0]
+    scales = _decode_fp8_e4m3_array(scale_bytes)
+
+    packed = blocks[:, 1:9]
+    low_nibbles = packed & 0x0F
+    high_nibbles = (packed >> 4) & 0x0F
+
+    nibbles = np.empty((N * num_blocks, 16), dtype=np.uint8)
+    nibbles[:, 0::2] = low_nibbles
+    nibbles[:, 1::2] = high_nibbles
+
+    signs = np.where((nibbles & 0x08) != 0, -1.0, 1.0).astype(np.float32)
+    mag_indices = nibbles & 0x07
+    mags = _FP4_DECODE_LUT[mag_indices]
+
+    unscaled = signs * mags
+    scaled = unscaled * scales[:, None]
+    return scaled.reshape(N, num_blocks * 16)[:, :dimension].astype(np.float32)
+
+
 def _build_mih_csr_table(tier0_bytes: bytes, num_records: int) -> bytes:
     """Vectorized construction of 4-chunk Multi-Index Hashing (MIH) CSR prefix table.
 
@@ -517,6 +569,50 @@ class IndexInfo:
             "tiers_count": self.tiers_count,
             "sidecar_mode": int(self.sidecar_mode),
         }
+
+
+@dataclass
+class PlanetaryGridResult:
+    """Result of planetary grid multi-family resonant screening and optional precision reranking.
+
+    Attributes
+    ----------
+    resonant_count : int
+        Number of records matching or exceeding the consensus resonance threshold.
+    voting_mask : ndarray
+        Binary uint8 voting mask array across all N records in index.
+    candidate_ids : ndarray, optional
+        Record IDs/indices of passing candidates, sorted by precision score (descending).
+    scores : ndarray, optional
+        Precision scores (cosine similarities) corresponding to candidate_ids.
+    votes : ndarray, optional
+        Number of active consensus families (popcount) for each candidate.
+    masks : ndarray, optional
+        Raw uint8 family bitmask for each candidate.
+    """
+    resonant_count: int
+    voting_mask: np.ndarray
+    candidate_ids: Optional[np.ndarray] = None
+    scores: Optional[np.ndarray] = None
+    votes: Optional[np.ndarray] = None
+    masks: Optional[np.ndarray] = None
+
+    def __iter__(self):
+        """Supports transparent tuple unpacking for 100% backwards compatibility:
+        `count, mask = index.query_planetary_grid(...)`
+        """
+        return iter((self.resonant_count, self.voting_mask))
+
+    def __getitem__(self, item: Union[int, slice]) -> Any:
+        return (self.resonant_count, self.voting_mask)[item]
+
+    def __len__(self) -> int:
+        return 2
+
+    @property
+    def has_reranked(self) -> bool:
+        """Returns True if precision reranking was executed on passing candidates."""
+        return self.candidate_ids is not None
 
 
 @dataclass(frozen=True)
@@ -689,12 +785,13 @@ class Index:
         self._base_path = base_path
         self._ffi = db._ffi
         self._info: Optional[IndexInfo] = None
+        self._sidecar_mmap: Optional[np.ndarray] = None
 
     def __setattr__(self, name: str, value: Any) -> None:
         """Protects Index attributes against silent assignment bugs (FAISS standard)."""
         valid_slots = {
             "_db", "_name", "_base_path", "_ffi", "_info", "d", "ntotal",
-            "referenced_objects"
+            "referenced_objects", "_sidecar_mmap"
         }
         if name.startswith("_") or name in valid_slots or hasattr(self, name) or hasattr(self.__class__, name):
             super().__setattr__(name, value)
@@ -748,6 +845,16 @@ class Index:
     def tier_count(self) -> int:
         """Number of configured Matryoshka tiers."""
         return self.info().tiers_count
+
+    @property
+    def sidecar_mode(self) -> SidecarMode:
+        """Precision sidecar format attached to index."""
+        return self.info().sidecar_mode
+
+    @property
+    def has_sidecar(self) -> bool:
+        """Returns True if the index has a precision sidecar attached."""
+        return self.sidecar_mode != SidecarMode.NONE
 
     @property
     def is_cuda_capable(self) -> bool:
@@ -1038,8 +1145,17 @@ class Index:
         out_voting_mask: Optional[np.ndarray] = None,
         voting_mask: Optional[np.ndarray] = None,
         cuda: bool = False,
-    ) -> Tuple[int, np.ndarray]:
-        """Performs multi-family resonant voting across scientific criteria.
+        min_votes: int = 5,
+        rerank: bool = True,
+    ) -> PlanetaryGridResult:
+        """Performs multi-family resonant voting across scientific criteria with automatic precision reranking.
+
+        When a precision sidecar is attached (FP8, FP16, NVFP4) and `rerank=True`, automatically retrieves
+        sidecar vectors for all candidates with >= `min_votes`, computes maximum cosine similarity across all
+        queries, and returns sorted candidate IDs, precision scores, and vote counts.
+
+        Supports transparent tuple unpacking `(count, mask) = index.query_planetary_grid(...)` for 100%
+        backwards compatibility.
 
         Parameters
         ----------
@@ -1053,13 +1169,15 @@ class Index:
             Pre-allocated byte mask of size N.
         cuda : bool, default=False
             Whether to use CUDA acceleration.
+        min_votes : int, default=5
+            Minimum number of active consensus families required for candidate selection.
+        rerank : bool, default=True
+            Whether to automatically re-rank passing candidates using the attached precision sidecar.
 
         Returns
         -------
-        resonant_count : int
-            Number of candidate records exceeding resonance threshold.
-        voting_mask : ndarray
-            Binary voting mask array.
+        PlanetaryGridResult
+            Result object containing resonant_count, voting_mask, and sorted candidate_ids / scores.
         """
         q_arr = _check_dtype_float32(queries, "queries")
         f_arr = np.ascontiguousarray(families, dtype=np.int32)
@@ -1097,7 +1215,49 @@ class Index:
 
         if resonant_count < 0:
             self._ffi.check_status(resonant_count, "query planetary grid")
-        return int(resonant_count), mask
+
+        # Automatic Precision Sidecar Re-Ranking
+        cand_ids = None
+        scores = None
+        votes = None
+        cand_masks = None
+
+        if rerank and self.has_sidecar:
+            popcounts = _BIT_COUNTS[mask]
+            cand_indices = np.where(popcounts >= min_votes)[0]
+            if len(cand_indices) > 0:
+                cand_vecs = self.get_vectors(cand_indices)
+                cand_norms = np.linalg.norm(cand_vecs, axis=1, keepdims=True)
+                cand_normed = cand_vecs / np.where(cand_norms == 0, 1.0, cand_norms)
+
+                q_norms = np.linalg.norm(q_arr, axis=1, keepdims=True)
+                q_normed = q_arr / np.where(q_norms == 0, 1.0, q_norms)
+
+                sim_matrix = np.dot(cand_normed, q_normed.T)
+                max_sims = np.max(sim_matrix, axis=1)
+
+                cand_popcounts = popcounts[cand_indices]
+                # Sort primarily by score descending, secondarily by votes descending
+                sort_order = np.lexsort((-cand_popcounts, -max_sims))
+
+                cand_ids = cand_indices[sort_order]
+                scores = max_sims[sort_order]
+                votes = cand_popcounts[sort_order]
+                cand_masks = mask[cand_ids]
+            else:
+                cand_ids = np.empty((0,), dtype=np.int64)
+                scores = np.empty((0,), dtype=np.float32)
+                votes = np.empty((0,), dtype=np.uint8)
+                cand_masks = np.empty((0,), dtype=np.uint8)
+
+        return PlanetaryGridResult(
+            resonant_count=int(resonant_count),
+            voting_mask=mask,
+            candidate_ids=cand_ids,
+            scores=scores,
+            votes=votes,
+            masks=cand_masks,
+        )
 
     # --------------------------------------------------------------------------
     # Off-Heap Memory Buffers & Hardware Descriptors
@@ -1161,6 +1321,189 @@ class Index:
         addr, length = self.get_ids_address()
         c_arr = (ctypes.c_int64 * (length // 8)).from_address(addr)
         return np.ctypeslib.as_array(c_arr)
+
+    def get_sidecar_buffer(self) -> Optional[np.ndarray]:
+        """Returns a zero-copy uint8 NumPy ndarray viewing the raw memory-mapped sidecar bytes."""
+        if self._sidecar_mmap is not None:
+            return self._sidecar_mmap
+
+        # 1. Check Single-File Container (.pithos)
+        c_path = self._base_path if self._base_path.endswith(".pithos") else f"{self._base_path}.pithos"
+        if os.path.exists(c_path) and os.path.isfile(c_path):
+            toc = self._db._read_container_toc(c_path)
+            sec = toc.get("sections", {}).get("sidecar")
+            if sec and sec.get("length", 0) > 0:
+                offset = sec["offset"]
+                length = sec["length"]
+                self._sidecar_mmap = np.memmap(c_path, dtype=np.uint8, mode="r", offset=offset, shape=(length,))
+                return self._sidecar_mmap
+
+        # 2. Check multi-file sidecar binaries
+        base_stem = self._base_path[:-7] if self._base_path.endswith(".pithos") else self._base_path
+        for ext in ["_fp8.bin", "_fp16.bin", "_fp4.bin"]:
+            cand_path = f"{base_stem}{ext}"
+            if os.path.exists(cand_path) and os.path.isfile(cand_path):
+                self._sidecar_mmap = np.memmap(cand_path, dtype=np.uint8, mode="r")
+                return self._sidecar_mmap
+
+        return None
+
+    def get_vectors(
+        self,
+        indices: Optional[Union[int, Sequence[int], np.ndarray]] = None,
+    ) -> np.ndarray:
+        """Retrieves and automatically decodes float32 vectors for given candidate indices.
+
+        Supports FP8 E4M3, FP16, NVFP4 E2M1, and sign-reconstruction fallback when no sidecar is present.
+
+        Parameters
+        ----------
+        indices : int, sequence of int, or ndarray, optional
+            Candidate record indices to retrieve. If None, retrieves all vectors in index.
+
+        Returns
+        -------
+        ndarray
+            Float32 vector array of shape (len(indices), D), or 1D shape (D,) if a scalar index was passed.
+        """
+        total_records = len(self)
+        dim = self.dimension
+        if total_records == 0:
+            return np.empty((0, dim), dtype=np.float32)
+
+        is_scalar = isinstance(indices, (int, np.integer))
+        if indices is None:
+            idx_arr = slice(None)
+            n_req = total_records
+        elif is_scalar:
+            idx_arr = np.array([int(indices)], dtype=np.int64)
+            n_req = 1
+        else:
+            idx_arr = np.ascontiguousarray(indices, dtype=np.int64)
+            n_req = len(idx_arr)
+            if n_req == 0:
+                return np.empty((0, dim), dtype=np.float32)
+
+        mode = self.sidecar_mode
+        if mode == SidecarMode.FP8:
+            buf = self.get_sidecar_buffer()
+            if buf is None:
+                raise RuntimeError("FP8 sidecar buffer could not be loaded.")
+            raw_fp8 = buf.reshape(total_records, dim)[idx_arr]
+            floats = _decode_fp8_e4m3_array(raw_fp8)
+            return floats[0] if is_scalar else floats
+        elif mode == SidecarMode.FP16:
+            buf = self.get_sidecar_buffer()
+            if buf is None:
+                raise RuntimeError("FP16 sidecar buffer could not be loaded.")
+            fp16_view = buf.view(np.float16).reshape(total_records, dim)[idx_arr]
+            floats = fp16_view.astype(np.float32)
+            return floats[0] if is_scalar else floats
+        elif mode == SidecarMode.FP4:
+            buf = self.get_sidecar_buffer()
+            if buf is None:
+                raise RuntimeError("NVFP4 sidecar buffer could not be loaded.")
+            num_blocks = (dim + 15) // 16
+            bytes_per_rec = num_blocks * 9
+            raw_fp4 = buf.reshape(total_records, bytes_per_rec)[idx_arr]
+            floats = _decode_nvfp4_blocks_array(raw_fp4, dim)
+            return floats[0] if is_scalar else floats
+        else:
+            # Fallback to sign-reconstruction from all active tiers
+            t_bits = []
+            for t in range(self.tier_count):
+                t_buf = self.get_tier_buffer(t)
+                if len(t_buf) == 0:
+                    continue
+                bytes_per_rec = len(t_buf) // total_records
+                t_selected = t_buf.reshape(total_records, bytes_per_rec)[idx_arr]
+                t_bits.append(np.unpackbits(t_selected, axis=-1, bitorder="little"))
+
+            if len(t_bits) > 0:
+                all_bits = np.concatenate(t_bits, axis=-1)[..., :dim]
+                reconstructed = np.where(all_bits == 1, 1.0, -1.0).astype(np.float32)
+                reconstructed /= math.sqrt(dim)
+            else:
+                reconstructed = np.zeros((n_req, dim), dtype=np.float32)
+            return reconstructed[0] if is_scalar else reconstructed
+
+    get_sidecar_vectors = get_vectors
+
+    def rerank(
+        self,
+        queries: Union[np.ndarray, Sequence[float], Sequence[Sequence[float]]],
+        candidate_indices: Optional[Union[Sequence[int], np.ndarray]] = None,
+        k: Optional[int] = None,
+        metric: str = "cosine",
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Re-ranks candidate records against queries using precision sidecar vectors.
+
+        Parameters
+        ----------
+        queries : ndarray
+            Query vectors, shape (num_queries, D) or 1D shape (D,).
+        candidate_indices : sequence of int or ndarray, optional
+            Subset of record indices to re-rank. If None, re-ranks all records in index.
+        k : int, optional
+            Number of top candidates to return. If None, returns all candidates sorted.
+        metric : str, default='cosine'
+            Ranking metric ('cosine' for similarity, 'l2' or 'euclidean' for distance).
+
+        Returns
+        -------
+        ranked_indices : ndarray
+            Array of record indices sorted by best match.
+        ranked_scores : ndarray
+            Cosine similarities or distances corresponding to ranked indices.
+        """
+        q_arr = _check_dtype_float32(np.asarray(queries), "queries")
+        is_single_query = q_arr.ndim == 1
+        if is_single_query:
+            q_arr = q_arr.reshape(1, -1)
+
+        num_queries, dim = q_arr.shape
+        if dim != self.dimension:
+            raise ValueError(f"Query dimension {dim} does not match index dimension {self.dimension}")
+
+        if candidate_indices is None:
+            cand_arr = np.arange(len(self), dtype=np.int64)
+        else:
+            cand_arr = np.ascontiguousarray(candidate_indices, dtype=np.int64)
+
+        num_cands = len(cand_arr)
+        if num_cands == 0:
+            empty_ids = np.empty((0,), dtype=np.int64) if is_single_query else np.empty((num_queries, 0), dtype=np.int64)
+            empty_scores = np.empty((0,), dtype=np.float32) if is_single_query else np.empty((num_queries, 0), dtype=np.float32)
+            return empty_ids, empty_scores
+
+        cand_vecs = self.get_vectors(cand_arr)
+        top_k = num_cands if k is None else min(k, num_cands)
+
+        metric_lower = metric.lower()
+        if metric_lower == "cosine":
+            cand_norms = np.linalg.norm(cand_vecs, axis=1, keepdims=True)
+            cand_normed = cand_vecs / np.where(cand_norms == 0, 1.0, cand_norms)
+            q_norms = np.linalg.norm(q_arr, axis=1, keepdims=True)
+            q_normed = q_arr / np.where(q_norms == 0, 1.0, q_norms)
+
+            sim_matrix = np.dot(q_normed, cand_normed.T)
+            sort_indices = np.argsort(-sim_matrix, axis=1)[:, :top_k]
+            ranked_ids = np.take(cand_arr, sort_indices)
+            ranked_scores = np.take_along_axis(sim_matrix, sort_indices, axis=1)
+        elif metric_lower in ("l2", "euclidean"):
+            q_sq = np.sum(q_arr**2, axis=1, keepdims=True)
+            c_sq = np.sum(cand_vecs**2, axis=1, keepdims=True).T
+            dists_sq = np.maximum(0.0, q_sq + c_sq - 2.0 * np.dot(q_arr, cand_vecs.T))
+            dists = np.sqrt(dists_sq)
+            sort_indices = np.argsort(dists, axis=1)[:, :top_k]
+            ranked_ids = np.take(cand_arr, sort_indices)
+            ranked_scores = np.take_along_axis(dists, sort_indices, axis=1)
+        else:
+            raise ValueError(f"Unsupported metric '{metric}'. Choose 'cosine' or 'l2'.")
+
+        if is_single_query:
+            return ranked_ids[0], ranked_scores[0]
+        return ranked_ids, ranked_scores
 
     def get_fpga_descriptor(self, tier_idx: int = 0) -> FpgaDescriptor:
         """Generates a complete hardware descriptor for FPGA DMA engines and PCIe MMIO registers."""
@@ -2077,10 +2420,14 @@ class VectorDb:
                                 else:
                                     shutil.copyfileobj(f_t, out_f)
 
-                        if actual_sidecar == SidecarMode.FP16 and os.path.exists(f"{tmp_base}_fp16.bin"):
+                        if actual_sidecar == SidecarMode.FP16:
                             out_f.seek(sidecar_offset + processed_records * sidecar_bpr)
-                            with open(f"{tmp_base}_fp16.bin", "rb") as f_s:
-                                shutil.copyfileobj(f_s, out_f)
+                            fp16_chunk = f"{tmp_base}_fp16.bin"
+                            if os.path.exists(fp16_chunk) and os.path.getsize(fp16_chunk) == b_size * dimension * 2:
+                                with open(fp16_chunk, "rb") as f_s:
+                                    shutil.copyfileobj(f_s, out_f)
+                            else:
+                                out_f.write(b_vecs.astype(np.float16).tobytes())
                         elif actual_sidecar == SidecarMode.FP8:
                             out_f.seek(sidecar_offset + processed_records * sidecar_bpr)
                             fp8_chunk = f"{tmp_base}_fp8.bin"

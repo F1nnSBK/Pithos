@@ -71,3 +71,18 @@ node_modules/
 !src/main/resources/**
 !src/test/resources/**
 
+# LaTeX, Whitepapers and PDF Artifacts
+*.tex
+*.pdf
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+docs/*whitepaper*
+docs/*.tex
+docs/*.pdf
+
+

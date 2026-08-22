@@ -2,6 +2,32 @@
 
 ---
 
+## Pithos v2.2.3 Release Notes — Automated Sidecar Precision Re-Ranking & Universal Vector Retrieval
+
+**Release Date:** August 2026  
+**Target Hardware:** NVIDIA Grace Blackwell GB10 / GB200 Superchips, Apple Silicon (M-Series ARM64), AWS Graviton 4, x86_64 (AVX-512 VPOPCNTDQ), NVMe DMA / io_uring.  
+**Package Version:** `pithos_core-2.2.3.jar` / `pithosdb 2.2.3` / `libpithos v2.2.3`
+
+### Summary
+Pithos v2.2.3 introduces automated, end-to-end precision sidecar re-ranking within `query_planetary_grid()`, universal zero-copy vector extraction and decoding across Blackwell FP8 (E4M3), IEEE FP16, and NVFP4 (E2M1) formats, and the backwards-compatible `PlanetaryGridResult` container.
+
+### Key Highlights & Improvements:
+
+#### 1. Automated Precision Sidecar Re-Ranking (`query_planetary_grid`)
+* **Integrated 2-Stage Planetary Screening:** When a precision sidecar is attached (FP8, FP16, NVFP4) and `rerank=True` (default), `query_planetary_grid()` automatically extracts vectors for candidates meeting the consensus threshold (`min_votes`), computes exact cosine similarities against all query archetypes, and returns pre-sorted candidate IDs and precision scores.
+* **Transparent Tuple Unpacking:** Returns `PlanetaryGridResult`, allowing legacy code `(cnt, mask) = index.query_planetary_grid(...)` to function without modifications while exposing `.candidate_ids`, `.scores`, `.votes`, and `.masks`.
+
+#### 2. Universal Sidecar Vector Decoding & Retrieval
+* **`Index.get_vectors(indices=None)`:** Retrieves and automatically decodes float32 embeddings for arbitrary candidate index subsets or the entire index across all sidecar modes (FP8, FP16, NVFP4, and multi-tier sign reconstruction fallback).
+* **`Index.get_sidecar_buffer()`:** Provides a zero-copy NumPy memory-mapped view of raw sidecar bytes for direct hardware DMA integration.
+* **`Index.rerank(queries, candidate_indices, k, metric)`:** Standalone high-level re-ranking utility supporting cosine similarity and Euclidean L2 distance metrics.
+
+#### 3. Vectorized NVFP4 & FP16 Sidecar Decoders
+* **SIMD-Accelerated Bit Manipulation:** Vectorized NVFP4 Block-16 microscaling decoder (`_decode_nvfp4_blocks_array`) with bit-parallel nibble unpacking and FP8 scale reconstruction.
+* **Zero-Copy FP16 View:** Native memory-mapped FP16 stride views with robust streaming container fallbacks.
+
+---
+
 ## Pithos v2.2.2 Release Notes — FAISS-Grade Python Interface, Vectorized MIH Tables & Pipeline Parallelization
 
 **Release Date:** August 2026  

@@ -24,6 +24,7 @@ from .core import (
     DeltaBuffer,
     SearchResult,
     IndexInfo,
+    PlanetaryGridResult,
     QuantizationMode,
     SidecarMode,
     FpgaDescriptor,
@@ -32,13 +33,14 @@ from .core import (
 )
 from .ffi import PithosNativeError
 
-__version__ = "2.2.2"
+__version__ = "2.2.3"
 __all__ = [
     "VectorDb",
     "Index",
     "DeltaBuffer",
     "SearchResult",
     "IndexInfo",
+    "PlanetaryGridResult",
     "QuantizationMode",
     "SidecarMode",
     "FpgaDescriptor",
