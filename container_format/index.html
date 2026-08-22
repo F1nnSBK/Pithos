@@ -1,0 +1,1438 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Model-Isomorphic Database for massive Datasets">
+      
+      
+        <meta name="author" content="F1nnSBK">
+      
+      
+        <link rel="canonical" href="https://F1nnSBK.github.io/Pithos/container_format/">
+      
+      
+        <link rel="prev" href="../agent_guide/">
+      
+      
+        <link rel="next" href="../cuda_integration/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Container Format - Pithos</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="cyan">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#universal-single-file-container-format-pithos" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Pithos" class="md-header__button md-logo" aria-label="Pithos" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Pithos
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Container Format
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="cyan"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="cyan"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/F1nnSBK/Pithos" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    F1nnSBK/Pithos
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Overview
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../architecture/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Architecture
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../agent_guide/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Agent Guide
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Container Format
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../cuda_integration/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  GPU Acceleration
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../c_api_reference/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  C-API Reference
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../math_theory/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Mathematical Theory
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../release_notes/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Release Notes
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../next_steps/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Roadmap
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Pithos" class="md-nav__button md-logo" aria-label="Pithos" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Pithos
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/F1nnSBK/Pithos" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    F1nnSBK/Pithos
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Container Format
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Container Format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#philosophical-heritage-the-urn-of-diogenes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Philosophical Heritage: The Urn of Diogenes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#binary-memory-specification-version-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Binary Memory Specification (Version 2)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Binary Memory Specification (Version 2)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#superblock-layout-128-bytes-offset-0x0000" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Superblock Layout (128 Bytes, Offset 0x0000)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#internal-sections-64-byte-cache-line-aligned" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Internal Sections (64-Byte Cache-Line Aligned)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#table-of-contents-toc-json-directory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table of Contents (TOC JSON Directory)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#trailer-20-bytes-at-end-of-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trailer (20 Bytes at End of File)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#code-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Code Examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Code Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#python-sdk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Python SDK
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#java-panama-foreign-function-memory-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Java (Panama Foreign Function &amp; Memory API)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-c-native-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        C / C++ Native API
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#container-integrity-defensive-bounds-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Container Integrity &amp; Defensive Bounds Verification
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cuda_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPU Acceleration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../c_api_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    C-API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../math_theory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mathematical Theory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../next_steps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#philosophical-heritage-the-urn-of-diogenes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Philosophical Heritage: The Urn of Diogenes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#binary-memory-specification-version-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Binary Memory Specification (Version 2)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Binary Memory Specification (Version 2)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#superblock-layout-128-bytes-offset-0x0000" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Superblock Layout (128 Bytes, Offset 0x0000)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#internal-sections-64-byte-cache-line-aligned" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Internal Sections (64-Byte Cache-Line Aligned)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#table-of-contents-toc-json-directory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table of Contents (TOC JSON Directory)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#trailer-20-bytes-at-end-of-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trailer (20 Bytes at End of File)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#code-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Code Examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Code Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#python-sdk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Python SDK
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#java-panama-foreign-function-memory-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Java (Panama Foreign Function &amp; Memory API)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-c-native-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        C / C++ Native API
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#container-integrity-defensive-bounds-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Container Integrity &amp; Defensive Bounds Verification
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="universal-single-file-container-format-pithos">Universal Single-File Container Format (.pithos)<a class="headerlink" href="#universal-single-file-container-format-pithos" title="Permanent link">&para;</a></h1>
+<hr />
+<h2 id="philosophical-heritage-the-urn-of-diogenes">Philosophical Heritage: The Urn of Diogenes<a class="headerlink" href="#philosophical-heritage-the-urn-of-diogenes" title="Permanent link">&para;</a></h2>
+<p>In ancient Athens, the philosopher <strong>Diogenes of Sinope</strong> made his dwelling within a <em>pithos</em> (πίθος)—a large, self-contained ceramic storage jar. His philosophy was rooted in absolute <strong>autarky</strong> (self-sufficiency), simplicity, and the ruthless elimination of superfluous baggage.</p>
+<p>The <code>.pithos</code> single-file container format embodies this exact philosophy:
+* <strong>100% Self-Contained:</strong> Embedding vectors, quantization tiers, precision sidecars, item IDs, and arbitrary schema-agnostic metadata are encapsulated into a single binary file.
+* <strong>Zero Runtime Overhead:</strong> Direct zero-copy memory mapping via Java 25 Foreign Function &amp; Memory (FFM) <code>MemorySegment.asSlice()</code> and POSIX <code>mmap()</code>.
+* <strong>Zero Domain Lock-In:</strong> Schema-agnostic design capable of holding multimodal image embeddings, genomic k-mers, geospatial coordinates, or LLM text vectors without hardcoded assumptions.</p>
+<hr />
+<h2 id="binary-memory-specification-version-2">Binary Memory Specification (Version 2)<a class="headerlink" href="#binary-memory-specification-version-2" title="Permanent link">&para;</a></h2>
+<pre class="mermaid"><code>graph LR
+    SB["Superblock (128 B)&lt;br/&gt;'DIOGENES'"] --&gt; S0["Section 0: IDs&lt;br/&gt;(N × 8 B)"]
+    S0 --&gt; S1["Section 1: Tiers&lt;br/&gt;(Quantized Bits)"]
+    S1 --&gt; S2["Section 2: Delta Log&lt;br/&gt;(Append Buffer)"]
+    S2 --&gt; S3["Section 3: Sidecar&lt;br/&gt;(FP8 / NVFP4 / FP16)"]
+    S3 --&gt; S4["Section 4: Prefix Table&lt;br/&gt;(MIH 4x8-Bit CSR)"]
+    S4 --&gt; S5["Section 5: Metadata&lt;br/&gt;(JSONL / Arrow IPC)"]
+    S5 --&gt; TOC["Table of Contents&lt;br/&gt;(JSON Directory)"]
+    TOC --&gt; TR["Trailer (20 B)&lt;br/&gt;'PITHOSDB'"]
+
+    classDef default fill:#1e293b,stroke:#475569,stroke-width:1.5px,color:#f8fafc;
+    classDef magic fill:#1e1b4b,stroke:#6366f1,stroke-width:2px,color:#e0e7ff;
+    class SB,TR magic;</code></pre>
+<h3 id="superblock-layout-128-bytes-offset-0x0000">Superblock Layout (128 Bytes, Offset <code>0x0000</code>)<a class="headerlink" href="#superblock-layout-128-bytes-offset-0x0000" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Byte Range</th>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Field Name</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>0..7</code></td>
+<td style="text-align: left;"><code>char[8]</code></td>
+<td style="text-align: left;"><code>magic_superblock</code></td>
+<td style="text-align: left;">Fixed ASCII signature: <code>"DIOGENES"</code> (<code>0x44, 0x49, 0x4F, 0x47, 0x45, 0x4E, 0x45, 0x53</code>)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>8..11</code></td>
+<td style="text-align: left;"><code>int32_t</code></td>
+<td style="text-align: left;"><code>format_version</code></td>
+<td style="text-align: left;">Container format version (currently <code>2</code>)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>12..19</code></td>
+<td style="text-align: left;"><code>uint64_t</code></td>
+<td style="text-align: left;"><code>num_vectors</code></td>
+<td style="text-align: left;">Total record count <span class="arithmatex">\(N\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>20..23</code></td>
+<td style="text-align: left;"><code>int32_t</code></td>
+<td style="text-align: left;"><code>dimension</code></td>
+<td style="text-align: left;">Continuous vector dimensionality <span class="arithmatex">\(D\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>24..25</code></td>
+<td style="text-align: left;"><code>uint16_t</code></td>
+<td style="text-align: left;"><code>metric_type</code></td>
+<td style="text-align: left;">Distance metric: <code>0</code> = Cosine, <code>1</code> = L2 / Euclidean, <code>2</code> = Dot Product</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>26..27</code></td>
+<td style="text-align: left;"><code>uint16_t</code></td>
+<td style="text-align: left;"><code>sidecar_type</code></td>
+<td style="text-align: left;">Precision sidecar: <code>0</code> = None, <code>1</code> = FP16, <code>2</code> = FP8 E4M3, <code>3</code> = NVFP4</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>28..29</code></td>
+<td style="text-align: left;"><code>uint16_t</code></td>
+<td style="text-align: left;"><code>num_tiers</code></td>
+<td style="text-align: left;">Number of Matryoshka tiers <span class="arithmatex">\(K \in [1, 8]\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>30..45</code></td>
+<td style="text-align: left;"><code>uint16_t[8]</code></td>
+<td style="text-align: left;"><code>tiers</code></td>
+<td style="text-align: left;">Cumulative dimension step boundaries <span class="arithmatex">\(T_0, T_1, \dots, T_{K-1}\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>46..53</code></td>
+<td style="text-align: left;"><code>uint64_t</code></td>
+<td style="text-align: left;"><code>toc_offset</code></td>
+<td style="text-align: left;">Byte offset to Table of Contents JSON directory</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>54..57</code></td>
+<td style="text-align: left;"><code>uint32_t</code></td>
+<td style="text-align: left;"><code>toc_length</code></td>
+<td style="text-align: left;">Byte length of Table of Contents JSON string</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>58..59</code></td>
+<td style="text-align: left;"><code>uint16_t</code></td>
+<td style="text-align: left;"><code>quantization_mode</code></td>
+<td style="text-align: left;">Quantization mode: <code>0</code> = 1-bit, <code>1</code> = 2-bit QJL, <code>2</code> = FP32 bypass</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>60..67</code></td>
+<td style="text-align: left;"><code>uint64_t</code></td>
+<td style="text-align: left;"><code>prefix_table_offset</code></td>
+<td style="text-align: left;">Byte offset to Gate 0 Direct-Mapped CSR Prefix Table</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>68..75</code></td>
+<td style="text-align: left;"><code>uint64_t</code></td>
+<td style="text-align: left;"><code>prefix_table_length</code></td>
+<td style="text-align: left;">Byte length of Gate 0 Prefix Table (offsets + postings)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>76..127</code></td>
+<td style="text-align: left;"><code>uint8_t[52]</code></td>
+<td style="text-align: left;"><code>reserved</code></td>
+<td style="text-align: left;">Zero-initialized reserved bytes for future extension</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="internal-sections-64-byte-cache-line-aligned">Internal Sections (64-Byte Cache-Line Aligned)<a class="headerlink" href="#internal-sections-64-byte-cache-line-aligned" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Section 1: Item Identifiers (<code>SECTION_IDS</code>)</strong></li>
+<li>Format: Contiguous array of 64-bit unsigned integers (<code>uint64_t ids[N]</code>).</li>
+<li>Size: <span class="arithmatex">\(N \times 8\)</span> bytes.</li>
+<li>
+<p>Address is aligned to <code>align64(128) = 128</code>.</p>
+</li>
+<li>
+<p><strong>Section 2: Matryoshka Quantization Tiers (<code>SECTION_TIERS</code>)</strong></p>
+</li>
+<li>Columnar bit-packed representations for SIMD Hamming scans.</li>
+<li>For 1-bit quantization: <span class="arithmatex">\(N \times \frac{W_k}{8}\)</span> bytes per tier <span class="arithmatex">\(k\)</span>.</li>
+<li>For 2-bit QJL ternary residuals: <span class="arithmatex">\(N \times \frac{W_k}{4}\)</span> bytes per tier <span class="arithmatex">\(k\)</span> (interleaved sign and threshold masks).</li>
+<li>
+<p>For FP32 float bypass: <span class="arithmatex">\(N \times W_k \times 4\)</span> bytes.</p>
+</li>
+<li>
+<p><strong>Section 3: Precision Sidecar (<code>SECTION_SIDECAR</code>)</strong></p>
+</li>
+<li>Continuous precision matrix for Gate 3 exact in-engine reranking.</li>
+<li><strong>FP8 E4M3:</strong> <span class="arithmatex">\(N \times D \times 1\)</span> byte.</li>
+<li><strong>Blackwell NVFP4 E2M1:</strong> <span class="arithmatex">\(N \times \lceil D / 16 \rceil \times 9\)</span> bytes (microscaled blocks with FP8 scale factor).</li>
+<li>
+<p><strong>FP16:</strong> <span class="arithmatex">\(N \times D \times 2\)</span> bytes.</p>
+</li>
+<li>
+<p><strong>Section 4: Direct-Mapped Prefix Table (<code>SECTION_PREFIX_TABLE</code>)</strong></p>
+</li>
+<li>Gate 0 inverted CSR index for 16-bit Walsh-Hadamard prefix routing (<span class="arithmatex">\(2^{16} = 65,536\)</span> buckets).</li>
+<li><strong>Bucket Offsets:</strong> 65,537 <code>int32</code> elements (262,148 bytes).</li>
+<li><strong>Postings Slice:</strong> <span class="arithmatex">\(N \times 4\)</span> bytes (<code>int32</code> vector row indices).</li>
+<li>
+<p>Probes exact query bucket + 16 Hamming-1 neighbors to prune 98-99% of search candidates.</p>
+</li>
+<li>
+<p><strong>Section 5: Generic Metadata Payload (<code>SECTION_METADATA</code>)</strong></p>
+</li>
+<li>Schema-agnostic storage for external attributes, documents, or tabular rows.</li>
+<li>Supported formats: JSON Lines (<code>jsonl</code>), Apache Arrow IPC stream (<code>arrow</code>), Raw Binary Blobs (<code>raw</code>).</li>
+<li>Read off-heap with zero heap memory overhead.</li>
+</ol>
+<hr />
+<h3 id="table-of-contents-toc-json-directory">Table of Contents (TOC JSON Directory)<a class="headerlink" href="#table-of-contents-toc-json-directory" title="Permanent link">&para;</a></h3>
+<p>Located at <code>toc_offset</code>, the self-describing directory provides section metadata and an arbitrary user-defined metadata dictionary:</p>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">{</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">"format"</span><span class="p">:</span><span class="w"> </span><span class="s2">"pithos_v2"</span><span class="p">,</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">"motto"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Autarky: Self-contained &amp; Zero Baggage"</span><span class="p">,</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">"sections"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">    </span><span class="nt">"ids"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"offset"</span><span class="p">:</span><span class="w"> </span><span class="mi">128</span><span class="p">,</span><span class="w"> </span><span class="nt">"length"</span><span class="p">:</span><span class="w"> </span><span class="mi">800000</span><span class="p">,</span><span class="w"> </span><span class="nt">"dtype"</span><span class="p">:</span><span class="w"> </span><span class="s2">"uint64"</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span><span class="nt">"tier_0"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"offset"</span><span class="p">:</span><span class="w"> </span><span class="mi">800128</span><span class="p">,</span><span class="w"> </span><span class="nt">"length"</span><span class="p">:</span><span class="w"> </span><span class="mi">800000</span><span class="p">,</span><span class="w"> </span><span class="nt">"dim_boundary"</span><span class="p">:</span><span class="w"> </span><span class="mi">64</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span><span class="nt">"tier_1"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"offset"</span><span class="p">:</span><span class="w"> </span><span class="mi">1600128</span><span class="p">,</span><span class="w"> </span><span class="nt">"length"</span><span class="p">:</span><span class="w"> </span><span class="mi">800000</span><span class="p">,</span><span class="w"> </span><span class="nt">"dim_boundary"</span><span class="p">:</span><span class="w"> </span><span class="mi">128</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">    </span><span class="nt">"sidecar"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"offset"</span><span class="p">:</span><span class="w"> </span><span class="mi">2400128</span><span class="p">,</span><span class="w"> </span><span class="nt">"length"</span><span class="p">:</span><span class="w"> </span><span class="mi">12800000</span><span class="p">,</span><span class="w"> </span><span class="nt">"format"</span><span class="p">:</span><span class="w"> </span><span class="s2">"fp8_e4m3"</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">    </span><span class="nt">"metadata"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"offset"</span><span class="p">:</span><span class="w"> </span><span class="mi">15200128</span><span class="p">,</span><span class="w"> </span><span class="nt">"length"</span><span class="p">:</span><span class="w"> </span><span class="mi">450000</span><span class="p">,</span><span class="w"> </span><span class="nt">"format"</span><span class="p">:</span><span class="w"> </span><span class="s2">"jsonl"</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">  </span><span class="p">},</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">  </span><span class="nt">"user_metadata"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">    </span><span class="nt">"collection"</span><span class="p">:</span><span class="w"> </span><span class="s2">"multimodal_satellite_embeddings"</span><span class="p">,</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">    </span><span class="nt">"model"</span><span class="p">:</span><span class="w"> </span><span class="s2">"vit-huge-patch14"</span><span class="p">,</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">    </span><span class="nt">"created_at"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2026-08-17T20:00:00Z"</span><span class="p">,</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">    </span><span class="nt">"custom_tags"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"esa"</span><span class="p">,</span><span class="w"> </span><span class="s2">"sentinel-2"</span><span class="p">,</span><span class="w"> </span><span class="s2">"spectral"</span><span class="p">]</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">  </span><span class="p">}</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="p">}</span>
+</span></code></pre></div>
+<hr />
+<h3 id="trailer-20-bytes-at-end-of-file">Trailer (20 Bytes at End of File)<a class="headerlink" href="#trailer-20-bytes-at-end-of-file" title="Permanent link">&para;</a></h3>
+<p>Readers open any <code>.pithos</code> file by seeking directly to <code>file_size - 20</code>:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Byte Range</th>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Field Name</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>EOF - 20 .. EOF - 13</code></td>
+<td style="text-align: left;"><code>uint64_t</code></td>
+<td style="text-align: left;"><code>toc_offset</code></td>
+<td style="text-align: left;">Absolute byte offset of TOC JSON</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>EOF - 12 .. EOF - 9</code></td>
+<td style="text-align: left;"><code>uint32_t</code></td>
+<td style="text-align: left;"><code>toc_length</code></td>
+<td style="text-align: left;">Byte length of TOC JSON</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>EOF - 8 .. EOF - 1</code></td>
+<td style="text-align: left;"><code>char[8]</code></td>
+<td style="text-align: left;"><code>magic_trailer</code></td>
+<td style="text-align: left;">Fixed ASCII signature: <code>"PITHOSDB"</code> (<code>0x50, 0x49, 0x54, 0x48, 0x4F, 0x53, 0x44, 0x42</code>)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="code-examples">Code Examples<a class="headerlink" href="#code-examples" title="Permanent link">&para;</a></h2>
+<h3 id="python-sdk">Python SDK<a class="headerlink" href="#python-sdk" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pithos</span><span class="w"> </span><span class="kn">import</span> <span class="n">VectorDb</span><span class="p">,</span> <span class="n">QuantizationMode</span><span class="p">,</span> <span class="n">SidecarMode</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># 1. Create continuous vector dataset</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">N</span><span class="p">,</span> <span class="n">D</span> <span class="o">=</span> <span class="mi">100_000</span><span class="p">,</span> <span class="mi">128</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">vectors</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">D</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">vectors</span> <span class="o">/=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">vectors</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">ids</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1_000_000</span><span class="p">,</span> <span class="mi">1_000_000</span> <span class="o">+</span> <span class="n">N</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># Optional: Embedded Apache Arrow Partition Table (1 Inode Master Architecture)</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pyarrow</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pa</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="n">partition_table</span> <span class="o">=</span> <span class="n">pa</span><span class="o">.</span><span class="n">Table</span><span class="o">.</span><span class="n">from_pylist</span><span class="p">([</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>    <span class="p">{</span><span class="s2">"product_id"</span><span class="p">:</span> <span class="sa">f</span><span class="s2">"CHUNK_</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="s2">"start_idx"</span><span class="p">:</span> <span class="n">i</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">,</span> <span class="s2">"count"</span><span class="p">:</span> <span class="mi">1000</span><span class="p">,</span> <span class="s2">"center_lat"</span><span class="p">:</span> <span class="mf">12.5</span><span class="p">}</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">100</span><span class="p">)</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="p">])</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="c1"># 2. Compile into self-contained .pithos container with embedded Arrow IPC table</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="n">VectorDb</span><span class="o">.</span><span class="n">compile_container</span><span class="p">(</span>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>    <span class="n">path</span><span class="o">=</span><span class="s2">"spectral_atlas.pithos"</span><span class="p">,</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>    <span class="n">records</span><span class="o">=</span><span class="n">vectors</span><span class="p">,</span>
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>    <span class="n">ids</span><span class="o">=</span><span class="n">ids</span><span class="p">,</span>
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>    <span class="n">tiers</span><span class="o">=</span><span class="p">[</span><span class="mi">64</span><span class="p">,</span> <span class="mi">128</span><span class="p">],</span>
+</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>    <span class="n">metric</span><span class="o">=</span><span class="s2">"cosine"</span><span class="p">,</span>
+</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>    <span class="n">q_mode</span><span class="o">=</span><span class="n">QuantizationMode</span><span class="o">.</span><span class="n">ONE_BIT</span><span class="p">,</span>
+</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>    <span class="n">sidecar_mode</span><span class="o">=</span><span class="n">SidecarMode</span><span class="o">.</span><span class="n">FP8</span><span class="p">,</span>
+</span><span id="__span-1-26"><a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a>    <span class="n">arrow_table</span><span class="o">=</span><span class="n">partition_table</span><span class="p">,</span>
+</span><span id="__span-1-27"><a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a>    <span class="n">user_metadata</span><span class="o">=</span><span class="p">{</span>
+</span><span id="__span-1-28"><a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a>        <span class="s2">"dataset"</span><span class="p">:</span> <span class="s2">"earth_observation_embeddings"</span><span class="p">,</span>
+</span><span id="__span-1-29"><a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a>        <span class="s2">"curator"</span><span class="p">:</span> <span class="s2">"Diogenes of Sinope"</span><span class="p">,</span>
+</span><span id="__span-1-30"><a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a>        <span class="s2">"architecture"</span><span class="p">:</span> <span class="s2">"Monolithic Single-File (1 Inode)"</span>
+</span><span id="__span-1-31"><a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>    <span class="p">}</span>
+</span><span id="__span-1-32"><a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a><span class="p">)</span>
+</span><span id="__span-1-33"><a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a>
+</span><span id="__span-1-34"><a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a><span class="c1"># 3. Load zero-copy, inspect Arrow table and search</span>
+</span><span id="__span-1-35"><a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a><span class="k">with</span> <span class="n">VectorDb</span><span class="p">()</span> <span class="k">as</span> <span class="n">db</span><span class="p">:</span>
+</span><span id="__span-1-36"><a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a>    <span class="n">index</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">load_index</span><span class="p">(</span><span class="s2">"spectral"</span><span class="p">,</span> <span class="s2">"spectral_atlas.pithos"</span><span class="p">)</span>
+</span><span id="__span-1-37"><a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Loaded </span><span class="si">{</span><span class="n">index</span><span class="o">.</span><span class="n">size</span><span class="p">()</span><span class="si">}</span><span class="s2"> records of dim </span><span class="si">{</span><span class="n">index</span><span class="o">.</span><span class="n">dimension</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</span><span id="__span-1-38"><a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Arrow Table Partitions: </span><span class="si">{</span><span class="n">index</span><span class="o">.</span><span class="n">arrow_table</span><span class="o">.</span><span class="n">num_rows</span><span class="si">}</span><span class="s2"> rows"</span><span class="p">)</span>
+</span><span id="__span-1-39"><a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a>
+</span><span id="__span-1-40"><a id="__codelineno-1-40" name="__codelineno-1-40" href="#__codelineno-1-40"></a>    <span class="c1"># Search top-5 nearest neighbors</span>
+</span><span id="__span-1-41"><a id="__codelineno-1-41" name="__codelineno-1-41" href="#__codelineno-1-41"></a>    <span class="n">results</span> <span class="o">=</span> <span class="n">index</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">vectors</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">k</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+</span><span id="__span-1-42"><a id="__codelineno-1-42" name="__codelineno-1-42" href="#__codelineno-1-42"></a>    <span class="k">for</span> <span class="n">res</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
+</span><span id="__span-1-43"><a id="__codelineno-1-43" name="__codelineno-1-43" href="#__codelineno-1-43"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Match ID: </span><span class="si">{</span><span class="n">res</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s2">, Distance: </span><span class="si">{</span><span class="n">res</span><span class="o">.</span><span class="n">distance</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="java-panama-foreign-function-memory-api">Java (Panama Foreign Function &amp; Memory API)<a class="headerlink" href="#java-panama-foreign-function-memory-api" title="Permanent link">&para;</a></h3>
+<div class="language-java highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">org.pithos.FlatIndex</span><span class="p">;</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">org.pithos.Index.SearchResult</span><span class="p">;</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">java.nio.file.Path</span><span class="p">;</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="kn">import</span><span class="w"> </span><span class="nn">java.util.List</span><span class="p">;</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">ContainerDemo</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">main</span><span class="p">(</span><span class="n">String</span><span class="o">[]</span><span class="w"> </span><span class="n">args</span><span class="p">)</span><span class="w"> </span><span class="kd">throws</span><span class="w"> </span><span class="n">Exception</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">        </span><span class="c1">// Zero-copy virtual memory map of .pithos container</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">        </span><span class="n">FlatIndex</span><span class="w"> </span><span class="n">index</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">FlatIndex</span><span class="p">.</span><span class="na">mapFile</span><span class="p">(</span><span class="s">"satellite_index.pithos"</span><span class="p">,</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">        </span><span class="n">System</span><span class="p">.</span><span class="na">out</span><span class="p">.</span><span class="na">println</span><span class="p">(</span><span class="s">"Single-file container: "</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">index</span><span class="p">.</span><span class="na">isSingleFileContainer</span><span class="p">());</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">        </span><span class="n">System</span><span class="p">.</span><span class="na">out</span><span class="p">.</span><span class="na">println</span><span class="p">(</span><span class="s">"TOC Metadata: "</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">index</span><span class="p">.</span><span class="na">getUserMetadataJson</span><span class="p">());</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">        </span><span class="kt">float</span><span class="o">[]</span><span class="w"> </span><span class="n">query</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="kt">float</span><span class="o">[</span><span class="mi">128</span><span class="o">]</span><span class="p">;</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">        </span><span class="n">List</span><span class="o">&lt;</span><span class="n">SearchResult</span><span class="o">&gt;</span><span class="w"> </span><span class="n">results</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">index</span><span class="p">.</span><span class="na">search</span><span class="p">(</span><span class="n">query</span><span class="p">,</span><span class="w"> </span><span class="mi">5</span><span class="p">);</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">SearchResult</span><span class="w"> </span><span class="n">r</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">results</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">            </span><span class="n">System</span><span class="p">.</span><span class="na">out</span><span class="p">.</span><span class="na">println</span><span class="p">(</span><span class="s">"Hit: "</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">r</span><span class="p">.</span><span class="na">id</span><span class="p">()</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s">", Score: "</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">r</span><span class="p">.</span><span class="na">score</span><span class="p">());</span>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">        </span><span class="p">}</span>
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">        </span><span class="n">index</span><span class="p">.</span><span class="na">close</span><span class="p">();</span>
+</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="p">}</span>
+</span></code></pre></div>
+<h3 id="c-c-native-api">C / C++ Native API<a class="headerlink" href="#c-c-native-api" title="Permanent link">&para;</a></h3>
+<div class="language-c highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">"pithos.h"</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdio.h&gt;</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="kt">int</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="n">graal_isolate_t</span><span class="w"> </span><span class="o">*</span><span class="n">isolate</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">NULL</span><span class="p">;</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">    </span><span class="n">graal_isolatethread_t</span><span class="w"> </span><span class="o">*</span><span class="kr">thread</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">NULL</span><span class="p">;</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">    </span><span class="n">graal_create_isolate</span><span class="p">(</span><span class="nb">NULL</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">isolate</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="kr">thread</span><span class="p">);</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">    </span><span class="n">vdb_init</span><span class="p">(</span><span class="kr">thread</span><span class="p">);</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">    </span><span class="n">vdb_load_index</span><span class="p">(</span><span class="kr">thread</span><span class="p">,</span><span class="w"> </span><span class="s">"satellite"</span><span class="p">,</span><span class="w"> </span><span class="s">"satellite_index.pithos"</span><span class="p">);</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">    </span><span class="kt">char</span><span class="w"> </span><span class="n">meta_buf</span><span class="p">[</span><span class="mi">4096</span><span class="p">];</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">len</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vdb_get_user_metadata</span><span class="p">(</span><span class="kr">thread</span><span class="p">,</span><span class="w"> </span><span class="s">"satellite"</span><span class="p">,</span><span class="w"> </span><span class="n">meta_buf</span><span class="p">,</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="n">meta_buf</span><span class="p">));</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">len</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">        </span><span class="n">printf</span><span class="p">(</span><span class="s">"Embedded Container Metadata: %s</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="w"> </span><span class="n">meta_buf</span><span class="p">);</span>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="w">    </span><span class="n">vdb_drop_index</span><span class="p">(</span><span class="kr">thread</span><span class="p">,</span><span class="w"> </span><span class="s">"satellite"</span><span class="p">);</span>
+</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="w">    </span><span class="n">vdb_close</span><span class="p">(</span><span class="kr">thread</span><span class="p">);</span>
+</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="w">    </span><span class="n">graal_tear_down_isolate</span><span class="p">(</span><span class="kr">thread</span><span class="p">);</span>
+</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+</span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a><span class="p">}</span>
+</span></code></pre></div>
+<hr />
+<h2 id="container-integrity-defensive-bounds-verification">Container Integrity &amp; Defensive Bounds Verification<a class="headerlink" href="#container-integrity-defensive-bounds-verification" title="Permanent link">&para;</a></h2>
+<p>When mounting a <code>.pithos</code> single-file container via <code>FlatIndex.mapFile()</code>, Pithos performs <span class="arithmatex">\(O(1)\)</span> defensive integrity checks in <span class="arithmatex">\(&lt; 1\,\mu\text{s}\)</span>:</p>
+<ol>
+<li><strong>Superblock Signature &amp; Schema Validation:</strong>
+   Verifies the 8-byte ASCII signature <code>"DIOGENES"</code>, format version (<code>2</code>), dimension <span class="arithmatex">\(D \in [1, 65536]\)</span>, and ensures that all tier step boundaries strictly increase (<span class="arithmatex">\(0 &lt; T_0 &lt; T_1 &lt; \dots \le D\)</span>).</li>
+<li><strong>Trailer Mirror Signature:</strong>
+   Verifies the 8-byte trailer signature <code>"PITHOSDB"</code> at <code>fileSize - 20</code> and checks that the trailer TOC offset and length match the superblock header exactly.</li>
+<li><strong>Physical File Bounds Enforcement:</strong>
+   Every section slice (<code>SECTION_IDS</code>, <code>SECTION_TIERS</code>, <code>SECTION_SIDECAR</code>, <code>SECTION_PREFIX_TABLE</code>, <code>SECTION_METADATA</code>) is verified against the physical file channel size:
+   $<span class="arithmatex">\(\text{Offset}_{\text{section}} + \text{Length}_{\text{section}} \le \text{FileChannel.size()}\)</span>$</li>
+<li><strong>TOC Decompression Guard:</strong>
+   Limits Table of Contents JSON strings to <span class="arithmatex">\(\le 10\,\text{MB}\)</span>, protecting against malicious memory expansion payloads.</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.select", "content.code.annotate"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>
