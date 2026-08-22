@@ -270,8 +270,11 @@ public class FlatIndex implements Index {
             throw new IOException("Base file path does not exist: " + basePath);
         }
 
-        // 1. Check if this is a Single-File .pithos Container (DIOGENES magic)
-        if (PithosContainer.isPithosContainer(mainPath)) {
+        boolean isPithosExt = mainPath.toString().endsWith(".pithos");
+        boolean isPithosMagic = PithosContainer.isPithosContainer(mainPath);
+
+        // 1. Check if this is a Single-File .pithos Container (DIOGENES magic or .pithos extension)
+        if (isPithosMagic || isPithosExt) {
             try (FileChannel channel = FileChannel.open(mainPath, StandardOpenOption.READ)) {
                 PithosContainer.Superblock sb = PithosContainer.readSuperblock(channel);
                 PithosContainer.validateTrailer(channel, sb.tocOffset(), sb.tocLength());
@@ -378,6 +381,10 @@ public class FlatIndex implements Index {
                 return new FlatIndex(containerSegment, idsSegment, tierSegments, null, fp16Segment, fp8Segment, fp4Segment,
                         (byte) 0, 0L, dimension, numTiers, tiers, totalRecords, cumulativeEnergy, qMode, sidecarMode,
                         tocJson, metadataPayloadSegment, prefixOffsetsSegment, prefixPostingsSegment);
+            } catch (Exception e) {
+                if (isPithosExt || isPithosMagic) {
+                    throw new IOException("Failed to load Pithos container '" + mainPath + "': " + e.getMessage(), e);
+                }
             }
         }
 
@@ -392,7 +399,7 @@ public class FlatIndex implements Index {
         byte m2 = mappedBase.get(ValueLayout.JAVA_BYTE, 2);
         byte m3 = mappedBase.get(ValueLayout.JAVA_BYTE, 3);
         if (m0 != 'P' || m1 != 'L' || m2 != 'A' || m3 != 'N') {
-            throw new IllegalArgumentException("Invalid file magic: must be DIOGENES or PLAN");
+            throw new IllegalArgumentException("Invalid file format for '" + mainPath + "': file is neither a valid single-file .pithos container nor a legacy multi-file PLAN index");
         }
 
         byte planetId = mappedBase.get(ValueLayout.JAVA_BYTE, 4);

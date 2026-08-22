@@ -2,6 +2,21 @@
 
 ---
 
+## Pithos v2.2.4 Release Notes — Robust Single-File Container Detection & Enhanced Error Propagation
+
+**Release Date:** August 2026  
+**Target Hardware:** NVIDIA Grace Blackwell GB10 / GB200 Superchips, Apple Silicon (M-Series ARM64), AWS Graviton 4, x86_64 (AVX-512 VPOPCNTDQ), NVMe DMA / io_uring.  
+**Package Version:** `pithos_core-2.2.4.jar` / `pithosdb 2.2.4` / `libpithos v2.2.4`
+
+### Summary
+Pithos v2.2.4 resolves a critical container detection fallback issue where corrupted, truncated, or `.pithos` single-file containers could erroneously fall through to the legacy multi-file PLAN parser and throw misleading `Invalid file magic: must be PLAN` exceptions.
+
+### Key Highlights & Improvements:
+* **Explicit `.pithos` & `DIOGENES` Container Boundary:** `FlatIndex.mapFile()` now guarantees that any file with a `.pithos` extension or valid container header is loaded strictly as a single-file container. If an I/O error occurs during container loading, the exact root cause is immediately propagated rather than masking it behind a legacy fallback exception.
+* **Resilient Header & Trailer Validation:** `PithosContainer.readSuperblock()`, `isPithosContainer()`, and `validateTrailer()` now use robust looped NIO buffer reads with multi-version compatibility (v1/v2) and generous TOC size limits (up to 50 MB).
+
+---
+
 ## Pithos v2.2.3 Release Notes — Automated Sidecar Precision Re-Ranking & Universal Vector Retrieval
 
 **Release Date:** August 2026  

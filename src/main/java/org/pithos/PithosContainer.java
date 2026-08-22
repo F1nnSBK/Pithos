@@ -172,20 +172,18 @@ public final class PithosContainer {
             return false;
         }
         try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ)) {
-            if (channel.size() < SUPERBLOCK_SIZE + TRAILER_SIZE) {
+            if (channel.size() < SUPERBLOCK_SIZE) {
                 return false;
             }
             ByteBuffer buf = ByteBuffer.allocate(8);
             channel.read(buf, 0);
             buf.flip();
+            if (buf.remaining() < 8) {
+                return false;
+            }
             byte[] magic = new byte[8];
             buf.get(magic);
-            for (int i = 0; i < 8; i++) {
-                if (magic[i] != MAGIC_SUPERBLOCK[i]) {
-                    return false;
-                }
-            }
-            return true;
+            return Arrays.equals(magic, MAGIC_SUPERBLOCK);
         } catch (IOException e) {
             return false;
         }
@@ -197,17 +195,18 @@ public final class PithosContainer {
         buf.order(java.nio.ByteOrder.LITTLE_ENDIAN);
         channel.read(buf, 0);
         buf.flip();
+        if (buf.remaining() < SUPERBLOCK_SIZE) {
+            throw new IOException("Container file is truncated: could not read 128-byte superblock");
+        }
 
         byte[] magic = new byte[8];
         buf.get(magic);
-        for (int i = 0; i < 8; i++) {
-            if (magic[i] != MAGIC_SUPERBLOCK[i]) {
-                throw new IOException("Invalid Pithos container: Superblock magic must be 'DIOGENES'");
-            }
+        if (!Arrays.equals(magic, MAGIC_SUPERBLOCK)) {
+            throw new IOException("Invalid Pithos container: Superblock magic must be 'DIOGENES'");
         }
 
         int version = buf.getInt();
-        if (version != FORMAT_VERSION) {
+        if (version != FORMAT_VERSION && version != 1) {
             throw new IOException("Unsupported Pithos container version: " + version + " (expected " + FORMAT_VERSION + ")");
         }
 
@@ -242,8 +241,8 @@ public final class PithosContainer {
 
         long tocOffset = buf.getLong();
         int tocLength = buf.getInt();
-        if (tocOffset <= 0 || tocLength <= 0 || tocLength > 10 * 1024 * 1024) {
-            throw new IOException("Corrupt container: TOC offset/length invalid (max TOC 10MB): offset=" + tocOffset + ", len=" + tocLength);
+        if (tocOffset <= 0 || tocLength <= 0 || tocLength > 50 * 1024 * 1024) {
+            throw new IOException("Corrupt container: TOC offset/length invalid (max TOC 50MB): offset=" + tocOffset + ", len=" + tocLength);
         }
         int qMode = buf.getShort() & 0xFFFF;
 
@@ -279,16 +278,14 @@ public final class PithosContainer {
         byte[] magic = new byte[8];
         buf.get(magic);
 
-        for (int i = 0; i < 8; i++) {
-            if (magic[i] != MAGIC_TRAILER[i]) {
-                throw new IOException("Corrupted Pithos container: Trailer signature must be 'PITHOSDB'");
-            }
+        if (!Arrays.equals(magic, MAGIC_TRAILER)) {
+            throw new IOException("Corrupted Pithos container: Trailer signature must be 'PITHOSDB'");
         }
 
-        if (expectedTocOffset > 0 && tocOffset != expectedTocOffset) {
+        if (expectedTocOffset > 0 && tocOffset > 0 && tocOffset != expectedTocOffset) {
             throw new IOException("TOC offset mismatch: header=" + expectedTocOffset + ", trailer=" + tocOffset);
         }
-        if (expectedTocLength > 0 && tocLength != expectedTocLength) {
+        if (expectedTocLength > 0 && tocLength > 0 && tocLength != expectedTocLength) {
             throw new IOException("TOC length mismatch: header=" + expectedTocLength + ", trailer=" + tocLength);
         }
     }
