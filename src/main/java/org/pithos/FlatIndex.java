@@ -76,7 +76,6 @@ public class FlatIndex implements Index {
     private final int[] tierOffsets;
     private final int[] tierSizes;
     private final ByteBuffer[] tierVectors;
-    private static final int SIMD_FLOAT_DIM_THRESHOLD = 32;
 
     private static final sun.misc.Unsafe UNSAFE;
     static {
