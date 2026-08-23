@@ -703,6 +703,15 @@ public class VectorDb {
         return index.cudaQueryPlanetaryGrid(queries, families, thresholds, votingMask);
     }
 
+    /// Dispatches a CUDA multi-family resonant voting query on the named index with direct off-heap address write.
+    public long cudaQueryPlanetaryGrid(String indexName, float[][] queries, int[] families, int[] thresholds, long rawMaskAddress, MemorySegment votingMask) {
+        Index index = getIndex(indexName);
+        if (index == null) {
+            throw new IllegalArgumentException("Index not found: " + indexName);
+        }
+        return index.cudaQueryPlanetaryGrid(queries, families, thresholds, rawMaskAddress, votingMask);
+    }
+
     /// Compacts multiple compiled Pithos indices into a single consolidated index file layout.
     ///
     /// Validates schema compatibility (D, tiers, qMode, planetId) and performs zero-copy

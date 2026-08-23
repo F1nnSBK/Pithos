@@ -76,8 +76,20 @@ public class FlatIndex implements Index {
     private final int[] tierOffsets;
     private final int[] tierSizes;
     private final ByteBuffer[] tierVectors;
-
     private static final int SIMD_FLOAT_DIM_THRESHOLD = 32;
+
+    private static final sun.misc.Unsafe UNSAFE;
+    static {
+        sun.misc.Unsafe u = null;
+        try {
+            java.lang.reflect.Field f = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+            f.setAccessible(true);
+            u = (sun.misc.Unsafe) f.get(null);
+        } catch (Throwable t) {
+            // fallback
+        }
+        UNSAFE = u;
+    }
 
     private static final ThreadLocal<long[]> VISITED_SCRATCH = ThreadLocal.withInitial(() -> new long[1024]);
     private final int numWorkers;
@@ -1493,6 +1505,11 @@ public class FlatIndex implements Index {
 
     @Override
     public long queryPlanetaryGrid(float[][] queries, int[] families, int[] thresholds, MemorySegment votingMask) {
+        return queryPlanetaryGrid(queries, families, thresholds, 0L, votingMask);
+    }
+
+    @Override
+    public long queryPlanetaryGrid(float[][] queries, int[] families, int[] thresholds, long rawMaskAddress, MemorySegment votingMask) {
         if (queries == null || queries.length == 0)
             return 0;
         int numQueries = queries.length;
@@ -1533,7 +1550,11 @@ public class FlatIndex implements Index {
                 for (int w = 0; w < numWorkers; w++) {
                     mergedVal |= threadLocalMasks[w].get(ValueLayout.JAVA_BYTE, i);
                 }
-                votingMask.set(ValueLayout.JAVA_BYTE, i, mergedVal);
+                if (rawMaskAddress != 0L && UNSAFE != null) {
+                    UNSAFE.putByte(rawMaskAddress + i, mergedVal);
+                } else if (votingMask != null) {
+                    votingMask.set(ValueLayout.JAVA_BYTE, i, mergedVal);
+                }
                 if (Integer.bitCount(mergedVal & 0xFF) >= 5) {
                     resonantCount++;
                 }
@@ -1779,8 +1800,13 @@ public class FlatIndex implements Index {
 
     @Override
     public long cudaQueryPlanetaryGrid(float[][] queries, int[] families, int[] thresholds, MemorySegment votingMask) {
+        return cudaQueryPlanetaryGrid(queries, families, thresholds, 0L, votingMask);
+    }
+
+    @Override
+    public long cudaQueryPlanetaryGrid(float[][] queries, int[] families, int[] thresholds, long rawMaskAddress, MemorySegment votingMask) {
         if (queries.length < GPU_BATCH_THRESHOLD || dimension < MIN_DIMENSION_FOR_GPU) {
-            return queryPlanetaryGrid(queries, families, thresholds, votingMask);
+            return queryPlanetaryGrid(queries, families, thresholds, rawMaskAddress, votingMask);
         }
 
         ensureCudaInitialized();
@@ -1840,7 +1866,7 @@ public class FlatIndex implements Index {
             CudaMemoryManager.freeDevice(deviceThresholds);
             CudaMemoryManager.freePinned(hostVotingMask);
             CudaMemoryManager.freeDevice(deviceVotingMask);
-            return queryPlanetaryGrid(queries, families, thresholds, votingMask);
+            return queryPlanetaryGrid(queries, families, thresholds, rawMaskAddress, votingMask);
         }
 
         ByteBuffer votingBuffer = ByteBuffer.allocateDirect(Math.toIntExact(size));
@@ -1849,9 +1875,14 @@ public class FlatIndex implements Index {
 
         long count = 0;
         for (int i = 0; i < size; i++) {
-            if (votingBuffer.get(i) != 0) {
+            byte v = votingBuffer.get(i);
+            if (v != 0) {
                 count++;
-                votingMask.set(ValueLayout.JAVA_BYTE, i, votingBuffer.get(i));
+            }
+            if (rawMaskAddress != 0L && UNSAFE != null) {
+                UNSAFE.putByte(rawMaskAddress + i, v);
+            } else if (votingMask != null) {
+                votingMask.set(ValueLayout.JAVA_BYTE, i, v);
             }
         }
 

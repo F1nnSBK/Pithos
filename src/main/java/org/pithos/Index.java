@@ -45,6 +45,11 @@ public interface Index extends AutoCloseable {
     /// @return count of highly resonant candidate records
     long queryPlanetaryGrid(float[][] queries, int[] families, int[] thresholds, MemorySegment votingMask);
 
+    /// Performs a parallel scan with direct off-heap address write.
+    default long queryPlanetaryGrid(float[][] queries, int[] families, int[] thresholds, long rawMaskAddress, MemorySegment votingMask) {
+        return queryPlanetaryGrid(queries, families, thresholds, votingMask);
+    }
+
     // =========================================================================
     // CUDA Acceleration Fallback Methods
     // =========================================================================
@@ -67,6 +72,11 @@ public interface Index extends AutoCloseable {
     /// @return count of resonant candidate records
     default long cudaQueryPlanetaryGrid(float[][] queries, int[] families, int[] thresholds, MemorySegment votingMask) {
         return queryPlanetaryGrid(queries, families, thresholds, votingMask);
+    }
+
+    /// Performs a CUDA-accelerated planetary grid voting search with direct off-heap address write.
+    default long cudaQueryPlanetaryGrid(float[][] queries, int[] families, int[] thresholds, long rawMaskAddress, MemorySegment votingMask) {
+        return queryPlanetaryGrid(queries, families, thresholds, rawMaskAddress, votingMask);
     }
 
     /// Returns the vector dimensionality (D).

@@ -272,9 +272,7 @@ public class CApi {
             }
 
             long rawAddress = votingMask.rawValue();
-            MemorySegment maskSegment = MemorySegment.ofAddress(rawAddress).reinterpret(totalTiles);
-
-            return index.queryPlanetaryGrid(javaQueries, javaFamilies, javaThresholds, maskSegment);
+            return index.queryPlanetaryGrid(javaQueries, javaFamilies, javaThresholds, rawAddress, null);
         } catch (Throwable t) {
             t.printStackTrace();
             return -4;
@@ -959,9 +957,7 @@ public class CApi {
             }
 
             long rawAddress = votingMask.rawValue();
-            MemorySegment maskSegment = MemorySegment.ofAddress(rawAddress).reinterpret(totalTiles);
-
-            return db.cudaQueryPlanetaryGrid(idxName, javaQueries, javaFamilies, javaThresholds, maskSegment);
+            return db.cudaQueryPlanetaryGrid(idxName, javaQueries, javaFamilies, javaThresholds, rawAddress, null);
         } catch (Throwable t) {
             t.printStackTrace();
             return -4;

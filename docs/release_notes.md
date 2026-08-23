@@ -2,6 +2,21 @@
 
 ---
 
+## Pithos v2.2.5 Release Notes — Zero-Warning FFI Off-Heap Memory Access & Panama Cleanliness
+
+**Release Date:** August 2026  
+**Target Hardware:** NVIDIA Grace Blackwell GB10 / GB200 Superchips, Apple Silicon (M-Series ARM64), AWS Graviton 4, x86_64 (AVX-512 VPOPCNTDQ), NVMe DMA / io_uring.  
+**Package Version:** `pithos_core-2.2.5.jar` / `pithosdb 2.2.5` / `libpithos v2.2.5`
+
+### Summary
+Pithos v2.2.5 eliminates restricted method warnings (`MemorySegment::reinterpret`) emitted by GraalVM / Java Panama during C-FFI planetary grid scans and ensures native access configuration across all build profiles.
+
+### Key Highlights & Improvements:
+* **Zero-Warning Direct Address Writing:** `CApi.java` passes raw off-heap buffer addresses directly to `FlatIndex.queryPlanetaryGrid()` and `FlatIndex.cudaQueryPlanetaryGrid()`, eliminating `MemorySegment::reinterpret` calls.
+* **Native Access Compilation Flags:** Added `--enable-native-access=ALL-UNNAMED` to both default and CUDA `native-maven-plugin` build profiles in `pom.xml`.
+
+---
+
 ## Pithos v2.2.4 Release Notes — Robust Single-File Container Detection & Enhanced Error Propagation
 
 **Release Date:** August 2026  

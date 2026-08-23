@@ -6,7 +6,7 @@
 
     <groupId>org.pithos</groupId>
     <artifactId>pithos_core</artifactId>
-    <version>2.2.4</version>
+    <version>2.2.5</version>
     <packaging>jar</packaging>
 
 
@@ -100,6 +100,7 @@
                     <buildArgs>
                         <buildArg>--no-fallback</buildArg>
                         <buildArg>--add-modules=jdk.incubator.vector</buildArg>
+                        <buildArg>--enable-native-access=ALL-UNNAMED</buildArg>
                         <buildArg>-H:+UnlockExperimentalVMOptions</buildArg>
                         <buildArg>-H:+VectorAPISupport</buildArg>
                         <buildArg>--gc=serial</buildArg>
@@ -218,6 +219,7 @@ EOF
                             <buildArgs>
                                 <buildArg>--no-fallback</buildArg>
                                 <buildArg>--add-modules=jdk.incubator.vector</buildArg>
+                                <buildArg>--enable-native-access=ALL-UNNAMED</buildArg>
                                 <buildArg>-H:+UnlockExperimentalVMOptions</buildArg>
                                 <buildArg>-H:+VectorAPISupport</buildArg>
                                 <buildArg>--gc=serial</buildArg>
