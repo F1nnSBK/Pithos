@@ -786,12 +786,19 @@ class Index:
         self._ffi = db._ffi
         self._info: Optional[IndexInfo] = None
         self._sidecar_mmap: Optional[np.ndarray] = None
+        self._mips_transformer = None
+        
+        # Check if this index was compiled with metric="mips"
+        meta = self.user_metadata
+        if meta and "mips_transformer" in meta:
+            from .mips import SphericalLiftingTransformer
+            self._mips_transformer = SphericalLiftingTransformer.from_dict(meta["mips_transformer"])
 
     def __setattr__(self, name: str, value: Any) -> None:
         """Protects Index attributes against silent assignment bugs (FAISS standard)."""
         valid_slots = {
             "_db", "_name", "_base_path", "_ffi", "_info", "d", "ntotal",
-            "referenced_objects", "_sidecar_mmap"
+            "referenced_objects", "_sidecar_mmap", "_mips_transformer"
         }
         if name.startswith("_") or name in valid_slots or hasattr(self, name) or hasattr(self.__class__, name):
             super().__setattr__(name, value)
@@ -964,6 +971,7 @@ class Index:
         I: Optional[np.ndarray] = None,
         cuda: bool = False,
         return_numpy: bool = False,
+        force_python: bool = False,
     ) -> Union[List[SearchResult], List[List[SearchResult]], Tuple[np.ndarray, np.ndarray]]:
         """Finds the k nearest neighbors of query vectors x.
 
@@ -990,6 +998,11 @@ class Index:
             Nearest neighbor results.
         """
         q_arr = _check_dtype_float32(np.asarray(queries), "queries")
+        
+        q_norms = None
+        if getattr(self, "_mips_transformer", None) is not None:
+            q_arr, q_norms = self._mips_transformer.transform_queries(q_arr)
+
         is_single = q_arr.ndim == 1
         if is_single:
             q_arr = q_arr.reshape(1, -1)
@@ -1012,6 +1025,10 @@ class Index:
             assert D.shape == (num_queries, k)
             out_dists = np.ascontiguousarray(D, dtype=np.int32)
 
+        import platform
+        # M4 Apple Silicon workaround: Force python fallback to avoid GraalVM SIGSEGV
+        force_python = platform.machine() == "arm64" and platform.system() == "Darwin"
+        
         if cuda and self._ffi._has_cuda:
             status = self._ffi.lib.vdb_cuda_batch_search(
                 self._ffi.thread,
@@ -1022,6 +1039,9 @@ class Index:
                 out_ids.ctypes.data_as(ctypes.c_void_p),
                 out_dists.ctypes.data_as(ctypes.c_void_p),
             )
+            self._ffi.check_status(status, "search")
+        elif force_python:
+            self._python_search_fallback(q_arr, k, out_ids, out_dists)
         else:
             status = self._ffi.lib.vdb_batch_search(
                 self._ffi.thread,
@@ -1032,19 +1052,33 @@ class Index:
                 out_ids.ctypes.data_as(ctypes.c_void_p),
                 out_dists.ctypes.data_as(ctypes.c_void_p),
             )
-        self._ffi.check_status(status, "search")
+            self._ffi.check_status(status, "search")
 
         if return_numpy or D is not None or I is not None:
+            if getattr(self, "_mips_transformer", None) is not None:
+                sims = 1.0 - (out_dists.astype(np.float32) / 1000000.0)
+                raw_scores = self._mips_transformer.untransform_scores(sims, q_norms)
+                # Note: If D was pre-allocated as int32, we cannot write floats into it seamlessly in python, 
+                # but we return the raw_scores arrays directly.
+                return (out_ids[0], raw_scores[0]) if is_single and D is None else (out_ids, raw_scores)
             return (out_ids[0], out_dists[0]) if is_single and D is None else (out_ids, out_dists)
 
         results: List[List[SearchResult]] = []
+        is_mips = getattr(self, "_mips_transformer", None) is not None
         for q_idx in range(num_queries):
             q_res: List[SearchResult] = []
             for i in range(k):
                 rec_id = int(out_ids[q_idx, i])
                 if rec_id == -1:
                     continue
-                q_res.append(SearchResult(id=rec_id, score=int(out_dists[q_idx, i])))
+                sc = out_dists[q_idx, i]
+                if is_mips:
+                    approx_sim = 1.0 - (float(sc) / 1000000.0)
+                    q_n = q_norms if is_single else q_norms[q_idx]
+                    orig_sim = self._mips_transformer.untransform_scores(approx_sim, float(q_n))
+                    q_res.append(SearchResult(id=rec_id, score=float(orig_sim)))
+                else:
+                    q_res.append(SearchResult(id=rec_id, score=float(sc)))
             results.append(q_res)
 
         return results[0] if is_single else results
@@ -1095,6 +1129,70 @@ class Index:
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Zero-Copy batch k-NN search returning flat numpy arrays (out_ids, out_distances)."""
         return self.search(queries, k=k, cuda=cuda, return_numpy=True)
+
+    def _python_search_fallback(self, q_arr: np.ndarray, k: int, out_ids: np.ndarray, out_dists: np.ndarray) -> None:
+        """NumPy vector-based exact search fallback to prevent JVM crashes on Apple Silicon M-series."""
+        if self.sidecar_mode == SidecarMode.NONE:
+            raise RuntimeError("SidecarMode.NONE is not supported on Apple Silicon (M-series) due to native search crashes. Please use SidecarMode.FP8, FP16, or FP4.")
+            
+        vecs = self.get_vectors()
+        if len(vecs) == 0:
+            out_ids.fill(-1)
+            out_dists.fill(0)
+            return
+
+        # Fetch index metric from superblock
+        metric = "cosine"
+        try:
+            c_path = self._base_path if self._base_path.endswith(".pithos") else f"{self._base_path}.pithos"
+            with open(c_path, "rb") as f:
+                f.seek(32)
+                m_code = int.from_bytes(f.read(4), byteorder="little")
+                if m_code == 1:
+                    metric = "l2"
+                elif m_code == 2:
+                    metric = "dot"
+        except Exception:
+            pass
+
+        num_queries = q_arr.shape[0]
+        ids_buf = self.get_ids_buffer()
+
+        for q_idx in range(num_queries):
+            q = q_arr[q_idx]
+
+            # If SidecarMode.NONE, vecs are 1-bit reconstructions (-1 / 1). 
+            # We must binarize the query as well to perform symmetric distance, 
+            # mirroring native Hamming space behavior to preserve self-retrieval.
+            if self.sidecar_mode == SidecarMode.NONE:
+                q_sym = np.where(q > 0, 1.0, -1.0).astype(np.float32)
+                q_sym /= math.sqrt(vecs.shape[1])
+            else:
+                q_sym = q
+
+            if metric == "l2":
+                dists = np.sum((vecs - q_sym) ** 2, axis=1)
+                best_idx = np.argsort(dists)[:k]
+                out_ids[q_idx, :len(best_idx)] = ids_buf[best_idx]
+                out_dists[q_idx, :len(best_idx)] = dists[best_idx].astype(np.int32)
+            else: # cosine or dot
+                dots = np.dot(vecs, q_sym)
+                if metric == "cosine":
+                    q_n = np.linalg.norm(q_sym)
+                    v_n = np.linalg.norm(vecs, axis=1)
+                    denom = q_n * v_n
+                    denom[denom == 0] = 1e-10
+                    sim = dots / denom
+                    # Native cosine returns: (int)((1.0 - sim) * 1000000.0)
+                    scores = (1.0 - sim) * 1000000.0
+                    best_idx = np.argsort(scores)[:k]
+                    out_ids[q_idx, :len(best_idx)] = ids_buf[best_idx]
+                    out_dists[q_idx, :len(best_idx)] = scores[best_idx].astype(np.int32)
+                else:
+                    scores = -dots # dot product needs to be maximized, but search returns ascending distances
+                    best_idx = np.argsort(scores)[:k]
+                    out_ids[q_idx, :len(best_idx)] = ids_buf[best_idx]
+                    out_dists[q_idx, :len(best_idx)] = (-scores[best_idx]).astype(np.int32)
 
     def search_merged(
         self,
@@ -1180,6 +1278,11 @@ class Index:
             Result object containing resonant_count, voting_mask, and sorted candidate_ids / scores.
         """
         q_arr = _check_dtype_float32(queries, "queries")
+        
+        q_norms = None
+        if getattr(self, "_mips_transformer", None) is not None:
+            q_arr, q_norms = self._mips_transformer.transform_queries(q_arr)
+            
         f_arr = np.ascontiguousarray(families, dtype=np.int32)
         t_arr = np.ascontiguousarray(thresholds, dtype=np.int32)
 
@@ -1244,6 +1347,10 @@ class Index:
                 scores = max_sims[sort_order]
                 votes = cand_popcounts[sort_order]
                 cand_masks = mask[cand_ids]
+                
+                if getattr(self, "_mips_transformer", None) is not None:
+                    best_q_indices = np.argmax(sim_matrix[sort_order], axis=1)
+                    scores = self._mips_transformer.untransform_scores(scores, q_norms[best_q_indices])
             else:
                 cand_ids = np.empty((0,), dtype=np.int64)
                 scores = np.empty((0,), dtype=np.float32)
@@ -1417,7 +1524,7 @@ class Index:
                     continue
                 bytes_per_rec = len(t_buf) // total_records
                 t_selected = t_buf.reshape(total_records, bytes_per_rec)[idx_arr]
-                t_bits.append(np.unpackbits(t_selected, axis=-1, bitorder="little"))
+                t_bits.append(np.unpackbits(t_selected, axis=-1, bitorder="big"))
 
             if len(t_bits) > 0:
                 all_bits = np.concatenate(t_bits, axis=-1)[..., :dim]
@@ -1457,6 +1564,11 @@ class Index:
             Cosine similarities or distances corresponding to ranked indices.
         """
         q_arr = _check_dtype_float32(np.asarray(queries), "queries")
+        
+        q_norms = None
+        if getattr(self, "_mips_transformer", None) is not None:
+            q_arr, q_norms = self._mips_transformer.transform_queries(q_arr)
+            
         is_single_query = q_arr.ndim == 1
         if is_single_query:
             q_arr = q_arr.reshape(1, -1)
@@ -1512,7 +1624,12 @@ class Index:
             raise ValueError(f"Unsupported metric '{metric}'. Choose 'cosine', 'dot', 'ip', or 'l2'.")
 
         if is_single_query:
+            if getattr(self, "_mips_transformer", None) is not None:
+                ranked_scores[0] = self._mips_transformer.untransform_scores(ranked_scores[0], q_norms)
             return ranked_ids[0], ranked_scores[0]
+            
+        if getattr(self, "_mips_transformer", None) is not None:
+            ranked_scores = self._mips_transformer.untransform_scores(ranked_scores, q_norms.reshape(-1, 1))
         return ranked_ids, ranked_scores
 
     def get_fpga_descriptor(self, tier_idx: int = 0) -> FpgaDescriptor:
@@ -1546,6 +1663,7 @@ class Index:
     # --------------------------------------------------------------------------
     # Single-File Container Metadata & Partitions
     # --------------------------------------------------------------------------
+    @property
     def user_metadata(self) -> dict:
         """User metadata dictionary embedded in the single-file container."""
         if hasattr(self._ffi.lib, "vdb_get_user_metadata"):
@@ -1569,7 +1687,7 @@ class Index:
 
     def get_user_metadata(self) -> dict:
         """Alias for user_metadata()."""
-        return self.user_metadata()
+        return self.user_metadata
 
     @property
     def arrow_table(self) -> Any:
@@ -1847,7 +1965,8 @@ class VectorDb:
         self._ffi = NativeBindings(lib_path)
         with VectorDb._lock:
             if VectorDb._active_instances == 0:
-                self._ffi.lib.vdb_init(self._ffi.thread)
+                if hasattr(self._ffi.lib, "vdb_init"):
+                    self._ffi.lib.vdb_init(self._ffi.thread)
             VectorDb._active_instances += 1
         self._indices: Dict[str, Index] = {}
         self._delta_buffers: Dict[str, DeltaBuffer] = {}
@@ -2053,9 +2172,22 @@ class VectorDb:
         lib_path : str, optional
             Path to native shared library.
         """
-        ffi = NativeBindings(lib_path)
         vecs = _check_dtype_float32(records, "records")
         num_records, dimension = vecs.shape
+        
+        # --- Native MIPS Interception ---
+        metric_lower = metric.lower()
+        if metric_lower in ("mips", "dot", "ip", "inner_product", "dot_product"):
+            from .mips import SphericalLiftingTransformer
+            transformer = SphericalLiftingTransformer(pad_to_multiple=64)
+            vecs = transformer.fit_transform(vecs)
+            dimension = vecs.shape[1]
+            metric = "cosine"
+            metric_lower = "cosine"
+            
+            if user_metadata is None:
+                user_metadata = {}
+            user_metadata["mips_transformer"] = transformer.to_dict()
 
         if arrow_table is not None:
             try:
@@ -2097,26 +2229,27 @@ class VectorDb:
         meta_fmt_ptr = metadata_format.encode("utf-8") if metadata_format else None
         user_json_str = json.dumps(user_metadata).encode("utf-8") if user_metadata else None
 
+        ffi = NativeBindings(lib_path)
         if hasattr(ffi.lib, "vdb_compile_container"):
             with ffi.isolated_context() as temp_thread:
                 status = ffi.lib.vdb_compile_container(
                     temp_thread,
                     path.encode("utf-8"),
                     ctypes.c_int(dimension),
-                    tiers_arr.ctypes.data_as(ctypes.c_void_p),
-                    ctypes.c_int(len(tiers_arr)),
+                    tiers_arr.ctypes.data_as(ctypes.c_void_p) if tiers_arr is not None else None,
+                    ctypes.c_int(len(tiers_arr) if tiers_arr is not None else 0),
                     ids_arr.ctypes.data_as(ctypes.c_void_p),
                     vecs.ctypes.data_as(ctypes.c_void_p),
                     ctypes.c_int(num_records),
                     ctypes.c_int(metric_code),
-                    ctypes.c_int(int(q_mode)),
-                    ctypes.c_int(int(actual_sidecar)),
+                    ctypes.c_int(q_mode.value),
+                    ctypes.c_int(actual_sidecar.value),
                     meta_bytes_ptr,
                     ctypes.c_int(meta_len),
                     meta_fmt_ptr,
-                    user_json_str,
+                    user_json_str
                 )
-                ffi.check_status(status, "compile single-file container")
+                ffi.check_status(status, "compile monolithic container")
         else:
             _write_pithos_container_file(
                 path=path,
@@ -2147,6 +2280,7 @@ class VectorDb:
         user_metadata: Optional[dict] = None,
         lib_path: Optional[str] = None,
         chunk_size: int = 5000,
+        mips_max_norm: Optional[float] = None,
     ) -> None:
         """Compiles continuous float vectors from a streaming iterator directly into a .pithos container on disk.
 
@@ -2180,6 +2314,8 @@ class VectorDb:
             Path to native shared library.
         chunk_size : int, default=5000
             Record count per streaming chunk batch.
+        mips_max_norm : float, optional
+            Required if metric is 'mips'/'dot'. The maximum L2 norm across the entire stream.
         """
         ffi = NativeBindings(lib_path)
         if total_records <= 0:
@@ -2203,7 +2339,30 @@ class VectorDb:
             actual_sidecar = SidecarMode(int(sidecar_mode))
 
         metric_map = {"cosine": 0, "l2": 1, "euclidean": 1, "dot": 2, "dot_product": 2}
-        metric_code = metric_map.get(metric.lower(), 0)
+        metric_lower = metric.lower()
+        
+        # --- Native MIPS Interception ---
+        mips_transformer = None
+        if metric_lower in ("mips", "dot", "ip", "inner_product", "dot_product"):
+            if mips_max_norm is None:
+                raise ValueError("mips_max_norm must be provided for streaming MIPS compilation.")
+            from .mips import SphericalLiftingTransformer
+            mips_transformer = SphericalLiftingTransformer(pad_to_multiple=64)
+            mips_transformer.max_norm = float(mips_max_norm)
+            mips_transformer.input_dim = dimension
+            mips_transformer.lifted_dim = dimension + 1
+            mips_transformer.padded_dim = _align64(dimension + 1)
+            mips_transformer._is_fitted = True
+            
+            dimension = mips_transformer.padded_dim
+            metric_lower = "cosine"
+            metric = "cosine"
+            
+            if user_metadata is None:
+                user_metadata = {}
+            user_metadata["mips_transformer"] = mips_transformer.to_dict()
+
+        metric_code = metric_map.get(metric_lower, 0)
 
         SUPERBLOCK_SIZE = 128
         ids_offset = _align64(SUPERBLOCK_SIZE)
@@ -2388,13 +2547,20 @@ class VectorDb:
                     b_vecs = _check_dtype_float32(buffer_vecs, "buffer_vecs")
                     b_ids = _check_dtype_int64(buffer_ids, "buffer_ids")
                     yield b_ids, b_vecs
-
             processed_records = 0
             all_t0_chunks = []
             with tempfile.TemporaryDirectory() as tmpdir:
                 with ffi.isolated_context() as temp_thread:
                     chunk_idx = 0
                     for b_ids, b_vecs in _iterate_chunks(record_stream, chunk_size):
+                        if mips_transformer is not None:
+                            norms = np.linalg.norm(b_vecs, axis=1)
+                            lifted = np.zeros((len(b_vecs), dimension), dtype=np.float32)
+                            lifted[:, :mips_transformer.input_dim] = b_vecs / mips_transformer.max_norm
+                            lifted[:, mips_transformer.input_dim] = np.sqrt(np.maximum(0.0, 1.0 - (norms / mips_transformer.max_norm)**2))
+                            b_vecs = lifted
+
+                        b_vecs = np.ascontiguousarray(b_vecs)
                         b_size = b_vecs.shape[0]
                         if b_size == 0 or processed_records >= total_records:
                             continue

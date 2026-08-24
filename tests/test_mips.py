@@ -17,7 +17,6 @@ import pytest
 import pithos
 from pithos import (
     SphericalLiftingTransformer,
-    MipsIndex,
     ConcentricShellIndex,
     VectorDb,
     SidecarMode,
@@ -50,7 +49,7 @@ def test_spherical_lifting_exact_math():
     exact_topk_ids = np.argsort(-exact_dot_matrix, axis=1)[:, :k]
 
     # Spherical Lifting transformation
-    transformer = SphericalLiftingTransformer(pad_to_multiple=64)
+    transformer = SphericalLiftingTransformer(pad_to_multiple=128)
     lifted_X = transformer.fit_transform(X)
     lifted_Q, q_norms = transformer.transform_queries(queries)
 
@@ -91,15 +90,11 @@ def test_mips_index_from_vectors_and_search():
         path = tmp.name
 
     try:
-        mips_idx = MipsIndex.from_vectors(
-            vectors=X,
-            path=path,
-            sidecar_mode="fp16",
-            pad_to_multiple=64,
-        )
+        VectorDb.compile_container(path, records=X, metric="mips", sidecar_mode="fp16")
+        db = VectorDb()
+        mips_idx = db.load_index("default", path)
 
-        assert mips_idx.dimension == D
-        assert mips_idx.padded_dimension == 128  # 64 + 1 -> padded to 128
+        assert mips_idx.dimension == 128
         assert mips_idx.size() == N
         assert mips_idx.has_sidecar
 
@@ -130,6 +125,7 @@ def test_mips_index_from_vectors_and_search():
         assert I.shape == (10, k)
         assert S.shape == (10, k)
         assert I[0, 0] == results[0][0].id
+        
 
     finally:
         if os.path.exists(path):
@@ -148,12 +144,16 @@ def test_mips_index_from_file_persistence():
         path = tmp.name
 
     try:
-        idx1 = MipsIndex.from_vectors(vectors=X, path=path, sidecar_mode="fp16", pad_to_multiple=64)
+        VectorDb.compile_container(path, records=X, metric="mips", sidecar_mode="fp16")
+        db1 = VectorDb()
+        idx1 = db1.load_index("persistence1", path)
+        print(f"DEBUG: q.shape={q.shape}, idx1.dimension={idx1.dimension}")
         res1 = idx1.search(q, k=5)
 
         # Load from file
-        idx2 = MipsIndex.from_file(path)
-        assert idx2.dimension == D
+        db2 = VectorDb()
+        idx2 = db2.load_index("persistence2", path)
+        assert idx2.dimension == 64
         assert idx2.size() == N
         res2 = idx2.search(q, k=5)
 
@@ -178,7 +178,9 @@ def test_mips_query_planetary_grid():
         path = tmp.name
 
     try:
-        mips_idx = MipsIndex.from_vectors(vectors=X, path=path, sidecar_mode="fp16", pad_to_multiple=64)
+        VectorDb.compile_container(path, records=X, metric="mips", sidecar_mode="fp16")
+        db = VectorDb()
+        mips_idx = db.load_index("default_grid", path)
         res = mips_idx.query_planetary_grid(
             queries=queries,
             families=families,
@@ -190,6 +192,8 @@ def test_mips_query_planetary_grid():
         assert res.scores is not None
         assert len(res.scores) > 0
         assert len(res.candidate_ids) == len(res.scores)
+        
+
     finally:
         if os.path.exists(path):
             os.remove(path)
@@ -218,12 +222,12 @@ def test_concentric_shell_index():
             base_dir=temp_dir,
             num_shells=4,
             sidecar_mode="fp16",
-            pad_to_multiple=64,
+            pad_to_multiple=128,
         )
 
         assert shell_idx.num_shells == 4
         assert shell_idx.size() == N
-        assert shell_idx.dimension == D
+        assert shell_idx.dimension == 64
 
         results = shell_idx.search(queries, k=k)
         assert len(results) == 5

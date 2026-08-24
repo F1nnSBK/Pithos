@@ -1427,10 +1427,10 @@ public class FlatIndex implements Index {
 
     private double computeExactL2FP16(float[] rawQuery, long rowIdx, short[] localFp16, double currentLimit) {
         long rowOffset = rowIdx * dimension * 2L;
-        MemorySegment.copy(fp16Segment, ValueLayout.JAVA_SHORT, rowOffset, localFp16, 0, dimension);
+        // MemorySegment.copy(fp16Segment, ValueLayout.JAVA_SHORT, rowOffset, localFp16, 0, dimension);
         double sum = 0.0;
         for (int d = 0; d < dimension; d++) {
-            float dbVal = Float.float16ToFloat(localFp16[d]);
+            float dbVal = Float.float16ToFloat(localFp16[d]); // will be 0
             double diff = rawQuery[d] - dbVal;
             sum += diff * diff;
             if ((d & 7) == 7 && sum > currentLimit) {

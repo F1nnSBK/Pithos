@@ -15,7 +15,7 @@ from collections import defaultdict
 
 import faiss
 import pithos
-from pithos import MipsIndex, ConcentricShellIndex
+from pithos import ConcentricShellIndex
 
 def generate_anisotropic_data(n_samples, n_dim, n_clusters=100, dynamic_range=1000.0, seed=42):
     """Generates clustered (anisotropic) vectors with heavy-tailed norm distributions."""
@@ -103,12 +103,16 @@ def evaluate_mips_pareto():
     import gc
     gc.collect()
 
-    # --- 3. Pithos MipsIndex (FP16 and FP8) ---
+    # --- 3. Pithos Native MIPS (FP16 and FP8) ---
+    from pithos import VectorDb
     for mode in ["fp16", "fp8"]:
-        print(f"Benchmarking Pithos MipsIndex ({mode.upper()})...")
+        print(f"Benchmarking Pithos Native MIPS ({mode.upper()})...")
         with tempfile.NamedTemporaryFile(suffix=".pithos", delete=False) as tmp:
             path = tmp.name
-        idx = MipsIndex.from_vectors(X, path=path, sidecar_mode=mode, pad_to_multiple=64)
+        VectorDb.compile_container(path, records=X, metric="mips", sidecar_mode=mode)
+        
+        db = VectorDb()
+        idx = db.load_index("default", path)
         
         # Warmup
         idx.search(queries, k=K_MAX, return_numpy=True)
@@ -123,8 +127,7 @@ def evaluate_mips_pareto():
             results[name]["recall_10"].append(compute_recall_at_k(I_pithos, gt_topk, 10))
             results[name]["recall_100"].append(compute_recall_at_k(I_pithos, gt_topk, 100))
         
-        if hasattr(idx.index, "_db") and hasattr(idx.index._db, "close"):
-            idx.index._db.close()
+        db.close()
         os.remove(path)
         gc.collect()
 

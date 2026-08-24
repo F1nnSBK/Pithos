@@ -33,7 +33,6 @@ from .core import (
 )
 from .mips import (
     SphericalLiftingTransformer,
-    MipsIndex,
     ConcentricShellIndex,
 )
 from .ffi import PithosNativeError
@@ -50,7 +49,6 @@ __all__ = [
     "SidecarMode",
     "FpgaDescriptor",
     "SphericalLiftingTransformer",
-    "MipsIndex",
     "ConcentricShellIndex",
     "PithosNativeError",
     "reset_isolate",

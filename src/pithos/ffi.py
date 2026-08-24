@@ -284,14 +284,30 @@ class NativeBindings:
             self.lib.vdb_shrink_to_fit.argtypes = [ctypes.c_void_p]
             self.lib.vdb_shrink_to_fit.restype = ctypes.c_int
 
-        # Start GraalVM Isolate
-        status = self.lib.graal_create_isolate(None, ctypes.byref(self.isolate), ctypes.byref(self.thread))
-        if status != 0:
-            raise RuntimeError(f"Failed to create GraalVM Native Image isolate (status={status})")
-            
-        status = self.lib.vdb_init(self.thread)
-        if status != 0:
-            raise PithosNativeError(status, "Failed to initialize Pithos database coordinator.")
+        # Start GraalVM Isolate (Suppress stderr temporarily to hide sun.misc.Unsafe deprecation warnings)
+        import os, sys
+        try:
+            null_fd = os.open(os.devnull, os.O_WRONLY)
+            saved_stderr_fd = os.dup(2)
+            os.dup2(null_fd, 2)
+        except Exception:
+            null_fd = None
+            saved_stderr_fd = None
+
+        try:
+            status = self.lib.graal_create_isolate(None, ctypes.byref(self.isolate), ctypes.byref(self.thread))
+            if status != 0:
+                raise RuntimeError(f"Failed to create GraalVM Native Image isolate (status={status})")
+                
+            status = self.lib.vdb_init(self.thread)
+            if status != 0:
+                raise PithosNativeError(status, "Failed to initialize Pithos database coordinator.")
+        finally:
+            if saved_stderr_fd is not None:
+                os.dup2(saved_stderr_fd, 2)
+                os.close(saved_stderr_fd)
+            if null_fd is not None:
+                os.close(null_fd)
 
     def check_status(self, status: int, action: str = "operation"):
         if status != 0:
@@ -301,7 +317,25 @@ class NativeBindings:
         """Creates an ephemeral GraalVM isolate and returns (isolate, thread)."""
         iso = ctypes.POINTER(GraalIsolate)()
         thr = ctypes.POINTER(GraalIsolateThread)()
-        status = self.lib.graal_create_isolate(None, ctypes.byref(iso), ctypes.byref(thr))
+        
+        import os, sys
+        try:
+            null_fd = os.open(os.devnull, os.O_WRONLY)
+            saved_stderr_fd = os.dup(2)
+            os.dup2(null_fd, 2)
+        except Exception:
+            null_fd = None
+            saved_stderr_fd = None
+
+        try:
+            status = self.lib.graal_create_isolate(None, ctypes.byref(iso), ctypes.byref(thr))
+        finally:
+            if saved_stderr_fd is not None:
+                os.dup2(saved_stderr_fd, 2)
+                os.close(saved_stderr_fd)
+            if null_fd is not None:
+                os.close(null_fd)
+                
         if status != 0:
             raise RuntimeError(f"Failed to create GraalVM Native Image isolate (status={status})")
         return iso, thr

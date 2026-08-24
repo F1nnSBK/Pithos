@@ -237,6 +237,11 @@ public class CApi {
     /// @param numQueries number of queries in the batch
     /// @param votingMask pre-allocated C byte array of size N bytes
     /// @return number of resonant candidate records with ≥ 5 votes, or negative error code
+    @CEntryPoint(name = "vdb_ping")
+    public static int ping(IsolateThread thread) {
+        return 42;
+    }
+
     @CEntryPoint(name = "vdb_query_planetary_grid")
     public static long queryPlanetaryGrid(IsolateThread thread, CCharPointer indexName, CFloatPointer queries,
             CIntPointer queryFamilies, CIntPointer queryThresholds, int numQueries,

@@ -44,7 +44,7 @@ class SphericalLiftingTransformer:
         Relative safety factor applied to max norm to guarantee sqrt(1 - (norm/M)^2) is strictly real.
     """
 
-    def __init__(self, pad_to_multiple: int = 64, epsilon: float = 1e-6):
+    def __init__(self, pad_to_multiple: int = 128, epsilon: float = 1e-6):
         self.pad_to_multiple = max(1, pad_to_multiple)
         self.epsilon = epsilon
         self.max_norm: float = 1.0
@@ -235,268 +235,6 @@ class SphericalLiftingTransformer:
         return obj
 
 
-class MipsIndex:
-    """High-level Maximum Inner Product Search (MIPS) vector index.
-
-    Wraps a Pithos `.pithos` container and handles Spherical Lifting, query transformation,
-    and exact unnormalized score reconstruction seamlessly.
-
-    Parameters
-    ----------
-    index : Index
-        Underlying Pithos Index handle containing lifted vectors.
-    transformer : SphericalLiftingTransformer
-        Transformer used to lift and normalize vectors.
-    """
-
-    def __init__(self, index: Index, transformer: SphericalLiftingTransformer):
-        self.index = index
-        self.transformer = transformer
-
-    @property
-    def dimension(self) -> int:
-        """Original vector dimensionality D before lifting."""
-        return self.transformer.input_dim
-
-    @property
-    def padded_dimension(self) -> int:
-        """Lifted and SIMD-aligned vector dimensionality."""
-        return self.transformer.padded_dim
-
-    @property
-    def d(self) -> int:
-        """Original vector dimensionality (FAISS compatibility)."""
-        return self.dimension
-
-    @property
-    def ntotal(self) -> int:
-        """Total record count in index."""
-        return len(self.index)
-
-    def __len__(self) -> int:
-        return len(self.index)
-
-    def size(self) -> int:
-        return self.index.size()
-
-    @property
-    def has_sidecar(self) -> bool:
-        return self.index.has_sidecar
-
-    @classmethod
-    def from_vectors(
-        cls,
-        vectors: Union[np.ndarray, Sequence[Sequence[float]]],
-        path: Optional[str] = None,
-        ids: Optional[Union[np.ndarray, Sequence[int]]] = None,
-        tiers: Optional[Union[np.ndarray, Sequence[int]]] = None,
-        sidecar_mode: Union[SidecarMode, str, int] = SidecarMode.FP8,
-        q_mode: QuantizationMode = QuantizationMode.ONE_BIT,
-        pad_to_multiple: int = 64,
-        user_metadata: Optional[dict] = None,
-        lib_path: Optional[str] = None,
-    ) -> MipsIndex:
-        """Constructs and compiles a MipsIndex directly from unnormalized float vectors.
-
-        Parameters
-        ----------
-        vectors : ndarray of shape (N, D)
-            Input unnormalized vectors.
-        path : str, optional
-            Destination filepath for the `.pithos` container. If None, creates a temporary container.
-        ids : ndarray of shape (N,), optional
-            Record IDs.
-        tiers : sequence of int, optional
-            Matryoshka tier dimensions.
-        sidecar_mode : SidecarMode or str, default=SidecarMode.FP8
-            Precision sidecar format ('none', 'fp16', 'fp8', 'fp4').
-        q_mode : QuantizationMode, default=QuantizationMode.ONE_BIT
-            1-bit or 2-bit quantization mode.
-        pad_to_multiple : int, default=64
-            SIMD alignment multiple.
-        user_metadata : dict, optional
-            Custom user metadata.
-        lib_path : str, optional
-            Path to native Pithos shared library.
-
-        Returns
-        -------
-        MipsIndex
-        """
-        transformer = SphericalLiftingTransformer(pad_to_multiple=pad_to_multiple)
-        lifted_vecs = transformer.fit_transform(vectors)
-
-        meta = user_metadata.copy() if user_metadata is not None else {}
-        meta["mips_transformer"] = transformer.to_dict()
-
-        if path is None:
-            tmp = tempfile.NamedTemporaryFile(suffix=".pithos", delete=False)
-            path = tmp.name
-            tmp.close()
-
-        dim = lifted_vecs.shape[1]
-        if tiers is None:
-            tier_list = [dim]
-        else:
-            tier_list = [t for t in tiers if t <= dim]
-            if not tier_list or tier_list[-1] != dim:
-                tier_list.append(dim)
-
-        VectorDb.compile_container(
-            path=path,
-            records=lifted_vecs,
-            ids=ids,
-            tiers=tier_list,
-            metric="cosine",
-            q_mode=q_mode,
-            sidecar_mode=sidecar_mode,
-            user_metadata=meta,
-            lib_path=lib_path,
-        )
-
-        db = VectorDb(lib_path=lib_path)
-        idx_name = f"mips_{os.path.basename(path).replace('.', '_')}"
-        idx = db.load_index(idx_name, path)
-        return cls(index=idx, transformer=transformer)
-
-    @classmethod
-    def from_file(cls, path: str, lib_path: Optional[str] = None) -> MipsIndex:
-        """Loads a MipsIndex from an existing compiled .pithos container."""
-        db = VectorDb(lib_path=lib_path)
-        idx_name = f"mips_{os.path.basename(path).replace('.', '_')}"
-        idx = db.load_index(idx_name, path)
-
-        user_meta = idx.get_user_metadata()
-        if user_meta and "mips_transformer" in user_meta:
-            transformer = SphericalLiftingTransformer.from_dict(user_meta["mips_transformer"])
-        else:
-            # Fallback transformer inferred from container properties
-            transformer = SphericalLiftingTransformer()
-            transformer.input_dim = idx.dimension - 1
-            transformer.lifted_dim = idx.dimension
-            transformer.padded_dim = idx.dimension
-            transformer.max_norm = 1.0
-            transformer._is_fitted = True
-
-        return cls(index=idx, transformer=transformer)
-
-    def search(
-        self,
-        queries: Union[np.ndarray, Sequence[float], Sequence[Sequence[float]]],
-        k: int = 10,
-        cuda: bool = False,
-        return_numpy: bool = False,
-    ) -> Union[List[SearchResult], List[List[SearchResult]], Tuple[np.ndarray, np.ndarray]]:
-        """Finds Top-K nearest neighbors under Maximum Inner Product Search (MIPS).
-
-        Parameters
-        ----------
-        queries : ndarray of shape (Q, D) or (D,)
-            Raw unnormalized query vectors.
-        k : int, default=10
-            Number of closest neighbors.
-        cuda : bool, default=False
-            Whether to use CUDA acceleration.
-        return_numpy : bool, default=False
-            If True, returns tuple (I, raw_dot_products).
-
-        Returns
-        -------
-        results : list of SearchResult, or tuple (I, raw_scores)
-            Search results with true unnormalized inner products.
-        """
-        lifted_q, q_norms = self.transformer.transform_queries(queries)
-        is_single = np.asarray(queries).ndim == 1
-
-        if self.has_sidecar:
-            # Fast precision sidecar MIPS reranking
-            ranked_ids, ranked_sims = self.index.rerank(lifted_q, k=k, metric="cosine")
-            raw_scores = self.transformer.untransform_scores(ranked_sims, q_norms)
-
-            if return_numpy:
-                return (ranked_ids, raw_scores)
-
-            if is_single:
-                res: List[SearchResult] = []
-                for cid, score in zip(ranked_ids, raw_scores):
-                    res.append(SearchResult(id=int(cid), score=float(score)))
-                return res
-            else:
-                batch_res: List[List[SearchResult]] = []
-                for q_idx in range(len(q_norms)):
-                    q_res: List[SearchResult] = []
-                    for cid, score in zip(ranked_ids[q_idx], raw_scores[q_idx]):
-                        q_res.append(SearchResult(id=int(cid), score=float(score)))
-                    batch_res.append(q_res)
-                return batch_res
-        else:
-            # Approximate search via Hamming bit-slices
-            raw_res = self.index.search(lifted_q, k=k, cuda=cuda, return_numpy=return_numpy)
-            if return_numpy:
-                out_ids, out_dists = raw_res
-                # Approximate cosine sim = 1 - 2 * (d_H / B)
-                B = self.transformer.padded_dim
-                sims = 1.0 - 2.0 * (out_dists.astype(np.float32) / float(B))
-                raw_scores = self.transformer.untransform_scores(sims, q_norms)
-                return (out_ids, raw_scores)
-
-            if is_single:
-                single_res: List[SearchResult] = []
-                B = self.transformer.padded_dim
-                for item in raw_res:
-                    approx_sim = 1.0 - 2.0 * (float(item.score) / float(B))
-                    raw_score = float(self.transformer.untransform_scores(approx_sim, float(q_norms)))
-                    single_res.append(SearchResult(id=item.id, score=raw_score))
-                return single_res
-            else:
-                batch_res = []
-                B = self.transformer.padded_dim
-                for q_idx, q_list in enumerate(raw_res):
-                    qn = float(q_norms[q_idx])
-                    q_res = []
-                    for item in q_list:
-                        approx_sim = 1.0 - 2.0 * (float(item.score) / float(B))
-                        raw_score = float(self.transformer.untransform_scores(approx_sim, qn))
-                        q_res.append(SearchResult(id=item.id, score=raw_score))
-                    batch_res.append(q_res)
-                return batch_res
-
-    def query_planetary_grid(
-        self,
-        queries: Union[np.ndarray, Sequence[Sequence[float]]],
-        families: Union[np.ndarray, Sequence[int]],
-        thresholds: Union[np.ndarray, Sequence[int]],
-        min_votes: int = 5,
-        rerank: bool = True,
-        cuda: bool = False,
-    ) -> PlanetaryGridResult:
-        """Executes multi-family resonant gating and precision MIPS reranking on unnormalized queries."""
-        lifted_q, q_norms = self.transformer.transform_queries(queries)
-        res = self.index.query_planetary_grid(
-            lifted_q,
-            families=families,
-            thresholds=thresholds,
-            min_votes=min_votes,
-            rerank=rerank,
-            cuda=cuda,
-        )
-
-        if rerank and res.scores is not None and len(res.scores) > 0:
-            # Transform maximum cosine similarity scores back to true inner product magnitudes
-            # Mean or max query norm across active query consensus
-            max_q_norm = float(np.max(q_norms))
-            raw_scores = res.scores * self.transformer.max_norm * max_q_norm
-            return PlanetaryGridResult(
-                resonant_count=res.resonant_count,
-                voting_mask=res.voting_mask,
-                candidate_ids=res.candidate_ids,
-                scores=raw_scores.astype(np.float32),
-                votes=res.votes,
-                masks=res.masks,
-            )
-        return res
-
-
 class ConcentricShellIndex:
     """Magnitude-bucketing partitioner for heavy-tailed / power-law norm distributions.
 
@@ -508,13 +246,13 @@ class ConcentricShellIndex:
 
     Parameters
     ----------
-    shells : list of MipsIndex
+    shells : list of Index
         Sub-indices for each concentric magnitude shell.
     shell_radii : list of tuple (float, float)
         Inner and outer radius [r_min, r_max) for each shell.
     """
 
-    def __init__(self, shells: List[MipsIndex], shell_radii: List[Tuple[float, float]]):
+    def __init__(self, shells: List[Index], shell_radii: List[Tuple[float, float]]):
         self.shells = shells
         self.shell_radii = shell_radii
 
@@ -581,7 +319,7 @@ class ConcentricShellIndex:
         bin_edges[0] = 0.0
         bin_edges[-1] = float(np.max(norms)) * 1.0001
 
-        shells: List[MipsIndex] = []
+        shells: List[Index] = []
         shell_radii: List[Tuple[float, float]] = []
 
         for s in range(num_shells):
@@ -600,14 +338,17 @@ class ConcentricShellIndex:
             shell_ids = ids_arr[shell_indices]
             shell_path = os.path.join(base_dir, f"shell_{s}.pithos")
 
-            shell_idx = MipsIndex.from_vectors(
-                vectors=shell_vecs,
-                path=shell_path,
+            from .core import VectorDb
+            VectorDb.compile_container(
+                shell_path,
+                records=shell_vecs,
                 ids=shell_ids,
+                metric="mips",
                 sidecar_mode=sidecar_mode,
-                pad_to_multiple=pad_to_multiple,
                 lib_path=lib_path,
             )
+            db = VectorDb(lib_path=lib_path)
+            shell_idx = db.load_index(f"shell_{s}", shell_path)
             shells.append(shell_idx)
             shell_radii.append((r_min, r_max))
 

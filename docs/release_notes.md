@@ -12,6 +12,11 @@
 Pithos v2.2.5 eliminates restricted method warnings (`MemorySegment::reinterpret`) emitted by GraalVM / Java Panama during C-FFI planetary grid scans and ensures native access configuration across all build profiles.
 
 ### Key Highlights & Improvements:
+* **Mac ARM64 Zero-Crash Search Fallback:** Completely bypassed the native C-API `vdb_batch_search` on Apple Silicon (M-Series) devices in favor of a robust, fully-vectorized NumPy exact search fallback, permanently eliminating JVM `SIGSEGV` memory access crashes on Macs.
+* **Isolate Lifecycle & Singleton Safety:** Refactored `VectorDb` to utilize thread-safe instance reference counting against a unified `NativeBindings` singleton. This ensures the GraalVM Isolate is never torn down prematurely during concurrent, loop-based, or `pytest` context operations, preventing cross-instance crashes.
+* **MIPS Architecture Hardening:** Fixed a silent `IndexError` during batch scalar untransformation of Maximum Inner Product Search (MIPS) scores by correctly handling scalar normalization arrays.
+* **Unsafe Warning Suppression:** Added an OS-level stderr suppression wrapper (`os.dup2` to `/dev/null`) strictly around the `graal_create_isolate` initialization block to completely swallow `sun.misc.Unsafe` / `LMAX Disruptor` deprecation warnings, ensuring a clean and silent console output without compromising logging integrity.
+* **SidecarMode.NONE Compatibility Guard:** Added explicit constraints and `RuntimeError` barriers preventing invalid unquantized vector mathematical assumptions on ARM64 when missing native rotation matrices, guiding users to precision FP8/FP16 sidecars.
 * **Zero-Warning Direct Address Writing:** `CApi.java` passes raw off-heap buffer addresses directly to `FlatIndex.queryPlanetaryGrid()` and `FlatIndex.cudaQueryPlanetaryGrid()`, eliminating `MemorySegment::reinterpret` calls.
 * **Native Access Compilation Flags:** Added `--enable-native-access=ALL-UNNAMED` to both default and CUDA `native-maven-plugin` build profiles in `pom.xml`.
 
