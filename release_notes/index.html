@@ -1,0 +1,2868 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Model-Isomorphic Database for massive Datasets">
+      
+      
+        <meta name="author" content="F1nnSBK">
+      
+      
+        <link rel="canonical" href="https://F1nnSBK.github.io/Pithos/release_notes/">
+      
+      
+        <link rel="prev" href="../math_theory/">
+      
+      
+        <link rel="next" href="../next_steps/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Release Notes - Pithos</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="cyan">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#pithos-release-notes" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Pithos" class="md-header__button md-logo" aria-label="Pithos" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Pithos
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Release Notes
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="cyan"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="cyan"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/F1nnSBK/Pithos" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    F1nnSBK/Pithos
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Overview
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../architecture/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Architecture
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../agent_guide/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Agent Guide
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../container_format/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Container Format
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../cuda_integration/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  GPU Acceleration
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../c_api_reference/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  C-API Reference
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../math_theory/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Mathematical Theory
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Release Notes
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../next_steps/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Roadmap
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Pithos" class="md-nav__button md-logo" aria-label="Pithos" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Pithos
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/F1nnSBK/Pithos" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    F1nnSBK/Pithos
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../container_format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Container Format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cuda_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPU Acceleration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../c_api_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    C-API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../math_theory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mathematical Theory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Notes
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#pithos-v225-release-notes-zero-warning-ffi-off-heap-memory-access-panama-cleanliness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pithos v2.2.5 Release Notes — Zero-Warning FFI Off-Heap Memory Access &amp; Panama Cleanliness
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pithos v2.2.5 Release Notes — Zero-Warning FFI Off-Heap Memory Access &amp; Panama Cleanliness">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-highlights-improvements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Highlights &amp; Improvements:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pithos-v224-release-notes-robust-single-file-container-detection-enhanced-error-propagation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pithos v2.2.4 Release Notes — Robust Single-File Container Detection &amp; Enhanced Error Propagation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pithos v2.2.4 Release Notes — Robust Single-File Container Detection &amp; Enhanced Error Propagation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#summary_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-highlights-improvements_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Highlights &amp; Improvements:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pithos-v223-release-notes-automated-sidecar-precision-re-ranking-universal-vector-retrieval" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pithos v2.2.3 Release Notes — Automated Sidecar Precision Re-Ranking &amp; Universal Vector Retrieval
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pithos v2.2.3 Release Notes — Automated Sidecar Precision Re-Ranking &amp; Universal Vector Retrieval">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#summary_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-highlights-improvements_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Highlights &amp; Improvements:
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Highlights &amp; Improvements:">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-automated-precision-sidecar-re-ranking-query_planetary_grid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Automated Precision Sidecar Re-Ranking (query_planetary_grid)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-universal-sidecar-vector-decoding-retrieval" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Universal Sidecar Vector Decoding &amp; Retrieval
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-vectorized-nvfp4-fp16-sidecar-decoders" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Vectorized NVFP4 &amp; FP16 Sidecar Decoders
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pithos-v222-release-notes-faiss-grade-python-interface-vectorized-mih-tables-pipeline-parallelization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pithos v2.2.2 Release Notes — FAISS-Grade Python Interface, Vectorized MIH Tables &amp; Pipeline Parallelization
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pithos v2.2.2 Release Notes — FAISS-Grade Python Interface, Vectorized MIH Tables &amp; Pipeline Parallelization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#summary_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-highlights-improvements_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Highlights &amp; Improvements:
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Highlights &amp; Improvements:">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-faiss-grade-python-ergonomics-pre-allocated-output-buffers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. FAISS-Grade Python Ergonomics &amp; Pre-Allocated Output Buffers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-vectorized-4-chunk-multi-index-hashing-mih-csr-table-generation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Vectorized 4-Chunk Multi-Index Hashing (MIH) CSR Table Generation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-core-engine-parallelization-zero-redundant-disk-io" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Core Engine Parallelization &amp; Zero Redundant Disk I/O
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pithos-v221-release-notes-ultra-fast-vectorized-sidecar-serialization-zero-overhead-container-compilation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pithos v2.2.1 Release Notes — Ultra-Fast Vectorized Sidecar Serialization &amp; Zero-Overhead Container Compilation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pithos v2.2.1 Release Notes — Ultra-Fast Vectorized Sidecar Serialization &amp; Zero-Overhead Container Compilation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#summary_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-highlights-improvements_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Highlights &amp; Improvements:
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Highlights &amp; Improvements:">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-bit-vectorized-fp8-e4m3-encoder-_encode_fp8_e4m3_array" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Bit-Vectorized FP8 E4M3 Encoder (_encode_fp8_e4m3_array)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-vectorized-block-16-nvfp4-microscaling-_encode_nvfp4_blocks_array" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Vectorized Block-16 NVFP4 Microscaling (_encode_nvfp4_blocks_array)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-core-serialization-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Core Serialization Integration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pithos-v220-release-notes-production-readiness-real-matryoshka-recall-zero-overhead-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pithos v2.2.0 Release Notes — Production-Readiness, Real Matryoshka Recall &amp; Zero-Overhead Security
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pithos v2.2.0 Release Notes — Production-Readiness, Real Matryoshka Recall &amp; Zero-Overhead Security">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#summary_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-highlights-architectural-improvements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Highlights &amp; Architectural Improvements:
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Highlights &amp; Architectural Improvements:">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-empirical-recall-validation-on-real-foundation-models-recall10-92" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Empirical Recall Validation on Real Foundation Models (Recall@10 &gt; 92%)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-lmax-disruptor-400-migration-clean-cqrs-isolation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. LMAX Disruptor 4.0.0 Migration &amp; Clean CQRS Isolation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-zero-allocation-query-scratch-buffers-adaptive-gate-0-beam-search" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Zero-Allocation Query Scratch Buffers &amp; Adaptive Gate 0 Beam Search
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-multi-layer-zero-overhead-security-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Multi-Layer Zero-Overhead Security Model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-100-backward-compatibility-guarantee" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. 100% Backward Compatibility Guarantee
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pithos-v200-release-notes-next-gen-hpc-throughput-algorithmic-breakthroughs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pithos v2.0.0 Release Notes — Next-Gen HPC Throughput &amp; Algorithmic Breakthroughs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pithos v2.0.0 Release Notes — Next-Gen HPC Throughput &amp; Algorithmic Breakthroughs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#summary_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-4-core-architectural-upgrades" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The 4 Core Architectural Upgrades:
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The 4 Core Architectural Upgrades:">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-algorithmic-breakthrough-gate-0-multi-index-hashing-mih-4x8-bit-csr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Algorithmic Breakthrough: "Gate 0" Multi-Index Hashing (MIH 4x8-Bit CSR)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-concurrency-redesign-lmax-disruptor-read-bypass-zero-copy-ffi-returns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Concurrency Redesign: LMAX Disruptor Read-Bypass &amp; Zero-Copy FFI Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-micro-architecture-simd-register-tiling-micro-batching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Micro-Architecture: SIMD Register Tiling &amp; Micro-Batching
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-async-out-of-core-io-proactive-prefetching-madv_willneed-io_uring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Async Out-of-Core I/O: Proactive Prefetching (MADV_WILLNEED / io_uring)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pithos-v121-release-notes-memory-lifecycle-stream-compilation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pithos v1.2.1 Release Notes — Memory Lifecycle &amp; Stream Compilation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pithos v1.2.1 Release Notes — Memory Lifecycle &amp; Stream Compilation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#summary_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-changes-architectural-improvements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Changes &amp; Architectural Improvements
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Changes &amp; Architectural Improvements">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-ephemeral-graalvm-isolate-lifecycles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Ephemeral GraalVM Isolate Lifecycles
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-direct-to-disk-streaming-compilation-compile_container_stream" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Direct-to-Disk Streaming Compilation (compile_container_stream)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-graalvm-native-image-memory-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. GraalVM Native Image Memory Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-stability-context-management-bugfixes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Stability, Context Management, &amp; Bugfixes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pithos-v120-release-notes-diogenes-autarky" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pithos v1.2.0 Release Notes — Diogenes Autarky
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pithos v1.2.0 Release Notes — Diogenes Autarky">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#executive-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Executive Summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-highlights-architectural-innovations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Highlights &amp; Architectural Innovations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Highlights &amp; Architectural Innovations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-native-blackwell-fp8-e4m3-nvfp4-e2m1-sidecar-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Native Blackwell FP8 (E4M3) &amp; NVFP4 (E2M1) Sidecar Engine
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-lever-1-asymmetric-precomputed-query-lookup-tables-lookup-codebooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Lever 1: Asymmetric Precomputed Query Lookup-Tables (Lookup-Codebooks)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-lever-2-hierarchical-query-pruning-in-multi-archetype-consensus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Lever 2: Hierarchical Query Pruning in Multi-Archetype Consensus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-lever-3-qjl-residual-quantization-turboquant-principles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Lever 3: QJL-Residual Quantization (TurboQuant Principles)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-lever-4-zero-cycle-metadata-saliency-gating-in-64-bit-word-m_i" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Lever 4: Zero-Cycle Metadata &amp; Saliency Gating in 64-Bit Word (m_i)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-lever-5-zero-copy-ipc-shared-memory-arena-panama-ffm-nvlink-c2c" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Lever 5: Zero-Copy IPC Shared Memory Arena (Panama FFM &amp; NVLink-C2C)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-universal-single-file-container-format-pithos" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Universal Single-File Container Format (.pithos)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#technical-comparison-with-existing-vector-databases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Technical Comparison with Existing Vector Databases
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#storage-performance-benchmarks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Storage &amp; Performance Benchmarks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Storage &amp; Performance Benchmarks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#multi-billion-scale-benchmark-272-billion-vectors-d384" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-Billion Scale Benchmark (2.72 Billion Vectors, D=384)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#binary-header-columnar-layout-specification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Binary Header &amp; Columnar Layout Specification
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Binary Header &amp; Columnar Layout Specification">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#64-byte-plan-header-layout-basepath" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        64-Byte PLAN Header Layout (&lt;basePath&gt;)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sidecar-columnar-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sidecar Columnar Files
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#license-attribution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        License &amp; Attribution
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../next_steps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#pithos-v225-release-notes-zero-warning-ffi-off-heap-memory-access-panama-cleanliness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pithos v2.2.5 Release Notes — Zero-Warning FFI Off-Heap Memory Access &amp; Panama Cleanliness
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pithos v2.2.5 Release Notes — Zero-Warning FFI Off-Heap Memory Access &amp; Panama Cleanliness">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-highlights-improvements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Highlights &amp; Improvements:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pithos-v224-release-notes-robust-single-file-container-detection-enhanced-error-propagation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pithos v2.2.4 Release Notes — Robust Single-File Container Detection &amp; Enhanced Error Propagation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pithos v2.2.4 Release Notes — Robust Single-File Container Detection &amp; Enhanced Error Propagation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#summary_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-highlights-improvements_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Highlights &amp; Improvements:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pithos-v223-release-notes-automated-sidecar-precision-re-ranking-universal-vector-retrieval" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pithos v2.2.3 Release Notes — Automated Sidecar Precision Re-Ranking &amp; Universal Vector Retrieval
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pithos v2.2.3 Release Notes — Automated Sidecar Precision Re-Ranking &amp; Universal Vector Retrieval">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#summary_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-highlights-improvements_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Highlights &amp; Improvements:
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Highlights &amp; Improvements:">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-automated-precision-sidecar-re-ranking-query_planetary_grid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Automated Precision Sidecar Re-Ranking (query_planetary_grid)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-universal-sidecar-vector-decoding-retrieval" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Universal Sidecar Vector Decoding &amp; Retrieval
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-vectorized-nvfp4-fp16-sidecar-decoders" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Vectorized NVFP4 &amp; FP16 Sidecar Decoders
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pithos-v222-release-notes-faiss-grade-python-interface-vectorized-mih-tables-pipeline-parallelization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pithos v2.2.2 Release Notes — FAISS-Grade Python Interface, Vectorized MIH Tables &amp; Pipeline Parallelization
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pithos v2.2.2 Release Notes — FAISS-Grade Python Interface, Vectorized MIH Tables &amp; Pipeline Parallelization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#summary_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-highlights-improvements_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Highlights &amp; Improvements:
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Highlights &amp; Improvements:">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-faiss-grade-python-ergonomics-pre-allocated-output-buffers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. FAISS-Grade Python Ergonomics &amp; Pre-Allocated Output Buffers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-vectorized-4-chunk-multi-index-hashing-mih-csr-table-generation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Vectorized 4-Chunk Multi-Index Hashing (MIH) CSR Table Generation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-core-engine-parallelization-zero-redundant-disk-io" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Core Engine Parallelization &amp; Zero Redundant Disk I/O
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pithos-v221-release-notes-ultra-fast-vectorized-sidecar-serialization-zero-overhead-container-compilation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pithos v2.2.1 Release Notes — Ultra-Fast Vectorized Sidecar Serialization &amp; Zero-Overhead Container Compilation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pithos v2.2.1 Release Notes — Ultra-Fast Vectorized Sidecar Serialization &amp; Zero-Overhead Container Compilation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#summary_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-highlights-improvements_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Highlights &amp; Improvements:
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Highlights &amp; Improvements:">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-bit-vectorized-fp8-e4m3-encoder-_encode_fp8_e4m3_array" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Bit-Vectorized FP8 E4M3 Encoder (_encode_fp8_e4m3_array)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-vectorized-block-16-nvfp4-microscaling-_encode_nvfp4_blocks_array" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Vectorized Block-16 NVFP4 Microscaling (_encode_nvfp4_blocks_array)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-core-serialization-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Core Serialization Integration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pithos-v220-release-notes-production-readiness-real-matryoshka-recall-zero-overhead-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pithos v2.2.0 Release Notes — Production-Readiness, Real Matryoshka Recall &amp; Zero-Overhead Security
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pithos v2.2.0 Release Notes — Production-Readiness, Real Matryoshka Recall &amp; Zero-Overhead Security">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#summary_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-highlights-architectural-improvements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Highlights &amp; Architectural Improvements:
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Highlights &amp; Architectural Improvements:">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-empirical-recall-validation-on-real-foundation-models-recall10-92" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Empirical Recall Validation on Real Foundation Models (Recall@10 &gt; 92%)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-lmax-disruptor-400-migration-clean-cqrs-isolation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. LMAX Disruptor 4.0.0 Migration &amp; Clean CQRS Isolation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-zero-allocation-query-scratch-buffers-adaptive-gate-0-beam-search" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Zero-Allocation Query Scratch Buffers &amp; Adaptive Gate 0 Beam Search
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-multi-layer-zero-overhead-security-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Multi-Layer Zero-Overhead Security Model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-100-backward-compatibility-guarantee" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. 100% Backward Compatibility Guarantee
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pithos-v200-release-notes-next-gen-hpc-throughput-algorithmic-breakthroughs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pithos v2.0.0 Release Notes — Next-Gen HPC Throughput &amp; Algorithmic Breakthroughs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pithos v2.0.0 Release Notes — Next-Gen HPC Throughput &amp; Algorithmic Breakthroughs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#summary_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-4-core-architectural-upgrades" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The 4 Core Architectural Upgrades:
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The 4 Core Architectural Upgrades:">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-algorithmic-breakthrough-gate-0-multi-index-hashing-mih-4x8-bit-csr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Algorithmic Breakthrough: "Gate 0" Multi-Index Hashing (MIH 4x8-Bit CSR)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-concurrency-redesign-lmax-disruptor-read-bypass-zero-copy-ffi-returns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Concurrency Redesign: LMAX Disruptor Read-Bypass &amp; Zero-Copy FFI Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-micro-architecture-simd-register-tiling-micro-batching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Micro-Architecture: SIMD Register Tiling &amp; Micro-Batching
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-async-out-of-core-io-proactive-prefetching-madv_willneed-io_uring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Async Out-of-Core I/O: Proactive Prefetching (MADV_WILLNEED / io_uring)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pithos-v121-release-notes-memory-lifecycle-stream-compilation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pithos v1.2.1 Release Notes — Memory Lifecycle &amp; Stream Compilation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pithos v1.2.1 Release Notes — Memory Lifecycle &amp; Stream Compilation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#summary_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-changes-architectural-improvements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Changes &amp; Architectural Improvements
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Changes &amp; Architectural Improvements">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-ephemeral-graalvm-isolate-lifecycles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Ephemeral GraalVM Isolate Lifecycles
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-direct-to-disk-streaming-compilation-compile_container_stream" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Direct-to-Disk Streaming Compilation (compile_container_stream)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-graalvm-native-image-memory-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. GraalVM Native Image Memory Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-stability-context-management-bugfixes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Stability, Context Management, &amp; Bugfixes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pithos-v120-release-notes-diogenes-autarky" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pithos v1.2.0 Release Notes — Diogenes Autarky
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pithos v1.2.0 Release Notes — Diogenes Autarky">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#executive-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Executive Summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-highlights-architectural-innovations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Highlights &amp; Architectural Innovations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Highlights &amp; Architectural Innovations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-native-blackwell-fp8-e4m3-nvfp4-e2m1-sidecar-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Native Blackwell FP8 (E4M3) &amp; NVFP4 (E2M1) Sidecar Engine
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-lever-1-asymmetric-precomputed-query-lookup-tables-lookup-codebooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Lever 1: Asymmetric Precomputed Query Lookup-Tables (Lookup-Codebooks)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-lever-2-hierarchical-query-pruning-in-multi-archetype-consensus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Lever 2: Hierarchical Query Pruning in Multi-Archetype Consensus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-lever-3-qjl-residual-quantization-turboquant-principles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Lever 3: QJL-Residual Quantization (TurboQuant Principles)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-lever-4-zero-cycle-metadata-saliency-gating-in-64-bit-word-m_i" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Lever 4: Zero-Cycle Metadata &amp; Saliency Gating in 64-Bit Word (m_i)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-lever-5-zero-copy-ipc-shared-memory-arena-panama-ffm-nvlink-c2c" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Lever 5: Zero-Copy IPC Shared Memory Arena (Panama FFM &amp; NVLink-C2C)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-universal-single-file-container-format-pithos" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Universal Single-File Container Format (.pithos)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#technical-comparison-with-existing-vector-databases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Technical Comparison with Existing Vector Databases
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#storage-performance-benchmarks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Storage &amp; Performance Benchmarks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Storage &amp; Performance Benchmarks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#multi-billion-scale-benchmark-272-billion-vectors-d384" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-Billion Scale Benchmark (2.72 Billion Vectors, D=384)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#binary-header-columnar-layout-specification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Binary Header &amp; Columnar Layout Specification
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Binary Header &amp; Columnar Layout Specification">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#64-byte-plan-header-layout-basepath" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        64-Byte PLAN Header Layout (&lt;basePath&gt;)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sidecar-columnar-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sidecar Columnar Files
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#license-attribution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        License &amp; Attribution
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="pithos-release-notes">Pithos Release Notes<a class="headerlink" href="#pithos-release-notes" title="Permanent link">&para;</a></h1>
+<hr />
+<h2 id="pithos-v225-release-notes-zero-warning-ffi-off-heap-memory-access-panama-cleanliness">Pithos v2.2.5 Release Notes — Zero-Warning FFI Off-Heap Memory Access &amp; Panama Cleanliness<a class="headerlink" href="#pithos-v225-release-notes-zero-warning-ffi-off-heap-memory-access-panama-cleanliness" title="Permanent link">&para;</a></h2>
+<p><strong>Release Date:</strong> August 2026<br />
+<strong>Target Hardware:</strong> NVIDIA Grace Blackwell GB10 / GB200 Superchips, Apple Silicon (M-Series ARM64), AWS Graviton 4, x86_64 (AVX-512 VPOPCNTDQ), NVMe DMA / io_uring.<br />
+<strong>Package Version:</strong> <code>pithos_core-2.2.5.jar</code> / <code>pithosdb 2.2.5</code> / <code>libpithos v2.2.5</code></p>
+<h3 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h3>
+<p>Pithos v2.2.5 eliminates restricted method warnings (<code>MemorySegment::reinterpret</code>) emitted by GraalVM / Java Panama during C-FFI planetary grid scans and ensures native access configuration across all build profiles.</p>
+<h3 id="key-highlights-improvements">Key Highlights &amp; Improvements:<a class="headerlink" href="#key-highlights-improvements" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Mac ARM64 Zero-Crash Search Fallback:</strong> Completely bypassed the native C-API <code>vdb_batch_search</code> on Apple Silicon (M-Series) devices in favor of a robust, fully-vectorized NumPy exact search fallback, permanently eliminating JVM <code>SIGSEGV</code> memory access crashes on Macs.</li>
+<li><strong>Isolate Lifecycle &amp; Singleton Safety:</strong> Refactored <code>VectorDb</code> to utilize thread-safe instance reference counting against a unified <code>NativeBindings</code> singleton. This ensures the GraalVM Isolate is never torn down prematurely during concurrent, loop-based, or <code>pytest</code> context operations, preventing cross-instance crashes.</li>
+<li><strong>MIPS Architecture Hardening:</strong> Fixed a silent <code>IndexError</code> during batch scalar untransformation of Maximum Inner Product Search (MIPS) scores by correctly handling scalar normalization arrays.</li>
+<li><strong>FP16 Sidecar Distance Tie Resolution:</strong> Fixed an issue where <code>MemorySegment.copy</code> operations inside <code>computeExactL2FP16</code> failed silently during GraalVM C-API execution, resulting in uniformly identical <code>1.0</code> distance evaluations. Replaced with direct <code>MemorySegment.get</code> primitive reads, resolving a persistent <code>AssertionError</code> during batch multi-candidate resolution on Linux x86_64 environments.</li>
+<li><strong>Complete Unsafe Removal &amp; Zero-Warning Direct Address Writing:</strong> Permanently eliminated all legacy <code>sun.misc.Unsafe</code> usages in planetary grid voting buffers (<code>queryPlanetaryGrid</code> and <code>mergeGPUVotingRange</code>). <code>CApi.java</code> now safely wraps raw off-heap buffer addresses using Java 22 FFM API <code>MemorySegment.ofAddress()</code>, ensuring zero warnings during maven compilation and execution.</li>
+<li><strong>Native Access Compilation Flags:</strong> Added <code>--enable-native-access=ALL-UNNAMED</code> to both default and CUDA <code>native-maven-plugin</code> build profiles in <code>pom.xml</code>.</li>
+</ul>
+<hr />
+<h2 id="pithos-v224-release-notes-robust-single-file-container-detection-enhanced-error-propagation">Pithos v2.2.4 Release Notes — Robust Single-File Container Detection &amp; Enhanced Error Propagation<a class="headerlink" href="#pithos-v224-release-notes-robust-single-file-container-detection-enhanced-error-propagation" title="Permanent link">&para;</a></h2>
+<p><strong>Release Date:</strong> August 2026<br />
+<strong>Target Hardware:</strong> NVIDIA Grace Blackwell GB10 / GB200 Superchips, Apple Silicon (M-Series ARM64), AWS Graviton 4, x86_64 (AVX-512 VPOPCNTDQ), NVMe DMA / io_uring.<br />
+<strong>Package Version:</strong> <code>pithos_core-2.2.4.jar</code> / <code>pithosdb 2.2.4</code> / <code>libpithos v2.2.4</code></p>
+<h3 id="summary_1">Summary<a class="headerlink" href="#summary_1" title="Permanent link">&para;</a></h3>
+<p>Pithos v2.2.4 resolves a critical container detection fallback issue where corrupted, truncated, or <code>.pithos</code> single-file containers could erroneously fall through to the legacy multi-file PLAN parser and throw misleading <code>Invalid file magic: must be PLAN</code> exceptions.</p>
+<h3 id="key-highlights-improvements_1">Key Highlights &amp; Improvements:<a class="headerlink" href="#key-highlights-improvements_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Explicit <code>.pithos</code> &amp; <code>DIOGENES</code> Container Boundary:</strong> <code>FlatIndex.mapFile()</code> now guarantees that any file with a <code>.pithos</code> extension or valid container header is loaded strictly as a single-file container. If an I/O error occurs during container loading, the exact root cause is immediately propagated rather than masking it behind a legacy fallback exception.</li>
+<li><strong>Resilient Header &amp; Trailer Validation:</strong> <code>PithosContainer.readSuperblock()</code>, <code>isPithosContainer()</code>, and <code>validateTrailer()</code> now use robust looped NIO buffer reads with multi-version compatibility (v1/v2) and generous TOC size limits (up to 50 MB).</li>
+</ul>
+<hr />
+<h2 id="pithos-v223-release-notes-automated-sidecar-precision-re-ranking-universal-vector-retrieval">Pithos v2.2.3 Release Notes — Automated Sidecar Precision Re-Ranking &amp; Universal Vector Retrieval<a class="headerlink" href="#pithos-v223-release-notes-automated-sidecar-precision-re-ranking-universal-vector-retrieval" title="Permanent link">&para;</a></h2>
+<p><strong>Release Date:</strong> August 2026<br />
+<strong>Target Hardware:</strong> NVIDIA Grace Blackwell GB10 / GB200 Superchips, Apple Silicon (M-Series ARM64), AWS Graviton 4, x86_64 (AVX-512 VPOPCNTDQ), NVMe DMA / io_uring.<br />
+<strong>Package Version:</strong> <code>pithos_core-2.2.3.jar</code> / <code>pithosdb 2.2.3</code> / <code>libpithos v2.2.3</code></p>
+<h3 id="summary_2">Summary<a class="headerlink" href="#summary_2" title="Permanent link">&para;</a></h3>
+<p>Pithos v2.2.3 introduces automated, end-to-end precision sidecar re-ranking within <code>query_planetary_grid()</code>, universal zero-copy vector extraction and decoding across Blackwell FP8 (E4M3), IEEE FP16, and NVFP4 (E2M1) formats, and the backwards-compatible <code>PlanetaryGridResult</code> container.</p>
+<h3 id="key-highlights-improvements_2">Key Highlights &amp; Improvements:<a class="headerlink" href="#key-highlights-improvements_2" title="Permanent link">&para;</a></h3>
+<h4 id="1-automated-precision-sidecar-re-ranking-query_planetary_grid">1. Automated Precision Sidecar Re-Ranking (<code>query_planetary_grid</code>)<a class="headerlink" href="#1-automated-precision-sidecar-re-ranking-query_planetary_grid" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Integrated 2-Stage Planetary Screening:</strong> When a precision sidecar is attached (FP8, FP16, NVFP4) and <code>rerank=True</code> (default), <code>query_planetary_grid()</code> automatically extracts vectors for candidates meeting the consensus threshold (<code>min_votes</code>), computes exact cosine similarities against all query archetypes, and returns pre-sorted candidate IDs and precision scores.</li>
+<li><strong>Transparent Tuple Unpacking:</strong> Returns <code>PlanetaryGridResult</code>, allowing legacy code <code>(cnt, mask) = index.query_planetary_grid(...)</code> to function without modifications while exposing <code>.candidate_ids</code>, <code>.scores</code>, <code>.votes</code>, and <code>.masks</code>.</li>
+</ul>
+<h4 id="2-universal-sidecar-vector-decoding-retrieval">2. Universal Sidecar Vector Decoding &amp; Retrieval<a class="headerlink" href="#2-universal-sidecar-vector-decoding-retrieval" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong><code>Index.get_vectors(indices=None)</code>:</strong> Retrieves and automatically decodes float32 embeddings for arbitrary candidate index subsets or the entire index across all sidecar modes (FP8, FP16, NVFP4, and multi-tier sign reconstruction fallback).</li>
+<li><strong><code>Index.get_sidecar_buffer()</code>:</strong> Provides a zero-copy NumPy memory-mapped view of raw sidecar bytes for direct hardware DMA integration.</li>
+<li><strong><code>Index.rerank(queries, candidate_indices, k, metric)</code>:</strong> Standalone high-level re-ranking utility supporting cosine similarity and Euclidean L2 distance metrics.</li>
+</ul>
+<h4 id="3-vectorized-nvfp4-fp16-sidecar-decoders">3. Vectorized NVFP4 &amp; FP16 Sidecar Decoders<a class="headerlink" href="#3-vectorized-nvfp4-fp16-sidecar-decoders" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>SIMD-Accelerated Bit Manipulation:</strong> Vectorized NVFP4 Block-16 microscaling decoder (<code>_decode_nvfp4_blocks_array</code>) with bit-parallel nibble unpacking and FP8 scale reconstruction.</li>
+<li><strong>Zero-Copy FP16 View:</strong> Native memory-mapped FP16 stride views with robust streaming container fallbacks.</li>
+</ul>
+<hr />
+<h2 id="pithos-v222-release-notes-faiss-grade-python-interface-vectorized-mih-tables-pipeline-parallelization">Pithos v2.2.2 Release Notes — FAISS-Grade Python Interface, Vectorized MIH Tables &amp; Pipeline Parallelization<a class="headerlink" href="#pithos-v222-release-notes-faiss-grade-python-interface-vectorized-mih-tables-pipeline-parallelization" title="Permanent link">&para;</a></h2>
+<p><strong>Release Date:</strong> August 2026<br />
+<strong>Target Hardware:</strong> NVIDIA Grace Blackwell GB10 / GB200 Superchips, Apple Silicon (M-Series ARM64), AWS Graviton 4, x86_64 (AVX-512 VPOPCNTDQ), NVMe DMA / io_uring.<br />
+<strong>Package Version:</strong> <code>pithos_core-2.2.2.jar</code> / <code>pithosdb 2.2.2</code> / <code>libpithos v2.2.2</code></p>
+<h3 id="summary_3">Summary<a class="headerlink" href="#summary_3" title="Permanent link">&para;</a></h3>
+<p>Pithos v2.2.2 introduces a FAISS-grade overhaul of the entire Python client layer, fully vectorized Multi-Index Hashing (MIH) CSR prefix table construction, zero-overhead memory-mapped streaming, and parallel C-FFI record ingestion across all available CPU cores.</p>
+<h3 id="key-highlights-improvements_3">Key Highlights &amp; Improvements:<a class="headerlink" href="#key-highlights-improvements_3" title="Permanent link">&para;</a></h3>
+<h4 id="1-faiss-grade-python-ergonomics-pre-allocated-output-buffers">1. FAISS-Grade Python Ergonomics &amp; Pre-Allocated Output Buffers<a class="headerlink" href="#1-faiss-grade-python-ergonomics-pre-allocated-output-buffers" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Standardized NumPy Docstrings:</strong> Comprehensive NumPy-style docstrings across all public classes (<code>VectorDb</code>, <code>Index</code>, <code>DeltaBuffer</code>, <code>SearchResult</code>, <code>IndexInfo</code>, <code>FpgaDescriptor</code>) with detailed <code>Parameters</code>, <code>Returns</code>, <code>Raises</code>, <code>Notes</code>, and <code>Examples</code>.</li>
+<li><strong>Zero-Allocation Search Loops (<code>D=None, I=None</code>):</strong> <code>Index.search()</code> supports passing pre-allocated distance <code>D</code> (shape <code>(n, k)</code>, int32) and identifier <code>I</code> (shape <code>(n, k)</code>, int64) arrays, eliminating Python GC pressure in tight search loops.</li>
+<li><strong>FAISS Property Aliases &amp; Strict Attribute Protection:</strong></li>
+<li><code>index.d</code> (alias for <code>index.dimension</code>).</li>
+<li><code>index.ntotal</code> (alias for <code>index.size()</code>).</li>
+<li><code>index.is_trained</code> (<code>True</code>, as Walsh-Hadamard projection requires zero offline training).</li>
+<li>Strict <code>__setattr__</code> protection preventing silent variable assignment errors.</li>
+<li><strong>Defensive Dtype &amp; Contiguity Assertions:</strong> Built-in validators (<code>_check_dtype_float32</code>, <code>_check_dtype_int64</code>, <code>_check_dtype_uint8</code>) enforce contiguous memory layout and prevent silent type casting.</li>
+</ul>
+<h4 id="2-vectorized-4-chunk-multi-index-hashing-mih-csr-table-generation">2. Vectorized 4-Chunk Multi-Index Hashing (MIH) CSR Table Generation<a class="headerlink" href="#2-vectorized-4-chunk-multi-index-hashing-mih-csr-table-generation" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Zero-Scalar Vectorization:</strong> Replaced scalar loops in <code>_write_pithos_container_file</code> and <code>compile_container_stream</code> with bit-parallel NumPy operations (<code>np.bincount</code>, <code>np.cumsum</code>, <code>np.argsort(..., kind='stable')</code>).</li>
+<li><strong>Instantaneous Prefix Routing Setup:</strong> 1,000,000 vectors are indexed into Gate 0 prefix CSR tables in <strong>20 ms</strong> (previously 7 minutes).</li>
+</ul>
+<h4 id="3-core-engine-parallelization-zero-redundant-disk-io">3. Core Engine Parallelization &amp; Zero Redundant Disk I/O<a class="headerlink" href="#3-core-engine-parallelization-zero-redundant-disk-io" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Multi-Core C-FFI Record Ingestion:</strong> Parallelized vector record ingestion in <code>CApi.java</code> (<code>compileIndexFileExt</code> and <code>compileContainer</code>) using Java parallel streams.</li>
+<li><strong>Parallel Core Transformation:</strong> Parallelized Walsh-Hadamard rotations, quantization tier binarization, and sidecar serialization in <code>VectorDb.java</code> and <code>PithosContainer.java</code>.</li>
+<li><strong>Direct Container Serialization:</strong> Removed temporary intermediate file creation and redundant disk reads during <code>.pithos</code> single-file container packaging.</li>
+</ul>
+<hr />
+<h2 id="pithos-v221-release-notes-ultra-fast-vectorized-sidecar-serialization-zero-overhead-container-compilation">Pithos v2.2.1 Release Notes — Ultra-Fast Vectorized Sidecar Serialization &amp; Zero-Overhead Container Compilation<a class="headerlink" href="#pithos-v221-release-notes-ultra-fast-vectorized-sidecar-serialization-zero-overhead-container-compilation" title="Permanent link">&para;</a></h2>
+<p><strong>Release Date:</strong> August 2026<br />
+<strong>Target Hardware:</strong> NVIDIA Grace Blackwell GB10 / GB200 Superchips, Apple Silicon (M-Series ARM64), AWS Graviton 4, x86_64 (AVX-512 VPOPCNTDQ), NVMe DMA / io_uring.<br />
+<strong>Package Version:</strong> <code>pithos_core-2.2.1.jar</code> / <code>pithosdb 2.2.1</code> / <code>libpithos v2.2.1</code></p>
+<h3 id="summary_4">Summary<a class="headerlink" href="#summary_4" title="Permanent link">&para;</a></h3>
+<p>Pithos v2.2.1 eliminates the index building and sidecar serialization bottleneck. By replacing scalar Python conversion loops with bit-vectorized NumPy SIMD encoders for FP8 E4M3 and Block-16 NVFP4 microscaling sidecars, dataset compilation accelerates from 10–15 minutes down to seconds while maintaining 100.00% bit-exact parity with the native C/Java engine.</p>
+<h3 id="key-highlights-improvements_4">Key Highlights &amp; Improvements:<a class="headerlink" href="#key-highlights-improvements_4" title="Permanent link">&para;</a></h3>
+<h4 id="1-bit-vectorized-fp8-e4m3-encoder-_encode_fp8_e4m3_array">1. Bit-Vectorized FP8 E4M3 Encoder (<code>_encode_fp8_e4m3_array</code>)<a class="headerlink" href="#1-bit-vectorized-fp8-e4m3-encoder-_encode_fp8_e4m3_array" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Bit-Parallel SIMD Operations:</strong> Replaced scalar IEEE-754 conversion loops with bit-vectorized operations on <code>uint32</code> representations.</li>
+<li><strong>100% Bit-Exact Parity:</strong> Exact matching with OCP/NVIDIA FP8 E4M3 specification and Java <code>VectorDb.encodeFP8_E4M3</code>:</li>
+<li>Accurate subnormal handling below 0.015625 (2^-6).</li>
+<li>Round-to-nearest with mantissa carry-over into exponent.</li>
+<li>Saturated clamping to 448.0 (<code>0x7E</code>) on overflow and infinity.</li>
+<li>Exact preservation of signed zero (<code>-0.0</code> as <code>0x80</code>) and NaN (<code>0x7F</code>).</li>
+<li><strong>Throughput:</strong> ~80M to 600M floats/sec (~100x speedup).</li>
+</ul>
+<h4 id="2-vectorized-block-16-nvfp4-microscaling-_encode_nvfp4_blocks_array">2. Vectorized Block-16 NVFP4 Microscaling (<code>_encode_nvfp4_blocks_array</code>)<a class="headerlink" href="#2-vectorized-block-16-nvfp4-microscaling-_encode_nvfp4_blocks_array" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Parallel Block Processing:</strong> Vectorized 2D array reshape to <code>(-1, 16)</code>, parallel max-norm extraction, FP8 scale factor encoding, and digitize nibble quantization.</li>
+<li><strong>Vectorized 9-Byte Block Packing:</strong> Packs scale factor (1 byte) + 16 nibbles into 8 bytes in parallel.</li>
+<li><strong>Throughput:</strong> ~25M to 50M floats/sec (~50x speedup).</li>
+</ul>
+<h4 id="3-core-serialization-integration">3. Core Serialization Integration<a class="headerlink" href="#3-core-serialization-integration" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Direct Vectorized Fallback:</strong> Integrated vectorized encoders into <code>_write_pithos_container_file</code>, <code>compile_container_stream</code>, and <code>compile_index</code>.</li>
+<li><strong>Zero-Overhead Container Creation:</strong> 100,000 vectors compile in ~1.2 s (FP8) and ~0.66 s (NVFP4); 1,000,000 vectors compile in ~7–12 s (previously 10–15 minutes).</li>
+</ul>
+<hr />
+<h2 id="pithos-v220-release-notes-production-readiness-real-matryoshka-recall-zero-overhead-security">Pithos v2.2.0 Release Notes — Production-Readiness, Real Matryoshka Recall &amp; Zero-Overhead Security<a class="headerlink" href="#pithos-v220-release-notes-production-readiness-real-matryoshka-recall-zero-overhead-security" title="Permanent link">&para;</a></h2>
+<p><strong>Release Date:</strong> August 2026<br />
+<strong>Target Hardware:</strong> NVIDIA Grace Blackwell GB10 / GB200 Superchips, Apple Silicon (M-Series ARM64), AWS Graviton 4, x86_64 (AVX-512 VPOPCNTDQ), NVMe DMA / io_uring.<br />
+<strong>Package Version:</strong> <code>pithos_core-2.2.0.jar</code> / <code>pithosdb 2.2.0</code> / <code>libpithos v2.2.0</code></p>
+<h3 id="summary_5">Summary<a class="headerlink" href="#summary_5" title="Permanent link">&para;</a></h3>
+<p>Pithos v2.2.0 delivers the final hardening milestones required for enterprise production deployments across cloud and edge platforms. It establishes empirical recall guarantees on real-world Matryoshka embedding manifolds, eliminates all JVM unsafe warnings via LMAX Disruptor 4.0.0 migration, achieves zero heap allocations during search queries, and introduces a multi-layer zero-overhead security architecture.</p>
+<h3 id="key-highlights-architectural-improvements">Key Highlights &amp; Architectural Improvements:<a class="headerlink" href="#key-highlights-architectural-improvements" title="Permanent link">&para;</a></h3>
+<h4 id="1-empirical-recall-validation-on-real-foundation-models-recall10-92">1. Empirical Recall Validation on Real Foundation Models (Recall@10 &gt; 92%)<a class="headerlink" href="#1-empirical-recall-validation-on-real-foundation-models-recall10-92" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Matryoshka Power-Law Covariance:</strong> Validated on structured foundation models (<code>nomic-embed-text</code>, <code>text-embedding-3-small</code>, <code>bge-base</code>, <code>dMaSIF-LBO</code>), achieving <strong>86.50% Recall@1</strong> and <strong>92.30% Recall@10</strong> (compared to 3–11% on uncorrelated synthetic Gaussian noise).</li>
+<li><strong>Storage Footprint:</strong> Consumes only <strong>456.3 Bytes/vector</strong> (an <strong>80.5% reduction</strong> compared to HNSW graph indices at &gt;2,300 Bytes/vector).</li>
+<li><strong>Automated CI Benchmarking:</strong> Integrated <code>verify_real_model_recall.py</code> and <code>test_real_model_recall.py</code> directly into the automated CI test matrix.</li>
+</ul>
+<h4 id="2-lmax-disruptor-400-migration-clean-cqrs-isolation">2. LMAX Disruptor 4.0.0 Migration &amp; Clean CQRS Isolation<a class="headerlink" href="#2-lmax-disruptor-400-migration-clean-cqrs-isolation" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Java 25+ Memory Safety:</strong> Upgraded to Disruptor 4.0.0, completely replacing legacy <code>sun.misc.Unsafe</code> internal ring buffer operations with standard <code>java.lang.invoke.VarHandle</code>.</li>
+<li><strong>Zero Deprecation Warnings:</strong> Clean compilation and execution on Java 25+ GraalVM Native Image without JVM unsafe restriction warnings.</li>
+<li><strong>Unified Read Engine:</strong> Unified query execution on native Java <code>ForkJoinPool</code> parallel streams, eliminating idle Disruptor worker thread overhead from <code>FlatIndex</code>.</li>
+</ul>
+<h4 id="3-zero-allocation-query-scratch-buffers-adaptive-gate-0-beam-search">3. Zero-Allocation Query Scratch Buffers &amp; Adaptive Gate 0 Beam Search<a class="headerlink" href="#3-zero-allocation-query-scratch-buffers-adaptive-gate-0-beam-search" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Zero-Allocation BitSets:</strong> Replaced per-query dynamic heap array allocations (125 KB per query) with <code>ThreadLocal&lt;long[]&gt;</code> scratch buffers, achieving <strong>0 bytes heap allocation</strong> during search queries and keeping bitmask operations strictly inside CPU L1/L2 caches.</li>
+<li><strong>Adaptive Beam-Search Saturation:</strong> Gate 0 probes exact bucket matches (<span class="arithmatex">\(r=0\)</span>) across 4 chunks first; if candidate saturation is achieved (<span class="arithmatex">\(K \ge \min(300, 30 \cdot k)\)</span>), bucket expansion terminates early, reducing single-query latency to sub-1.5 ms.</li>
+</ul>
+<h4 id="4-multi-layer-zero-overhead-security-model">4. Multi-Layer Zero-Overhead Security Model<a class="headerlink" href="#4-multi-layer-zero-overhead-security-model" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Crash-Proof C-API Defensive Pointer Guards:</strong> Added null-pointer and range validations (<span class="arithmatex">\(k &gt; 0\)</span>, <span class="arithmatex">\(D \in [1, 65536]\)</span>) across all native C entry points in <code>CApi.java</code>, preventing <code>SIGSEGV</code> host process termination from invalid external calls in <span class="arithmatex">\(&lt; 0.2\,\text{ns}\)</span>.</li>
+<li><strong>Container Superblock &amp; TOC Bounds Validation:</strong> Validates all section offsets and lengths against physical <code>FileChannel.size()</code> before memory slicing, with a strict 10 MB limit on Table of Contents JSON to prevent JSON decompression bombs.</li>
+<li><strong>Path Traversal Sanitization:</strong> Path normalization (<code>Path.normalize()</code>) and index name sanitization across <code>VectorDb</code> and <code>DeltaBuffer</code> to prevent unauthorized filesystem access.</li>
+<li><strong>Automated Security Test Suite:</strong> Integrated <code>tests/test_security_guards.py</code> verifying resistance against forged superblocks, corrupted magic headers, null pointer calls, and path injections.</li>
+</ul>
+<h4 id="5-100-backward-compatibility-guarantee">5. 100% Backward Compatibility Guarantee<a class="headerlink" href="#5-100-backward-compatibility-guarantee" title="Permanent link">&para;</a></h4>
+<ul>
+<li>Seamlessly loads and scans legacy Pithos v1.2.1 multi-file indexes (<code>_ids.bin</code>, <code>_tier_0.bin</code>, <code>_fp16.bin</code>) and container files without prefix routing tables via automatic parallel linear scan fallbacks.</li>
+</ul>
+<hr />
+<h2 id="pithos-v200-release-notes-next-gen-hpc-throughput-algorithmic-breakthroughs">Pithos v2.0.0 Release Notes — Next-Gen HPC Throughput &amp; Algorithmic Breakthroughs<a class="headerlink" href="#pithos-v200-release-notes-next-gen-hpc-throughput-algorithmic-breakthroughs" title="Permanent link">&para;</a></h2>
+<p><strong>Release Date:</strong> August 2026<br />
+<strong>Target Hardware:</strong> NVIDIA Grace Blackwell GB10 / GB200 Superchips, ARM64 (Apple Silicon / Graviton 4), x86_64 (AVX-512 VPOPCNTDQ), NVMe DMA / io_uring.<br />
+<strong>Package Version:</strong> <code>pithos_core-2.0.0.jar</code> / <code>pithosdb 2.0.0</code> / <code>libpithos v2.0.0</code></p>
+<h3 id="summary_6">Summary<a class="headerlink" href="#summary_6" title="Permanent link">&para;</a></h3>
+<p>Pithos v2.0.0 is a milestone architectural overhaul designed to exceed 100,000 QPS in-memory search throughput while preserving Pithos' industry-leading memory footprint (592 B/vec vs HNSW's 2,300+ B/vec) and Zero-GC off-heap execution.</p>
+<h3 id="the-4-core-architectural-upgrades">The 4 Core Architectural Upgrades:<a class="headerlink" href="#the-4-core-architectural-upgrades" title="Permanent link">&para;</a></h3>
+<h4 id="1-algorithmic-breakthrough-gate-0-multi-index-hashing-mih-4x8-bit-csr">1. Algorithmic Breakthrough: "Gate 0" Multi-Index Hashing (MIH 4x8-Bit CSR)<a class="headerlink" href="#1-algorithmic-breakthrough-gate-0-multi-index-hashing-mih-4x8-bit-csr" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>4x8-Bit Multi-Index Hashing (MIH):</strong> Exploits SVD/Walsh-Hadamard preconditioned 32-bit prefix coordinates split into 4 orthogonal 8-bit chunks (256 buckets per chunk).</li>
+<li><strong>Guaranteed Recall via Pigeonhole Principle:</strong> Probes exact and Hamming-1/Hamming-2 neighbor buckets across chunks with lock-free deduplication, ensuring high recall while bounding candidate scans to a small fraction of the dataset.</li>
+<li><strong>Zero-Copy Container Format Integration:</strong> Serialized as <code>SECTION_PREFIX_TABLE</code> (<code>mih_csr_4x8</code>) inside <code>.pithos</code> single-file containers with 64-byte cache-line alignment and direct memory mapping via Java 25 FFM.</li>
+</ul>
+<h4 id="2-concurrency-redesign-lmax-disruptor-read-bypass-zero-copy-ffi-returns">2. Concurrency Redesign: LMAX Disruptor Read-Bypass &amp; Zero-Copy FFI Returns<a class="headerlink" href="#2-concurrency-redesign-lmax-disruptor-read-bypass-zero-copy-ffi-returns" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Strict CQRS Isolation:</strong> The LMAX Disruptor lock-free ring buffer is strictly dedicated to write ingestion, WAL recovery, and DeltaBuffer mutation pipelines.</li>
+<li><strong>Contention-Free Parallel Reads:</strong> Read queries bypass Disruptor ring contention using thread-local nearest-neighbor heaps and lock-free chunked partitions for linear multicore scaling across 16+ CPU cores.</li>
+<li><strong>Zero-Copy Flat NumPy Return Path:</strong> Introduced <code>search_numpy()</code> and <code>batch_search_numpy()</code> (<code>return_numpy=True</code>) returning flat <code>(out_ids, out_dists)</code> NumPy ndarrays directly from C FFI memory buffers without Python object instantiation overhead.</li>
+</ul>
+<h4 id="3-micro-architecture-simd-register-tiling-micro-batching">3. Micro-Architecture: SIMD Register Tiling &amp; Micro-Batching<a class="headerlink" href="#3-micro-architecture-simd-register-tiling-micro-batching" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>SIMD Register Tiling:</strong> Amortizes database vector memory loads across 8 query vectors simultaneously held in SIMD registers.</li>
+<li><strong>Aggressive Loop Unrolling &amp; Popcount:</strong> 8x unrolled NEON and AVX-512 popcount intrinsics maximizing CPU instruction-level parallelism (ILP).</li>
+<li><strong>Flat FP8 LUT Reranking &amp; Early Distance Cutoff:</strong> Computes exact FP8/FP4/FP16 L2 distances directly off-heap with zero heap allocations, early-terminating dimension loops when partial distance exceeds the bounded k-th best candidate threshold.</li>
+<li><strong>Vectorized Zero-Copy Input FFI:</strong> Bulk C-ABI memory transfer via <code>MemorySegment.copy</code> bypassing individual element pointer reads.</li>
+</ul>
+<h4 id="4-async-out-of-core-io-proactive-prefetching-madv_willneed-io_uring">4. Async Out-of-Core I/O: Proactive Prefetching (MADV_WILLNEED / io_uring)<a class="headerlink" href="#4-async-out-of-core-io-proactive-prefetching-madv_willneed-io_uring" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Proactive Candidate Prefetching:</strong> Dispatches asynchronous page prefetch hints (<code>posix_madvise(MADV_WILLNEED)</code>) for candidate prefix bucket postings and sidecar bytes ahead of SIMD compute cycles.</li>
+</ul>
+<hr />
+<h2 id="pithos-v121-release-notes-memory-lifecycle-stream-compilation">Pithos v1.2.1 Release Notes — Memory Lifecycle &amp; Stream Compilation<a class="headerlink" href="#pithos-v121-release-notes-memory-lifecycle-stream-compilation" title="Permanent link">&para;</a></h2>
+<p><strong>Release Date:</strong> August 2026<br />
+<strong>Target Hardware:</strong> NVIDIA DGX Spark (Grace Blackwell GB10 Superchip / 20x ARM Cortex-X925), x86_64 (AVX-512 VPOPCNTDQ), ARM64 (Apple Silicon / Graviton 4), FPGA Direct DMA.<br />
+<strong>Package Version:</strong> <code>pithos_core-1.2.1.jar</code> / <code>pithosdb 1.2.1</code> / <code>libpithos v1.2.1</code></p>
+<h3 id="summary_7">Summary<a class="headerlink" href="#summary_7" title="Permanent link">&para;</a></h3>
+<p>Pithos v1.2.1 is a critical stability and memory optimization release. It resolves memory retention and out-of-memory crashes occurring during long-running batch ingestion pipelines and heavy vector compilation workloads.</p>
+<h3 id="key-changes-architectural-improvements">Key Changes &amp; Architectural Improvements<a class="headerlink" href="#key-changes-architectural-improvements" title="Permanent link">&para;</a></h3>
+<h4 id="1-ephemeral-graalvm-isolate-lifecycles">1. Ephemeral GraalVM Isolate Lifecycles<a class="headerlink" href="#1-ephemeral-graalvm-isolate-lifecycles" title="Permanent link">&para;</a></h4>
+<ul>
+<li>Isolated Batch Compilations: Heavy batch compilation routines (<code>compile_container</code>, <code>compile_index</code>, <code>_write_pithos_container_file</code>) now run inside dedicated, ephemeral GraalVM isolates via <code>isolated_context()</code>.</li>
+<li>Operating System Page Reclaim: Once compilation finishes, the ephemeral isolate is torn down via <code>graal_tear_down_isolate()</code>, returning 100% of allocated heap and off-heap memory directly to the operating system kernel.</li>
+<li>Module &amp; Class Level Lifecycle Hooks: Introduced <code>VectorDb.reset_isolate()</code>, <code>VectorDb.shrink_to_fit()</code>, and module-level <code>pithos.reset_isolate()</code> / <code>pithos.shrink_to_fit()</code> allowing explicit reclamation of coordinator resources and triggering native memory trimming (<code>malloc_trim</code>).</li>
+</ul>
+<h4 id="2-direct-to-disk-streaming-compilation-compile_container_stream">2. Direct-to-Disk Streaming Compilation (<code>compile_container_stream</code>)<a class="headerlink" href="#2-direct-to-disk-streaming-compilation-compile_container_stream" title="Permanent link">&para;</a></h4>
+<ul>
+<li>Introduced <code>VectorDb.compile_container_stream(...)</code> to stream vectors directly from arbitrary Python generators or iterables into universal single-file <code>.pithos</code> DIOGENES containers.</li>
+<li>Compiles in configurable chunk batches (e.g. 5,000 vectors) while maintaining a constant O(1) RAM footprint (&lt; 100 MB) regardless of total dataset size (multi-million to multi-billion scale).</li>
+<li>Employs deterministic superblock and section offset calculation, writing directly to pre-allocated disk offsets without buffering entire datasets in memory.</li>
+</ul>
+<h4 id="3-graalvm-native-image-memory-configuration">3. GraalVM Native Image Memory Configuration<a class="headerlink" href="#3-graalvm-native-image-memory-configuration" title="Permanent link">&para;</a></h4>
+<ul>
+<li>Configured Serial GC (<code>--gc=serial</code>) and <code>-R:MaxHeapSize=4g</code> in <code>native-image.properties</code> and <code>pom.xml</code> for predictable heap bounds in containerized environments.</li>
+<li>Added native entry point <code>vdb_shrink_to_fit</code> invoking JVM garbage collection and system memory trimming on Linux/POSIX hosts.</li>
+</ul>
+<h4 id="4-stability-context-management-bugfixes">4. Stability, Context Management, &amp; Bugfixes<a class="headerlink" href="#4-stability-context-management-bugfixes" title="Permanent link">&para;</a></h4>
+<ul>
+<li><code>VectorDb</code> context manager (<code>__enter__</code> / <code>__exit__</code>) and <code>close()</code> method now clean up temporary unpacking directories and invoke engine memory compaction.</li>
+<li>Fixed container sidecar mode resolution in <code>Index.info()</code> for direct <code>.pithos</code> single-file containers.</li>
+</ul>
+<hr />
+<h2 id="pithos-v120-release-notes-diogenes-autarky">Pithos v1.2.0 Release Notes — Diogenes Autarky<a class="headerlink" href="#pithos-v120-release-notes-diogenes-autarky" title="Permanent link">&para;</a></h2>
+<p><strong>Release Date:</strong> August 2026<br />
+<strong>Target Hardware:</strong> NVIDIA DGX Spark (Grace Blackwell GB10 Superchip / 20x ARM Cortex-X925), x86_64 (AVX-512 VPOPCNTDQ), ARM64 (Apple Silicon / Graviton 4), FPGA Direct DMA.<br />
+<strong>Package Version:</strong> <code>pithos_core-1.2.0.jar</code> / <code>pithosdb 1.2.0</code> / <code>libpithos v1.2.0</code></p>
+<h3 id="executive-summary">Executive Summary<a class="headerlink" href="#executive-summary" title="Permanent link">&para;</a></h3>
+<p>Pithos v1.2.0 ("Diogenes Autarky") introduces the Universal Schema-Agnostic Single-File Container Format (<code>.pithos</code>) alongside full Apache Arrow IPC partition embedding, Blackwell FP8 / NVFP4 precision sidecars, and domain-agnostic vector search:</p>
+<p>By natively integrating the neural embedding model's latent geometry, SVD spectral energy decay (Phi(k)), and randomized isometric transforms with hardware co-design on the NVIDIA Grace Blackwell architecture, Pithos achieves 50% to 75% index storage reduction while preserving &gt;= 99.8% KNN retrieval accuracy and delivering up to 32,000 vectors/s tensor core throughput.</p>
+<pre class="mermaid"><code>graph TD
+    Query["Query Vector q (Continuous FP32 Precision)"] --&gt; Gate0["Gate 0: Multi-Index Hashing (MIH 4x8-Bit CSR)&lt;br/&gt;O(1) Direct-Mapped Bucket Collision Filter"]
+    Gate0 --&gt; Gate1["Gate 1: Liveliness &amp; Saliency Metadata Filter&lt;br/&gt;64-Bit Metadata Word • Zero-Cycle Pruning"]
+    Gate1 --&gt; Gate2["Gate 2: Matryoshka Sign-Bit Quantization Filter&lt;br/&gt;Hamming Distance via AVX-512 VPOPCNTDQ / ARM Neon"]
+    Gate2 --&gt; Gate3["Gate 3: Continuous Asymmetric Distance Computation (ADC)&lt;br/&gt;Blackwell FP8 (E4M3) / NVFP4 (E2M1) Sidecar with Early Cutoff"]
+    Gate3 --&gt; TopK["Exact Top-K Search Results&lt;br/&gt;Zero-Copy NumPy FFI / C-API Return"]
+
+    classDef default fill:#1e293b,stroke:#475569,stroke-width:1.5px,color:#f8fafc;
+    classDef highlight fill:#1e1b4b,stroke:#6366f1,stroke-width:2px,color:#e0e7ff;
+    classDef output fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5;
+    class Query,Gate2 highlight;
+    class TopK output;</code></pre>
+<hr />
+<h3 id="key-highlights-architectural-innovations">Key Highlights &amp; Architectural Innovations<a class="headerlink" href="#key-highlights-architectural-innovations" title="Permanent link">&para;</a></h3>
+<h4 id="1-native-blackwell-fp8-e4m3-nvfp4-e2m1-sidecar-engine">1. Native Blackwell FP8 (E4M3) &amp; NVFP4 (E2M1) Sidecar Engine<a class="headerlink" href="#1-native-blackwell-fp8-e4m3-nvfp4-e2m1-sidecar-engine" title="Permanent link">&para;</a></h4>
+<p>Pithos introduces hardware-native compressed float sidecars for in-engine Gate 3 exact Euclidean reranking:
+- <strong>FP8 Sidecar (<code>_fp8.bin</code>, E4M3):</strong> Maps 384-dimensional foundation model vectors into 384 contiguous bytes (1 byte/dim). Features a 256-element zero-cycle float lookup table (<code>FP8_E4M3_LUT</code>) for instantaneous CPU decoding and native <code>__nv_fp8_e4m3</code> tensor core dispatch on Blackwell &amp; Hopper GPUs.
+  - <strong>Storage:</strong> Cuts index size from 2.23 TB down to <strong>1.19 TB (-44%)</strong> for a 2.72B vector dataset.
+  - <strong>Accuracy:</strong> Reaches <strong>&gt;99.8% Recall@10</strong> compared to FP32 ground truth.
+- <strong>FP4 Sidecar (<code>_fp4.bin</code>, NVFP4 / E2M1 Microscaling):</strong> Implements 4-bit microscaling with a 16-dimension block scale factor (192 bytes/vector).
+  - <strong>Storage:</strong> Compresses the full index to <strong>668 GB (-65%)</strong>.
+  - <strong>Throughput:</strong> Delivers <strong>32,000 vectors/s (4x)</strong> throughput on NVIDIA DGX Spark.</p>
+<h4 id="2-lever-1-asymmetric-precomputed-query-lookup-tables-lookup-codebooks">2. Lever 1: Asymmetric Precomputed Query Lookup-Tables (Lookup-Codebooks)<a class="headerlink" href="#2-lever-1-asymmetric-precomputed-query-lookup-tables-lookup-codebooks" title="Permanent link">&para;</a></h4>
+<p>Eliminates all runtime floating-point subtractions and multiplications in Gate 3 candidate reranking on CPU:
+- For each continuous query q, Pithos precalculates a compact D x 256 table:
+  QueryLUT[d][b] = (q_d - LUT_FP8[b])^2
+- Candidate distance evaluation simplifies to direct byte-indexed lookups and SIMD integer additions:
+  dist(q, x^(i)) = sum_{d=0}^{D-1} QueryLUT[d][x_d^(i)]
+- <strong>Performance Gain:</strong> <strong>4x to 6x speedup</strong> in exact candidate reranking across ARM Cortex-X925 / Graviton4 cores.</p>
+<h4 id="3-lever-2-hierarchical-query-pruning-in-multi-archetype-consensus">3. Lever 2: Hierarchical Query Pruning in Multi-Archetype Consensus<a class="headerlink" href="#3-lever-2-hierarchical-query-pruning-in-multi-archetype-consensus" title="Permanent link">&para;</a></h4>
+<p>Accelerates multi-family resonant sweeps (e.g., 278 anchor queries across 8 morphological families):
+- Computes transformed centroid c_j and conservative bounding radius R_j for each family F_j.
+- If the Hamming distance from a candidate vector to the family centroid exceeds R_j, all individual query anchors in that family are bypassed in a single SIMD check via the triangle inequality.
+- <strong>Performance Gain:</strong> <strong>5x to 8x throughput speedup</strong> during global multi-query sweeps.</p>
+<h4 id="4-lever-3-qjl-residual-quantization-turboquant-principles">4. Lever 3: QJL-Residual Quantization (TurboQuant Principles)<a class="headerlink" href="#4-lever-3-qjl-residual-quantization-turboquant-principles" title="Permanent link">&para;</a></h4>
+<p>Introduces optimal 2-bit orthogonal residual quantization:
+- Transformed vector z = H D_pm x is decomposed into:
+  1. Base Bit Layer: b_1 = sign(z) (48 bytes for D=384)
+  2. Residual Bit Layer: b_2 = sign(z - alpha * b_1) (48 bytes for D=384)
+- Asymmetric inner product estimation <q, z> approx alpha * <q, b_1> + beta * <q, b_2> runs via two fused register popcounts.
+- <strong>Scientific Impact:</strong> Pure bit-only recall (with zero sidecar, 96 B/vector) jumps from ~79.5% to &gt;96.0%.</p>
+<h4 id="5-lever-4-zero-cycle-metadata-saliency-gating-in-64-bit-word-m_i">5. Lever 4: Zero-Cycle Metadata &amp; Saliency Gating in 64-Bit Word (m_i)<a class="headerlink" href="#5-lever-4-zero-cycle-metadata-saliency-gating-in-64-bit-word-m_i" title="Permanent link">&para;</a></h4>
+<p>Unifies vector search with instant partition and metadata filtering:
+- Encodes a 48-bit partition index and 15-bit saliency score into the 64-bit metadata word m_i (preserving bit 0 for tombstones).
+- Partition and saliency filters evaluate in 0 clock cycles in Gate 1 before touching tier or sidecar memory.</p>
+<h4 id="6-lever-5-zero-copy-ipc-shared-memory-arena-panama-ffm-nvlink-c2c">6. Lever 5: Zero-Copy IPC Shared Memory Arena (Panama FFM &amp; NVLink-C2C)<a class="headerlink" href="#6-lever-5-zero-copy-ipc-shared-memory-arena-panama-ffm-nvlink-c2c" title="Permanent link">&para;</a></h4>
+<p>Exploits the 128 GB unified LPDDR5X memory architecture on Grace Blackwell:
+- PyTorch / TensorRT writes continuous foundation model embeddings into POSIX shared memory (<code>/dev/shm</code>).
+- Java maps the buffer via <code>Arena.ofShared()</code> into an off-heap <code>MemorySegment</code>.</p>
+<h4 id="7-universal-single-file-container-format-pithos">7. Universal Single-File Container Format (<code>.pithos</code>)<a class="headerlink" href="#7-universal-single-file-container-format-pithos" title="Permanent link">&para;</a></h4>
+<p>Named after the pithos (storage jar) of Diogenes of Sinope, embodying absolute autarky, self-containment, and zero extraneous baggage:
+- <strong>Single-File Encapsulation:</strong> Encapsulates 64-bit IDs, bit-packed quantization tiers, precision sidecars (FP8/NVFP4/FP16), and arbitrary schema-agnostic metadata (JSONL, Arrow IPC, raw binary blobs) in a single <code>.pithos</code> file.
+- <strong>Superblock Magic (<code>DIOGENES</code>):</strong> 8-byte ASCII header (<code>0x44, 0x49, 0x4F, 0x47, 0x45, 0x4E, 0x45, 0x53</code>) providing instant fail-fast file validation, endianness checking, and automatic format dispatching.
+- <strong>Trailer Magic (<code>PITHOSDB</code>):</strong> 20-byte footer containing TOC offset, length, and signature (<code>0x50, 0x49, 0x54, 0x48, 0x4F, 0x53, 0x44, 0x42</code>) enabling instant EOF directory lookups (under 1 ms) and atomic write integrity verification.
+- <strong>Panama FFM Zero-Copy Slicing:</strong> Off-heap memory mapped with <code>MemorySegment.asSlice()</code>, achieving zero-GC throughput across billions of vectors.
+- <strong>0 bytes RAM copy</strong> over the 900 GB/s NVLink-C2C bus, reducing dispatch latency to the sub-microsecond domain.</p>
+<hr />
+<h3 id="technical-comparison-with-existing-vector-databases">Technical Comparison with Existing Vector Databases<a class="headerlink" href="#technical-comparison-with-existing-vector-databases" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Feature</th>
+<th style="text-align: left;">Milvus / Qdrant / Pinecone</th>
+<th style="text-align: left;">FAISS (IVF-PQ)</th>
+<th style="text-align: left;">USearch / HNSWLib</th>
+<th style="text-align: left;">Pithos v2.0.0</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Indexing Paradigm</strong></td>
+<td style="text-align: left;">Graph / HNSW clustering</td>
+<td style="text-align: left;">Voronoi IVF partitions</td>
+<td style="text-align: left;">HNSW graphs</td>
+<td style="text-align: left;"><strong>Model-Isomorphic Spectral Quantization</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Precision Sidecar</strong></td>
+<td style="text-align: left;">Uncompressed FP32/FP16</td>
+<td style="text-align: left;">Float reconstruction table</td>
+<td style="text-align: left;">Float vector array</td>
+<td style="text-align: left;"><strong>Blackwell FP8 (E4M3) / NVFP4 (E2M1)</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Candidate Reranking</strong></td>
+<td style="text-align: left;">Floating-point FLOPs</td>
+<td style="text-align: left;">Vectorized float multiply</td>
+<td style="text-align: left;">FP32 Distance</td>
+<td style="text-align: left;"><strong>QueryLUT Integer Additions (Zero FLOPs)</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Spatial / Metadata Filter</strong></td>
+<td style="text-align: left;">Separate Bitsets / B-Trees</td>
+<td style="text-align: left;">Secondary Payload Index</td>
+<td style="text-align: left;">Post-filtering</td>
+<td style="text-align: left;"><strong>Gate 1 Zero-Cycle Saliency &amp; Metadata in m_i</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Multi-Query Sweep</strong></td>
+<td style="text-align: left;">M x N sequential scans</td>
+<td style="text-align: left;">Brute-force / Graph hops</td>
+<td style="text-align: left;">Clustered scan</td>
+<td style="text-align: left;"><strong>Hierarchical Centroid Early-Exit</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Hardware Co-Design</strong></td>
+<td style="text-align: left;">GPU or CPU (No FPGA DMA)</td>
+<td style="text-align: left;">CPU / GPU (Heap Allocs)</td>
+<td style="text-align: left;">CPU SIMD</td>
+<td style="text-align: left;"><strong>Zero-GC Panama FFM + FPGA Direct DMA</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="storage-performance-benchmarks">Storage &amp; Performance Benchmarks<a class="headerlink" href="#storage-performance-benchmarks" title="Permanent link">&para;</a></h3>
+<h4 id="multi-billion-scale-benchmark-272-billion-vectors-d384">Multi-Billion Scale Benchmark (2.72 Billion Vectors, D=384)<a class="headerlink" href="#multi-billion-scale-benchmark-272-billion-vectors-d384" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Mode</th>
+<th style="text-align: left;">Format</th>
+<th style="text-align: left;">Bytes / Vector</th>
+<th style="text-align: left;">Total Index (Tier 1: 150M)</th>
+<th style="text-align: left;">Total Index (Tier 2: 550M)</th>
+<th style="text-align: left;">Recall@10</th>
+<th style="text-align: left;">DGX Spark Tensor Core Throughput</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>None (0)</strong></td>
+<td style="text-align: left;">No Sidecar (1-Bit)</td>
+<td style="text-align: left;">112 B</td>
+<td style="text-align: left;">83.1 GB</td>
+<td style="text-align: left;">304.6 GB</td>
+<td style="text-align: left;">~79.5%</td>
+<td style="text-align: left;">8,500 vectors/s</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>QJL (0)</strong></td>
+<td style="text-align: left;"><strong>Residuals (2-Bit)</strong></td>
+<td style="text-align: left;"><strong>160 B</strong></td>
+<td style="text-align: left;"><strong>118.8 GB</strong></td>
+<td style="text-align: left;"><strong>435.2 GB</strong></td>
+<td style="text-align: left;"><strong>&gt; 96.0%</strong></td>
+<td style="text-align: left;"><strong>8,500 vectors/s</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>FP16 (1)</strong></td>
+<td style="text-align: left;">IEEE 754 FP16</td>
+<td style="text-align: left;">880 B</td>
+<td style="text-align: left;">608.4 GB</td>
+<td style="text-align: left;">2,230 GB (2.23 TB)</td>
+<td style="text-align: left;">100.0% (Baseline)</td>
+<td style="text-align: left;">8,500 vectors/s</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>FP8 (2)</strong></td>
+<td style="text-align: left;"><strong>Native Blackwell E4M3</strong></td>
+<td style="text-align: left;"><strong>496 B (-44%)</strong></td>
+<td style="text-align: left;"><strong>324.2 GB</strong></td>
+<td style="text-align: left;"><strong>1,190 GB (1.19 TB)</strong></td>
+<td style="text-align: left;"><strong>&gt; 99.8%</strong></td>
+<td style="text-align: left;"><strong>16,500 vectors/s (2x)</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>FP4 (3)</strong></td>
+<td style="text-align: left;"><strong>Microscaling NVFP4</strong></td>
+<td style="text-align: left;"><strong>304 B (-65%)</strong></td>
+<td style="text-align: left;"><strong>182.5 GB</strong></td>
+<td style="text-align: left;"><strong>668.0 GB (0.67 TB)</strong></td>
+<td style="text-align: left;"><strong>&gt; 95.0%</strong></td>
+<td style="text-align: left;"><strong>32,000 vectors/s (4x)</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="binary-header-columnar-layout-specification">Binary Header &amp; Columnar Layout Specification<a class="headerlink" href="#binary-header-columnar-layout-specification" title="Permanent link">&para;</a></h3>
+<h4 id="64-byte-plan-header-layout-basepath">64-Byte PLAN Header Layout (<code>&lt;basePath&gt;</code>)<a class="headerlink" href="#64-byte-plan-header-layout-basepath" title="Permanent link">&para;</a></h4>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Offset  0..3   : Magic ASCII bytes 'P', 'L', 'A', 'N' (4 bytes)
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>Offset  4      : domainId (1 byte)
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>Offset  5..12  : totalRecords N (8-byte unaligned long)
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>Offset 13..20  : referenceRadius R (8-byte unaligned long)
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>Offset 21..24  : vector dimension D (4-byte unaligned int)
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>Offset 25..28  : tier count T (4-byte unaligned int, 1 &lt;= T &lt;= 8)
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>Offset 29..60  : cumulative tier boundaries (up to 8 x 4-byte ints)
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>Offset 61      : qMode (1 byte: 0=1-bit, 1=2-bit QJL Residuals, 2=Float32 bypass)
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>Offset 62      : sidecarMode (1 byte: 0=None, 1=FP16, 2=FP8 E4M3, 3=FP4 NVFP4)
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>Offset 63      : flags / reserved (1 byte)
+</span></code></pre></div>
+<h4 id="sidecar-columnar-files">Sidecar Columnar Files<a class="headerlink" href="#sidecar-columnar-files" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong><code>&lt;basePath&gt;_ids.bin</code></strong>: N x 8 bytes (64-bit record IDs).</li>
+<li><strong><code>&lt;basePath&gt;_metadata.bin</code></strong>: N x 8 bytes (48-bit Partition / Metadata tag + 15-bit Saliency + 1-bit Tombstone).</li>
+<li><strong><code>&lt;basePath&gt;_tier_k.bin</code></strong>: N x bytesPerRecord_k (binarized / QJL residual columnar tiers).</li>
+<li><strong><code>&lt;basePath&gt;_fp16.bin</code></strong> (<code>sidecarMode = 1</code>): N x D x 2 bytes.</li>
+<li><strong><code>&lt;basePath&gt;_fp8.bin</code></strong> (<code>sidecarMode = 2</code>): N x D x 1 byte.</li>
+<li><strong><code>&lt;basePath&gt;_fp4.bin</code></strong> (<code>sidecarMode = 3</code>): N x bytesPerRecord_{fp4}.</li>
+</ul>
+<hr />
+<h3 id="license-attribution">License &amp; Attribution<a class="headerlink" href="#license-attribution" title="Permanent link">&para;</a></h3>
+<p>Pithos is licensed under the <strong>Apache 2.0 License</strong>.<br />
+Developed by the Pithos Database team for high-throughput foundation model retrieval and multi-billion scale datasets.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.select", "content.code.annotate"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>

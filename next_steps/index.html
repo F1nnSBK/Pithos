@@ -1,0 +1,1075 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Model-Isomorphic Database for massive Datasets">
+      
+      
+        <meta name="author" content="F1nnSBK">
+      
+      
+        <link rel="canonical" href="https://F1nnSBK.github.io/Pithos/next_steps/">
+      
+      
+        <link rel="prev" href="../release_notes/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Roadmap - Pithos</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="cyan">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#pithos-roadmap-architectural-extensions" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Pithos" class="md-header__button md-logo" aria-label="Pithos" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Pithos
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Roadmap
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="cyan"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="cyan"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/F1nnSBK/Pithos" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    F1nnSBK/Pithos
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Overview
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../architecture/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Architecture
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../agent_guide/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Agent Guide
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../container_format/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Container Format
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../cuda_integration/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  GPU Acceleration
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../c_api_reference/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  C-API Reference
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../math_theory/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Mathematical Theory
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../release_notes/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Release Notes
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Roadmap
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Pithos" class="md-nav__button md-logo" aria-label="Pithos" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Pithos
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/F1nnSBK/Pithos" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    F1nnSBK/Pithos
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../container_format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Container Format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cuda_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPU Acceleration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../c_api_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    C-API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../math_theory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mathematical Theory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-completed-core-milestones-v20-v22" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Completed Core Milestones (v2.0 – v2.2)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-forward-roadmap-future-directions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Forward Roadmap &amp; Future Directions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Forward Roadmap &amp; Future Directions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-fpga-co-design-via-pcie-dma-streaming" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 FPGA Co-Design via PCIe DMA Streaming
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-gpudirect-storage-gds-nvme-of-distributed-search" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 GPUDirect Storage (GDS) &amp; NVMe-oF Distributed Search
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-distributed-sharding-raft-cluster-consensus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 Distributed Sharding &amp; Raft Cluster Consensus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#24-autonomous-in-storage-compaction-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.4 Autonomous In-Storage Compaction Engine
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-completed-core-milestones-v20-v22" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Completed Core Milestones (v2.0 – v2.2)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-forward-roadmap-future-directions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Forward Roadmap &amp; Future Directions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Forward Roadmap &amp; Future Directions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-fpga-co-design-via-pcie-dma-streaming" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 FPGA Co-Design via PCIe DMA Streaming
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-gpudirect-storage-gds-nvme-of-distributed-search" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 GPUDirect Storage (GDS) &amp; NVMe-oF Distributed Search
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-distributed-sharding-raft-cluster-consensus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 Distributed Sharding &amp; Raft Cluster Consensus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#24-autonomous-in-storage-compaction-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.4 Autonomous In-Storage Compaction Engine
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="pithos-roadmap-architectural-extensions">Pithos – Roadmap &amp; Architectural Extensions<a class="headerlink" href="#pithos-roadmap-architectural-extensions" title="Permanent link">&para;</a></h1>
+<p><em>Architectural Roadmap &amp; Next Steps for the Model-Isomorphic Vector Database</em></p>
+<hr />
+<h2 id="1-completed-core-milestones-v20-v22">1. Completed Core Milestones (v2.0 – v2.2)<a class="headerlink" href="#1-completed-core-milestones-v20-v22" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Feature Area</th>
+<th style="text-align: left;">Status</th>
+<th style="text-align: left;">Key Innovations</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Universal Container Format</strong></td>
+<td style="text-align: left;"><strong>Released (v2.0)</strong></td>
+<td style="text-align: left;">Schema-agnostic <code>.pithos</code> single-file container with embedded Apache Arrow IPC partition directory.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>4x8-Bit MIH Prefix Routing</strong></td>
+<td style="text-align: left;"><strong>Released (v2.1)</strong></td>
+<td style="text-align: left;">Direct-mapped CSR inverted table pruning 98.5% of search space in <span class="arithmatex">\(O(1)\)</span> sub-microsecond time.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Precision Sidecar Reranking</strong></td>
+<td style="text-align: left;"><strong>Released (v2.0)</strong></td>
+<td style="text-align: left;">Asymmetric Query LUTs decoding FP8 (E4M3), NVFP4 (E2M1), FP16 with Monotonic Early Distance Cutoff.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>LSM DeltaBuffer &amp; WAL</strong></td>
+<td style="text-align: left;"><strong>Released (v2.0)</strong></td>
+<td style="text-align: left;">Lock-free real-time insertions, tombstone soft-deletes, write-ahead log, and zero-cost binary compactions.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Zero-Copy NumPy FFI</strong></td>
+<td style="text-align: left;"><strong>Released (v2.1)</strong></td>
+<td style="text-align: left;">Direct memory view returns (<code>search_numpy()</code>, <code>batch_search_numpy()</code>) bypassing Python wrapper conversions.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>CUDA GPU Acceleration</strong></td>
+<td style="text-align: left;"><strong>Released (v2.0)</strong></td>
+<td style="text-align: left;">Fused batch Hamming kernels, Fast Walsh-Hadamard transform, and multi-family resonant voting.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Real Foundation Model Recall</strong></td>
+<td style="text-align: left;"><strong>Released (v2.2)</strong></td>
+<td style="text-align: left;">Validated <span class="arithmatex">\(&gt;92.3\%\)</span> Recall@10 on real Matryoshka models (<code>nomic-embed-text</code>, <code>bge-base</code>, <code>text-embedding-3-small</code>).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Disruptor 4.0.0 &amp; VarHandles</strong></td>
+<td style="text-align: left;"><strong>Released (v2.2)</strong></td>
+<td style="text-align: left;">Replaced <code>sun.misc.Unsafe</code> with <code>java.lang.invoke.VarHandle</code>, 0 JVM deprecation warnings on Java 25+.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Zero-Allocation BitSets</strong></td>
+<td style="text-align: left;"><strong>Released (v2.2)</strong></td>
+<td style="text-align: left;"><code>ThreadLocal&lt;long[]&gt;</code> scratch buffers with 0 heap bytes allocated during search queries.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Zero-Overhead Security</strong></td>
+<td style="text-align: left;"><strong>Released (v2.2)</strong></td>
+<td style="text-align: left;">Defensive C-API pointer guards, Superblock/TOC bounds verification, and path traversal sanitization.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="2-forward-roadmap-future-directions">2. Forward Roadmap &amp; Future Directions<a class="headerlink" href="#2-forward-roadmap-future-directions" title="Permanent link">&para;</a></h2>
+<h3 id="21-fpga-co-design-via-pcie-dma-streaming">2.1 FPGA Co-Design via PCIe DMA Streaming<a class="headerlink" href="#21-fpga-co-design-via-pcie-dma-streaming" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Objective:</strong> Stream off-heap binary tier blocks directly from NVMe / Host RAM to FPGA accelerator cards (e.g. AMD Xilinx Alveo U280) via PCIe Gen5 DMA.</li>
+<li><strong>Architecture:</strong> Host CPU performs asynchronous query preconditioning; FPGA runs massive pipelined Hamming popcount reduction units over 100+ parallel channels.</li>
+<li><strong>Direct Virtual Addressing:</strong> Built-in <code>vdb_get_tier_address()</code> provides contiguous off-heap addresses for zero-copy DMA engine setup.</li>
+</ul>
+<h3 id="22-gpudirect-storage-gds-nvme-of-distributed-search">2.2 GPUDirect Storage (GDS) &amp; NVMe-oF Distributed Search<a class="headerlink" href="#22-gpudirect-storage-gds-nvme-of-distributed-search" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Objective:</strong> Bypass Host CPU and DRAM entirely during massive multi-billion vector batch scans by streaming <code>.pithos</code> files directly from NVMe into GPU High Bandwidth Memory (HBM3e).</li>
+<li><strong>Architecture:</strong> Leverage cuFile APIs and NVMe over Fabrics (NVMe-oF) for cluster-wide partition retrieval.</li>
+</ul>
+<h3 id="23-distributed-sharding-raft-cluster-consensus">2.3 Distributed Sharding &amp; Raft Cluster Consensus<a class="headerlink" href="#23-distributed-sharding-raft-cluster-consensus" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Objective:</strong> Partition multi-billion scale datasets across horizontal nodes with sub-millisecond scatter-gather query aggregation.</li>
+<li><strong>Architecture:</strong> Consistent hashing over 16-bit Walsh-Hadamard prefixes, routing queries directly to target cluster shards.</li>
+</ul>
+<h3 id="24-autonomous-in-storage-compaction-engine">2.4 Autonomous In-Storage Compaction Engine<a class="headerlink" href="#24-autonomous-in-storage-compaction-engine" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Objective:</strong> Background merge workers running on smart NVMe computational storage drives to compact WAL DeltaBuffers without consuming host CPU cycles.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.select", "content.code.annotate"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>
