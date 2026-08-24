@@ -1467,8 +1467,13 @@ class Index:
 
         if candidate_indices is None:
             cand_arr = np.arange(len(self), dtype=np.int64)
+            try:
+                cand_ids = self.get_ids_buffer()
+            except Exception:
+                cand_ids = cand_arr
         else:
             cand_arr = np.ascontiguousarray(candidate_indices, dtype=np.int64)
+            cand_ids = cand_arr
 
         num_cands = len(cand_arr)
         if num_cands == 0:
@@ -1488,7 +1493,12 @@ class Index:
 
             sim_matrix = np.dot(q_normed, cand_normed.T)
             sort_indices = np.argsort(-sim_matrix, axis=1)[:, :top_k]
-            ranked_ids = np.take(cand_arr, sort_indices)
+            ranked_ids = np.take(cand_ids, sort_indices)
+            ranked_scores = np.take_along_axis(sim_matrix, sort_indices, axis=1)
+        elif metric_lower in ("dot", "ip", "mips", "inner_product", "dot_product"):
+            sim_matrix = np.dot(q_arr, cand_vecs.T)
+            sort_indices = np.argsort(-sim_matrix, axis=1)[:, :top_k]
+            ranked_ids = np.take(cand_ids, sort_indices)
             ranked_scores = np.take_along_axis(sim_matrix, sort_indices, axis=1)
         elif metric_lower in ("l2", "euclidean"):
             q_sq = np.sum(q_arr**2, axis=1, keepdims=True)
@@ -1496,10 +1506,10 @@ class Index:
             dists_sq = np.maximum(0.0, q_sq + c_sq - 2.0 * np.dot(q_arr, cand_vecs.T))
             dists = np.sqrt(dists_sq)
             sort_indices = np.argsort(dists, axis=1)[:, :top_k]
-            ranked_ids = np.take(cand_arr, sort_indices)
+            ranked_ids = np.take(cand_ids, sort_indices)
             ranked_scores = np.take_along_axis(dists, sort_indices, axis=1)
         else:
-            raise ValueError(f"Unsupported metric '{metric}'. Choose 'cosine' or 'l2'.")
+            raise ValueError(f"Unsupported metric '{metric}'. Choose 'cosine', 'dot', 'ip', or 'l2'.")
 
         if is_single_query:
             return ranked_ids[0], ranked_scores[0]
@@ -1518,7 +1528,7 @@ class Index:
             words_per_record = max(1, (bytes_per_rec + 7) // 8)
         else:
             tier_dim = self.dimension
-            words_per_record = (tier_dim + 63) // 64
+            words_per_record = max(1, (self.dimension + 63) // 64)
 
         return FpgaDescriptor(
             tier_index=tier_idx,
@@ -1536,7 +1546,6 @@ class Index:
     # --------------------------------------------------------------------------
     # Single-File Container Metadata & Partitions
     # --------------------------------------------------------------------------
-    @property
     def user_metadata(self) -> dict:
         """User metadata dictionary embedded in the single-file container."""
         if hasattr(self._ffi.lib, "vdb_get_user_metadata"):
@@ -1557,6 +1566,10 @@ class Index:
                 toc = self._db._read_container_toc(c_path)
                 return toc.get("user_metadata", {})
         return {}
+
+    def get_user_metadata(self) -> dict:
+        """Alias for user_metadata()."""
+        return self.user_metadata()
 
     @property
     def arrow_table(self) -> Any:

@@ -31,6 +31,11 @@ from .core import (
     reset_isolate,
     shrink_to_fit,
 )
+from .mips import (
+    SphericalLiftingTransformer,
+    MipsIndex,
+    ConcentricShellIndex,
+)
 from .ffi import PithosNativeError
 
 __version__ = "2.2.5"
@@ -44,6 +49,9 @@ __all__ = [
     "QuantizationMode",
     "SidecarMode",
     "FpgaDescriptor",
+    "SphericalLiftingTransformer",
+    "MipsIndex",
+    "ConcentricShellIndex",
     "PithosNativeError",
     "reset_isolate",
     "shrink_to_fit",
