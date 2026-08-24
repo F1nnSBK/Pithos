@@ -1026,8 +1026,8 @@ class Index:
             out_dists = np.ascontiguousarray(D, dtype=np.int32)
 
         import platform
-        # M4 Apple Silicon workaround: Force python fallback to avoid GraalVM SIGSEGV
-        force_python = platform.machine() == "arm64" and platform.system() == "Darwin"
+        # ARM64/aarch64 workaround: Force python fallback to avoid GraalVM Panama/MemorySegment bugs on ARM backend
+        force_python = platform.machine().lower() in ("arm64", "aarch64")
         
         if cuda and self._ffi._has_cuda:
             status = self._ffi.lib.vdb_cuda_batch_search(

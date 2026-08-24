@@ -109,7 +109,7 @@ class TestPithosSidecars(unittest.TestCase):
             self.assertEqual(len(results), 5)
             self.assertEqual(results[0].id, self.ids[10])
 
-    @unittest.skipIf(platform.machine() == "arm64" and platform.system() == "Darwin", "NONE sidecar is unsupported on Apple Silicon due to missing Python search fallback rotation matrix")
+    @unittest.skipIf(platform.machine().lower() in ("arm64", "aarch64"), "NONE sidecar is unsupported on ARM64 platforms due to missing Python search fallback rotation matrix")
     def test_03_compile_none_sidecar(self):
         """Validates sidecarMode = NONE with asymmetric rotated distance fallback."""
         base_path = os.path.join(self.temp_dir, "idx_none")
