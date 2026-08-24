@@ -78,17 +78,23 @@ def main():
         recall_with += len(intersect) / 10.0
     recall_with /= num_queries
     
-    # WITHOUT FP16
-    print("[4/4] Benchmarking Search WITHOUT FP16...")
-    t0 = time.perf_counter()
-    res_ids_without, _ = engine.batch_search("idx_without", queries, k=10)
-    t_search_without = (time.perf_counter() - t0) * 1000.0
-    
-    recall_without = 0.0
-    for q_idx in range(num_queries):
-        intersect = np.intersect1d(res_ids_without[q_idx], gt_ids[q_idx])
-        recall_without += len(intersect) / 10.0
-    recall_without /= num_queries
+    import platform
+    if platform.machine().lower() in ("arm64", "aarch64"):
+        print("[4/4] SKIPPING Search WITHOUT FP16 on ARM64 (SidecarMode.NONE is unsupported)")
+        recall_without = 0.0
+        t_search_without = 0.0
+    else:
+        # WITHOUT FP16
+        print("[4/4] Benchmarking Search WITHOUT FP16...")
+        t0 = time.perf_counter()
+        res_ids_without, _ = engine.batch_search("idx_without", queries, k=10)
+        t_search_without = (time.perf_counter() - t0) * 1000.0
+        
+        recall_without = 0.0
+        for q_idx in range(num_queries):
+            intersect = np.intersect1d(res_ids_without[q_idx], gt_ids[q_idx])
+            recall_without += len(intersect) / 10.0
+        recall_without /= num_queries
     
     # 4. Test Resonant Voting (Family Voting should be identical)
     print("\n[Voting] Testing Resonant Voting consistency...")
