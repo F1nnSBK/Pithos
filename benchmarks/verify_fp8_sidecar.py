@@ -85,31 +85,41 @@ def main():
         with VectorDb() as db:
             index = db.load_index(f"idx_{label}", path)
 
-            # Warmup
-            _ = index.search(queries[:5], k=k)
+            import platform
+            is_arm64 = platform.machine().lower() in ("arm64", "aarch64")
+            
+            if sidecar_mode == SidecarMode.NONE and is_arm64:
+                print(f"  [SKIPPED] Search unsupported on ARM64 for SidecarMode.NONE")
+                lat_per_query_us = 0.0
+                qps = 0.0
+                r1 = 0.0
+                r10 = 0.0
+            else:
+                # Warmup
+                _ = index.search(queries[:5], k=k)
 
-            # Latency benchmark
-            t0 = time.perf_counter()
-            retrieved = index.search(queries, k=k)
-            query_time_total = time.perf_counter() - t0
-            lat_per_query_us = (query_time_total / num_queries) * 1_000_000.0
-            qps = num_queries / query_time_total
+                # Latency benchmark
+                t0 = time.perf_counter()
+                retrieved = index.search(queries, k=k)
+                query_time_total = time.perf_counter() - t0
+                lat_per_query_us = (query_time_total / num_queries) * 1_000_000.0
+                qps = num_queries / query_time_total
 
-            # Accuracy evaluation
-            recall1_count = 0
-            recall10_count = 0
-            for q_idx in range(num_queries):
-                res = retrieved[q_idx]
-                pred_ids = [r.id for r in res]
-                gt_ids = set(gt_neighbors[q_idx])
+                # Accuracy evaluation
+                recall1_count = 0
+                recall10_count = 0
+                for q_idx in range(num_queries):
+                    res = retrieved[q_idx]
+                    pred_ids = [r.id for r in res]
+                    gt_ids = set(gt_neighbors[q_idx])
 
-                if pred_ids[0] == gt_neighbors[q_idx][0]:
-                    recall1_count += 1
-                overlap = len(set(pred_ids) & gt_ids)
-                recall10_count += (overlap / k)
+                    if pred_ids[0] == gt_neighbors[q_idx][0]:
+                        recall1_count += 1
+                    overlap = len(set(pred_ids) & gt_ids)
+                    recall10_count += (overlap / k)
 
-            r1 = (recall1_count / num_queries) * 100.0
-            r10 = (recall10_count / num_queries) * 100.0
+                r1 = (recall1_count / num_queries) * 100.0
+                r10 = (recall10_count / num_queries) * 100.0
 
             results_table.append({
                 "label": label,
