@@ -77,18 +77,7 @@ public class FlatIndex implements Index {
     private final int[] tierSizes;
     private final ByteBuffer[] tierVectors;
 
-    private static final sun.misc.Unsafe UNSAFE;
-    static {
-        sun.misc.Unsafe u = null;
-        try {
-            java.lang.reflect.Field f = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
-            f.setAccessible(true);
-            u = (sun.misc.Unsafe) f.get(null);
-        } catch (Throwable t) {
-            // fallback
-        }
-        UNSAFE = u;
-    }
+
 
     private static final ThreadLocal<long[]> VISITED_SCRATCH = ThreadLocal.withInitial(() -> new long[1024]);
     private final int numWorkers;
@@ -1427,10 +1416,10 @@ public class FlatIndex implements Index {
 
     private double computeExactL2FP16(float[] rawQuery, long rowIdx, short[] localFp16, double currentLimit) {
         long rowOffset = rowIdx * dimension * 2L;
-        // MemorySegment.copy(fp16Segment, ValueLayout.JAVA_SHORT, rowOffset, localFp16, 0, dimension);
         double sum = 0.0;
         for (int d = 0; d < dimension; d++) {
-            float dbVal = Float.float16ToFloat(localFp16[d]); // will be 0
+            short fp16Val = fp16Segment.get(ValueLayout.JAVA_SHORT, rowOffset + d * 2L);
+            float dbVal = Float.float16ToFloat(fp16Val);
             double diff = rawQuery[d] - dbVal;
             sum += diff * diff;
             if ((d & 7) == 7 && sum > currentLimit) {
@@ -1509,6 +1498,10 @@ public class FlatIndex implements Index {
 
     @Override
     public long queryPlanetaryGrid(float[][] queries, int[] families, int[] thresholds, long rawMaskAddress, MemorySegment votingMask) {
+        final MemorySegment finalVotingMask = (votingMask == null && rawMaskAddress != 0L) 
+            ? MemorySegment.ofAddress(rawMaskAddress).reinterpret(size) 
+            : votingMask;
+
         if (queries == null || queries.length == 0)
             return 0;
         int numQueries = queries.length;
@@ -1549,10 +1542,8 @@ public class FlatIndex implements Index {
                 for (int w = 0; w < numWorkers; w++) {
                     mergedVal |= threadLocalMasks[w].get(ValueLayout.JAVA_BYTE, i);
                 }
-                if (rawMaskAddress != 0L && UNSAFE != null) {
-                    UNSAFE.putByte(rawMaskAddress + i, mergedVal);
-                } else if (votingMask != null) {
-                    votingMask.set(ValueLayout.JAVA_BYTE, i, mergedVal);
+                if (finalVotingMask != null) {
+                    finalVotingMask.set(ValueLayout.JAVA_BYTE, i, mergedVal);
                 }
                 if (Integer.bitCount(mergedVal & 0xFF) >= 5) {
                     resonantCount++;
@@ -1871,6 +1862,10 @@ public class FlatIndex implements Index {
         ByteBuffer votingBuffer = ByteBuffer.allocateDirect(Math.toIntExact(size));
         long votingBufferPtr = CudaMemoryManager.getDirectBufferAddress(votingBuffer);
         CudaMemoryManager.copyFromDevice(votingBufferPtr, deviceVotingMask, size);
+        
+        final MemorySegment finalVotingMask = (votingMask == null && rawMaskAddress != 0L) 
+            ? MemorySegment.ofAddress(rawMaskAddress).reinterpret(size) 
+            : votingMask;
 
         long count = 0;
         for (int i = 0; i < size; i++) {
@@ -1878,10 +1873,8 @@ public class FlatIndex implements Index {
             if (v != 0) {
                 count++;
             }
-            if (rawMaskAddress != 0L && UNSAFE != null) {
-                UNSAFE.putByte(rawMaskAddress + i, v);
-            } else if (votingMask != null) {
-                votingMask.set(ValueLayout.JAVA_BYTE, i, v);
+            if (finalVotingMask != null) {
+                finalVotingMask.set(ValueLayout.JAVA_BYTE, i, v);
             }
         }
 
