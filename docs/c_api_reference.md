@@ -7,8 +7,8 @@ This document details the native C interface exposed by the compiled `libpithos`
 ## Developer Integration Demos
 
 For direct references on how to link and call Pithos:
-- **[ZeroCostDemo.java](file:///Users/finnhertsch/projects/lcvk/examples/java/ZeroCostDemo.java):** Demonstrates Java-level GC-free memory mapping via Project Panama's Foreign Function & Memory (FFM) API.
-- **[demo.c](file:///Users/finnhertsch/projects/lcvk/examples/cpp/demo.c):** A complete, self-contained C/C++ search client showing isolate management and native query scans.
+- **[ZeroCostDemo.java](../examples/java/ZeroCostDemo.java):** Demonstrates Java-level GC-free memory mapping via Project Panama's Foreign Function & Memory (FFM) API.
+- **[demo.c](../examples/cpp/demo.c):** A complete, self-contained C/C++ search client showing isolate management and native query scans.
 
 ---
 

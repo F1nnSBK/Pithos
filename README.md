@@ -111,8 +111,8 @@ Precompiled native libraries are automatically published on GitHub Releases:
 
 Detailed architectural guides, mathematical specifications, and C-API references:
 
-- **[Architectural Principles & Core Innovations](docs/ARCHITECTURAL_PRINCIPLES.md):** Mathematical foundations, block-diagonal Walsh-Hadamard rotations, SVD-driven spectral truncation, and the 3-gate read-path cascade.
-- **[C-API Reference & Runtime Configuration](docs/C_API_REFERENCE.md):** Complete declarations of entry points (`libpithos`), FFI mappings, CUDA wrappers, and hardware co-design guidelines (FPGA/DMA offloading).
+- **[Architectural Principles & Core Innovations](docs/architecture.md):** Mathematical foundations, block-diagonal Walsh-Hadamard rotations, SVD-driven spectral truncation, and the 3-gate read-path cascade.
+- **[C-API Reference & Runtime Configuration](docs/c_api_reference.md):** Complete declarations of entry points (`libpithos`), FFI mappings, CUDA wrappers, and hardware co-design guidelines (FPGA/DMA offloading).
 - **[CUDA GPU Acceleration Guide](docs/cuda_integration.md):** Shared memory popcount kernels, asynchronous stream pipelines, and multi-family voting.
 
 ---
