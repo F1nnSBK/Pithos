@@ -469,6 +469,152 @@ def _pad_to(file_obj, target_offset: int) -> None:
         file_obj.write(bytes(target_offset - cur))
 
 
+def _java_rademacher_signs(dimension: int, seed: int = 42) -> np.ndarray:
+    """Generates Rademacher +/-1 signs matching java.util.Random(seed).nextBoolean()."""
+    s = (seed ^ 0x5DEECE66D) & ((1 << 48) - 1)
+    signs = np.empty(dimension, dtype=np.float32)
+    for i in range(dimension):
+        s = (s * 0x5DEECE66D + 0xB) & ((1 << 48) - 1)
+        signs[i] = 1.0 if ((s >> 47) & 1) != 0 else -1.0
+    return signs
+
+
+def _fwht_axis1_inplace(arr_3d: np.ndarray) -> None:
+    """Applies normalized Fast Walsh-Hadamard Transform in-place along axis 1 of a 3D array (N, u, v)."""
+    N, u, v = arr_3d.shape
+    if u <= 1:
+        return
+    h = 1
+    while h < u:
+        reshaped = arr_3d.reshape(N, u // (2 * h), 2, h, v)
+        x = reshaped[:, :, 0, :, :].copy()
+        y = reshaped[:, :, 1, :, :].copy()
+        reshaped[:, :, 0, :, :] = x + y
+        reshaped[:, :, 1, :, :] = x - y
+        h <<= 1
+    arr_3d *= np.float32(1.0 / math.sqrt(u))
+
+
+def _dct2_orthogonal_matrix(v: int) -> np.ndarray:
+    """Generates Type-II Discrete Cosine Transform orthogonal matrix of size v x v."""
+    idx = np.arange(v, dtype=np.float64)
+    mat = np.cos(math.pi * idx[:, None] * (2.0 * idx[None, :] + 1.0) / (2.0 * v))
+    mat[0, :] *= math.sqrt(1.0 / v)
+    if v > 1:
+        mat[1:, :] *= math.sqrt(2.0 / v)
+    return mat.astype(np.float32)
+
+
+def _precondition_and_rotate_array(
+    vecs: np.ndarray, dimension: int, tiers: Sequence[int]
+) -> np.ndarray:
+    """Applies Rademacher preconditioning and block-diagonal WHT/Kronecker rotation matching TransformOperator."""
+    is_1d = vecs.ndim == 1
+    z = np.array(vecs, dtype=np.float32, copy=True)
+    if is_1d:
+        z = z.reshape(1, -1)
+    N = z.shape[0]
+    signs = _java_rademacher_signs(dimension)
+    z *= signs[None, :]
+    prev_bound = 0
+    for end_bound in tiers:
+        end_b = int(end_bound)
+        width = end_b - prev_bound
+        if width > 0:
+            u = width & -width
+            v = width // u
+            block = z[:, prev_bound:end_b].reshape(N, u, v)
+            if v > 1:
+                omega = _dct2_orthogonal_matrix(v)
+                block[:] = np.einsum("ij,nuj->nui", omega, block)
+            _fwht_axis1_inplace(block)
+        prev_bound = end_b
+    return z[0] if is_1d else z
+
+
+def _back_project_array(
+    z_vecs: np.ndarray, dimension: int, tiers: Sequence[int]
+) -> np.ndarray:
+    """Applies inverse block-diagonal WHT/Kronecker rotation and Rademacher un-preconditioning."""
+    is_1d = z_vecs.ndim == 1
+    x = np.array(z_vecs, dtype=np.float32, copy=True)
+    if is_1d:
+        x = x.reshape(1, -1)
+    N = x.shape[0]
+    prev_bound = 0
+    for end_bound in tiers:
+        end_b = int(end_bound)
+        width = end_b - prev_bound
+        if width > 0:
+            u = width & -width
+            v = width // u
+            block = x[:, prev_bound:end_b].reshape(N, u, v)
+            if v > 1:
+                omega = _dct2_orthogonal_matrix(v)
+                block[:] = np.einsum("ji,nuj->nui", omega, block)
+            _fwht_axis1_inplace(block)
+        prev_bound = end_b
+    signs = _java_rademacher_signs(dimension)
+    x *= signs[None, :]
+    return x[0] if is_1d else x
+
+
+def _populate_sub64_container_tiers(
+    path: str, vecs: np.ndarray, dimension: int, tiers_arr: Sequence[int], q_mode: int = 0
+) -> None:
+    """Ensures sub-64-bit tier sections in .pithos containers are populated even when built via legacy dylibs."""
+    try:
+        file_size = os.path.getsize(path)
+        if file_size < 148:
+            return
+        with open(path, "rb") as f:
+            f.seek(file_size - 20)
+            trailer = f.read(20)
+            if trailer[12:20] != b"PITHOSDB":
+                return
+            toc_offset = int.from_bytes(trailer[0:8], byteorder="little", signed=True)
+            toc_len = int.from_bytes(trailer[8:12], byteorder="little", signed=True)
+            f.seek(toc_offset)
+            toc = json.loads(f.read(toc_len).decode("utf-8"))
+        sections = toc.get("sections", {})
+        z_vecs = _precondition_and_rotate_array(vecs, dimension, tiers_arr)
+        if int(q_mode) == 1:
+            abs_z = np.sort(np.abs(z_vecs), axis=1)
+            thresh_idx = min(dimension - 1, int(dimension * 0.20))
+            thresholds = abs_z[:, thresh_idx : thresh_idx + 1]
+        prev_bound = 0
+        with open(path, "r+b") as f:
+            for k, end_bound in enumerate(tiers_arr):
+                end_b = int(end_bound)
+                width = end_b - prev_bound
+                t_sec = sections.get(f"tier_{k}")
+                if t_sec and (width & 63) != 0 and t_sec.get("length", 0) > 0:
+                    if int(q_mode) == 1:
+                        z_slice = z_vecs[:, prev_bound:end_b]
+                        m_bits = (np.abs(z_slice) >= thresholds).astype(np.uint8)
+                        s_bits = ((z_slice >= 0) & (m_bits == 1)).astype(np.uint8)
+                        s_packed = np.packbits(s_bits, axis=-1, bitorder="little")
+                        m_packed = np.packbits(m_bits, axis=-1, bitorder="little")
+                        packed = np.concatenate([s_packed, m_packed], axis=-1).tobytes()
+                        t0_mih_src = s_packed.tobytes()
+                    else:
+                        bits = (z_vecs[:, prev_bound:end_b] >= 0).astype(np.uint8)
+                        packed = np.packbits(bits, axis=-1, bitorder="little").tobytes()
+                        t0_mih_src = packed
+                    if len(packed) == t_sec["length"]:
+                        f.seek(t_sec["offset"])
+                        f.write(packed)
+                        if k == 0 and "prefix_table" in sections:
+                            p_sec = sections["prefix_table"]
+                            mih_bytes = _build_mih_csr_table(t0_mih_src, len(vecs))
+                            if p_sec.get("offset", 0) > 0 and len(mih_bytes) == p_sec.get("length", 0):
+                                f.seek(p_sec["offset"])
+                                f.write(mih_bytes)
+                prev_bound = end_b
+    except Exception:
+        pass
+
+
 # ==============================================================================
 # Enumerations & Data Classes
 # ==============================================================================
@@ -1025,10 +1171,8 @@ class Index:
             assert D.shape == (num_queries, k)
             out_dists = np.ascontiguousarray(D, dtype=np.int32)
 
-        import platform
-        # ARM64/aarch64 workaround: Force python fallback to avoid GraalVM Panama/MemorySegment bugs on ARM backend
-        force_python = platform.machine().lower() in ("arm64", "aarch64")
-        
+        force_python = bool(force_python)
+
         if cuda and self._ffi._has_cuda:
             status = self._ffi.lib.vdb_cuda_batch_search(
                 self._ffi.thread,
@@ -1042,6 +1186,24 @@ class Index:
             self._ffi.check_status(status, "search")
         elif force_python:
             self._python_search_fallback(q_arr, k, out_ids, out_dists)
+        elif getattr(self, "_mips_transformer", None) is not None:
+            if self.tier_count > 1:
+                self.set_energy_budget(0.5)
+            native_k = max(k, min(max(k * 16, 128), max(1, len(self))))
+            native_ids = np.empty((num_queries, native_k), dtype=np.int64)
+            native_dists = np.empty((num_queries, native_k), dtype=np.int32)
+            status = self._ffi.lib.vdb_batch_search(
+                self._ffi.thread,
+                self._name.encode("utf-8"),
+                q_arr.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(num_queries),
+                ctypes.c_int(native_k),
+                native_ids.ctypes.data_as(ctypes.c_void_p),
+                native_dists.ctypes.data_as(ctypes.c_void_p),
+            )
+            self._ffi.check_status(status, "search")
+            out_ids[:, :] = native_ids[:, :k]
+            out_dists[:, :] = native_dists[:, :k]
         else:
             status = self._ffi.lib.vdb_batch_search(
                 self._ffi.thread,
@@ -1056,7 +1218,7 @@ class Index:
 
         if return_numpy or D is not None or I is not None:
             if getattr(self, "_mips_transformer", None) is not None:
-                sims = 1.0 - (out_dists.astype(np.float32) / 1000000.0)
+                sims = 1.0 - (out_dists.astype(np.float32) / 2000000.0)
                 raw_scores = self._mips_transformer.untransform_scores(sims, q_norms)
                 # Note: If D was pre-allocated as int32, we cannot write floats into it seamlessly in python, 
                 # but we return the raw_scores arrays directly.
@@ -1073,7 +1235,7 @@ class Index:
                     continue
                 sc = out_dists[q_idx, i]
                 if is_mips:
-                    approx_sim = 1.0 - (float(sc) / 1000000.0)
+                    approx_sim = 1.0 - (float(sc) / 2000000.0)
                     q_n = q_norms if is_single else q_norms[q_idx]
                     orig_sim = self._mips_transformer.untransform_scores(approx_sim, float(q_n))
                     q_res.append(SearchResult(id=rec_id, score=float(orig_sim)))
@@ -1131,23 +1293,20 @@ class Index:
         return self.search(queries, k=k, cuda=cuda, return_numpy=True)
 
     def _python_search_fallback(self, q_arr: np.ndarray, k: int, out_ids: np.ndarray, out_dists: np.ndarray) -> None:
-        """NumPy vector-based exact search fallback to prevent JVM crashes on Apple Silicon M-series."""
-        if self.sidecar_mode == SidecarMode.NONE:
-            raise RuntimeError("SidecarMode.NONE is not supported on Apple Silicon (M-series) due to native search crashes. Please use SidecarMode.FP8, FP16, or FP4.")
-            
+        """NumPy vector-based exact search fallback."""
         vecs = self.get_vectors()
         if len(vecs) == 0:
             out_ids.fill(-1)
             out_dists.fill(0)
             return
 
-        # Fetch index metric from superblock
+        # Fetch index metric from superblock (uint16 at byte offset 24)
         metric = "cosine"
         try:
             c_path = self._base_path if self._base_path.endswith(".pithos") else f"{self._base_path}.pithos"
             with open(c_path, "rb") as f:
-                f.seek(32)
-                m_code = int.from_bytes(f.read(4), byteorder="little")
+                f.seek(24)
+                m_code = int.from_bytes(f.read(2), byteorder="little", signed=True)
                 if m_code == 1:
                     metric = "l2"
                 elif m_code == 2:
@@ -1157,21 +1316,22 @@ class Index:
 
         num_queries = q_arr.shape[0]
         ids_buf = self.get_ids_buffer()
+        tiers = self._get_tiers() if self.sidecar_mode == SidecarMode.NONE else None
 
         for q_idx in range(num_queries):
             q = q_arr[q_idx]
 
-            # If SidecarMode.NONE, vecs are 1-bit reconstructions (-1 / 1). 
-            # We must binarize the query as well to perform symmetric distance, 
-            # mirroring native Hamming space behavior to preserve self-retrieval.
-            if self.sidecar_mode == SidecarMode.NONE:
-                q_sym = np.where(q > 0, 1.0, -1.0).astype(np.float32)
-                q_sym /= math.sqrt(vecs.shape[1])
+            # If SidecarMode.NONE, vecs are back-projected 1-bit WHT reconstructions.
+            # Binarizing the query in the same WHT space preserves symmetric Hamming distance and self-retrieval.
+            if self.sidecar_mode == SidecarMode.NONE and tiers is not None:
+                z_q = _precondition_and_rotate_array(q, vecs.shape[1], tiers)
+                z_q_bin = np.where(z_q >= 0, 1.0, -1.0).astype(np.float32) / math.sqrt(vecs.shape[1])
+                q_sym = _back_project_array(z_q_bin, vecs.shape[1], tiers)
             else:
                 q_sym = q
 
             if metric == "l2":
-                dists = np.sum((vecs - q_sym) ** 2, axis=1)
+                dists = np.sum((vecs - q_sym) ** 2, axis=1) * 1000000.0
                 best_idx = np.argsort(dists)[:k]
                 out_ids[q_idx, :len(best_idx)] = ids_buf[best_idx]
                 out_dists[q_idx, :len(best_idx)] = dists[best_idx].astype(np.int32)
@@ -1183,8 +1343,8 @@ class Index:
                     denom = q_n * v_n
                     denom[denom == 0] = 1e-10
                     sim = dots / denom
-                    # Native cosine returns: (int)((1.0 - sim) * 1000000.0)
-                    scores = (1.0 - sim) * 1000000.0
+                    # Native cosine/L2 on unit sphere returns: (int)(2.0 * (1.0 - sim) * 1000000.0)
+                    scores = 2.0 * (1.0 - sim) * 1000000.0
                     best_idx = np.argsort(scores)[:k]
                     out_ids[q_idx, :len(best_idx)] = ids_buf[best_idx]
                     out_dists[q_idx, :len(best_idx)] = scores[best_idx].astype(np.int32)
@@ -1455,6 +1615,52 @@ class Index:
 
         return None
 
+    def _get_tiers(self) -> List[int]:
+        """Reads configured Matryoshka tier boundaries from container superblock or index header."""
+        c_path = self._base_path if self._base_path.endswith(".pithos") else f"{self._base_path}.pithos"
+        if os.path.exists(c_path) and os.path.isfile(c_path):
+            try:
+                with open(c_path, "rb") as f:
+                    sb = f.read(64)
+                if len(sb) >= 46 and sb[:8] == b"DIOGENES":
+                    num_t = int.from_bytes(sb[28:30], byteorder="little", signed=True)
+                    if 0 < num_t <= 8:
+                        tiers = [
+                            int.from_bytes(sb[30 + 2 * i : 32 + 2 * i], byteorder="little", signed=True)
+                            for i in range(num_t)
+                        ]
+                        if tiers[-1] == self.dimension:
+                            return tiers
+            except Exception:
+                pass
+        if os.path.exists(self._base_path) and os.path.isfile(self._base_path):
+            try:
+                with open(self._base_path, "rb") as f:
+                    hdr = f.read(64)
+                if len(hdr) >= 61 and hdr[:4] == b"PLAN":
+                    num_t = int.from_bytes(hdr[25:29], byteorder="little", signed=True)
+                    if 0 < num_t <= 8:
+                        tiers = [
+                            int.from_bytes(hdr[29 + 4 * i : 33 + 4 * i], byteorder="little", signed=True)
+                            for i in range(num_t)
+                        ]
+                        if tiers[-1] == self.dimension:
+                            return tiers
+            except Exception:
+                pass
+        return [self.dimension]
+
+    def _is_sidecar_in_wht_space(self) -> bool:
+        """Returns True if the container TOC marks the sidecar as stored in rotated WHT space."""
+        c_path = self._base_path if self._base_path.endswith(".pithos") else f"{self._base_path}.pithos"
+        if os.path.exists(c_path) and os.path.isfile(c_path):
+            try:
+                toc = self._db._read_container_toc(c_path)
+                return toc.get("sections", {}).get("sidecar", {}).get("space") == "wht"
+            except Exception:
+                return False
+        return False
+
     def get_vectors(
         self,
         indices: Optional[Union[int, Sequence[int], np.ndarray]] = None,
@@ -1498,6 +1704,8 @@ class Index:
                 raise RuntimeError("FP8 sidecar buffer could not be loaded.")
             raw_fp8 = buf.reshape(total_records, dim)[idx_arr]
             floats = _decode_fp8_e4m3_array(raw_fp8)
+            if self._is_sidecar_in_wht_space():
+                floats = _back_project_array(floats, dim, self._get_tiers())
             return floats[0] if is_scalar else floats
         elif mode == SidecarMode.FP16:
             buf = self.get_sidecar_buffer()
@@ -1514,22 +1722,35 @@ class Index:
             bytes_per_rec = num_blocks * 9
             raw_fp4 = buf.reshape(total_records, bytes_per_rec)[idx_arr]
             floats = _decode_nvfp4_blocks_array(raw_fp4, dim)
+            if self._is_sidecar_in_wht_space():
+                floats = _back_project_array(floats, dim, self._get_tiers())
             return floats[0] if is_scalar else floats
         else:
-            # Fallback to sign-reconstruction from all active tiers
+            # Fallback to sign-reconstruction from all active tiers in WHT space, then back-project
+            tiers = self._get_tiers()
             t_bits = []
+            prev_bound = 0
             for t in range(self.tier_count):
+                end_bound = tiers[t] if t < len(tiers) else dim
+                width = max(0, end_bound - prev_bound)
+                prev_bound = end_bound
                 t_buf = self.get_tier_buffer(t)
                 if len(t_buf) == 0:
+                    if width > 0:
+                        t_bits.append(np.zeros((n_req, width), dtype=np.uint8))
                     continue
                 bytes_per_rec = len(t_buf) // total_records
                 t_selected = t_buf.reshape(total_records, bytes_per_rec)[idx_arr]
-                t_bits.append(np.unpackbits(t_selected, axis=-1, bitorder="big"))
+                unpacked = np.unpackbits(t_selected, axis=-1, bitorder="little")
+                if width > 0:
+                    unpacked = unpacked[..., :width]
+                t_bits.append(unpacked)
 
             if len(t_bits) > 0:
                 all_bits = np.concatenate(t_bits, axis=-1)[..., :dim]
-                reconstructed = np.where(all_bits == 1, 1.0, -1.0).astype(np.float32)
-                reconstructed /= math.sqrt(dim)
+                z_reconstructed = np.where(all_bits == 1, 1.0, -1.0).astype(np.float32)
+                z_reconstructed /= math.sqrt(dim)
+                reconstructed = _back_project_array(z_reconstructed, dim, tiers)
             else:
                 reconstructed = np.zeros((n_req, dim), dtype=np.float32)
             return reconstructed[0] if is_scalar else reconstructed
@@ -2177,7 +2398,9 @@ class VectorDb:
         
         # --- Native MIPS Interception ---
         metric_lower = metric.lower()
-        if metric_lower in ("mips", "dot", "ip", "inner_product", "dot_product"):
+        is_mips_compile = metric_lower in ("mips", "dot", "ip", "inner_product", "dot_product")
+        orig_input_dim = dimension
+        if is_mips_compile:
             from .mips import SphericalLiftingTransformer
             transformer = SphericalLiftingTransformer(pad_to_multiple=64)
             vecs = transformer.fit_transform(vecs)
@@ -2206,9 +2429,15 @@ class VectorDb:
             ids_arr = _check_dtype_int64(ids, "ids")
 
         if tiers is None:
-            tiers_arr = np.array([dimension], dtype=np.int32)
+            dir_bound = _align64(orig_input_dim)
+            if is_mips_compile and 0 < dir_bound < dimension:
+                tiers_arr = np.array([dir_bound, dimension], dtype=np.int32)
+            else:
+                tiers_arr = np.array([dimension], dtype=np.int32)
         else:
             tiers_arr = np.ascontiguousarray(tiers, dtype=np.int32)
+            if len(tiers_arr) > 0 and tiers_arr[-1] < dimension:
+                tiers_arr = np.append(tiers_arr, dimension).astype(np.int32)
 
         if isinstance(sidecar_mode, str):
             sidecar_map = {
@@ -2250,6 +2479,39 @@ class VectorDb:
                     user_json_str
                 )
                 ffi.check_status(status, "compile monolithic container")
+            if is_mips_compile and os.path.exists(path):
+                try:
+                    with open(path, "r+b") as f:
+                        sb = bytearray(f.read(128))
+                        toc_off = int.from_bytes(sb[46:54], byteorder="little", signed=True)
+                        toc_len = int.from_bytes(sb[54:58], byteorder="little", signed=True)
+                        f.seek(toc_off)
+                        toc = json.loads(f.read(toc_len).decode("utf-8"))
+                        toc.get("sections", {}).pop("prefix_table", None)
+                        new_toc = json.dumps(toc).encode("utf-8")
+                        sb[54:58] = len(new_toc).to_bytes(4, byteorder="little", signed=True)
+                        sb[60:76] = bytes(16)
+                        f.seek(0)
+                        f.write(sb)
+                        f.seek(toc_off)
+                        f.write(new_toc)
+                        f.seek(-20, 2)
+                        f.write(
+                            toc_off.to_bytes(8, byteorder="little", signed=True)
+                            + len(new_toc).to_bytes(4, byteorder="little", signed=True)
+                            + b"PITHOSDB"
+                        )
+                except Exception:
+                    pass
+            if q_mode == QuantizationMode.ONE_BIT:
+                prev_b = 0
+                has_sub64 = False
+                for tb in tiers_arr:
+                    if ((int(tb) - prev_b) & 63) != 0:
+                        has_sub64 = True
+                    prev_b = int(tb)
+                if has_sub64:
+                    _populate_sub64_container_tiers(path, vecs, dimension, tiers_arr)
         else:
             _write_pithos_container_file(
                 path=path,
@@ -2321,12 +2583,6 @@ class VectorDb:
         if total_records <= 0:
             raise ValueError(f"total_records must be > 0, got {total_records}")
 
-        if tiers is None:
-            tiers_arr = np.array([dimension], dtype=np.int32)
-        else:
-            tiers_arr = np.ascontiguousarray(tiers, dtype=np.int32)
-        num_tiers = len(tiers_arr)
-
         if isinstance(sidecar_mode, str):
             sidecar_map = {
                 "none": SidecarMode.NONE,
@@ -2362,6 +2618,14 @@ class VectorDb:
                 user_metadata = {}
             user_metadata["mips_transformer"] = mips_transformer.to_dict()
 
+        if tiers is None:
+            tiers_arr = np.array([dimension], dtype=np.int32)
+        else:
+            tiers_arr = np.ascontiguousarray(tiers, dtype=np.int32)
+            if len(tiers_arr) > 0 and tiers_arr[-1] < dimension:
+                tiers_arr = np.append(tiers_arr, dimension).astype(np.int32)
+        num_tiers = len(tiers_arr)
+
         metric_code = metric_map.get(metric_lower, 0)
 
         SUPERBLOCK_SIZE = 128
@@ -2378,11 +2642,11 @@ class VectorDb:
             width = int(tiers_arr[k]) - prev_bound
             prev_bound = int(tiers_arr[k])
             if q_mode == QuantizationMode.TWO_BIT:
-                bpr = width // 4
+                bpr = 2 * ((width + 7) // 8)
             elif q_mode == QuantizationMode.FLOAT32:
                 bpr = width * 4
             else:
-                bpr = width // 8
+                bpr = (width + 7) // 8
             tier_bytes_per_rec.append(bpr)
             tier_offsets.append(current_offset)
             tier_lengths.append(total_records * bpr)

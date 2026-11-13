@@ -80,6 +80,11 @@ public class FlatIndex implements Index {
 
 
     private static final ThreadLocal<long[]> VISITED_SCRATCH = ThreadLocal.withInitial(() -> new long[1024]);
+    private static final ThreadLocal<float[]> QUERY_LUT_SCRATCH = new ThreadLocal<>();
+    private static final ThreadLocal<float[]> DB_FLOAT_SCRATCH = new ThreadLocal<>();
+    private final boolean sidecarInWhtSpace;
+    private final boolean allTiers64Aligned;
+    private final int totalTierLongs;
     private final int numWorkers;
     private volatile long chunkSize = 20000;
 
@@ -121,6 +126,11 @@ public class FlatIndex implements Index {
     /// Returns true if this index was loaded from a universal single-file container.
     public boolean isSingleFileContainer() {
         return isSingleFileContainer;
+    }
+
+    /// Returns true if FP8/FP4 sidecars are stored in orthogonally rotated WHT space.
+    public boolean isSidecarInWhtSpace() {
+        return sidecarInWhtSpace;
     }
 
     public FlatIndex(MemorySegment baseSegment, MemorySegment idsSegment, MemorySegment[] tierSegments,
@@ -173,16 +183,24 @@ public class FlatIndex implements Index {
         this.userMetadataJson = userMetadataJson;
         this.metadataPayloadSegment = metadataPayloadSegment;
         this.isSingleFileContainer = (userMetadataJson != null || metadataPayloadSegment != null);
+        this.sidecarInWhtSpace = !this.isSingleFileContainer
+                || (userMetadataJson != null && userMetadataJson.contains("\"space\": \"wht\""));
         this.prefixOffsetsSegment = prefixOffsetsSegment;
         this.prefixPostingsSegment = prefixPostingsSegment;
         this.hasPrefixTable = (prefixOffsetsSegment != null && prefixPostingsSegment != null);
 
         this.tierLongs = new int[numTiers];
+        boolean aligned64 = true;
         int prevBoundVal = 0;
         for (int idx = 0; idx < numTiers; idx++) {
-            this.tierLongs[idx] = (tiers[idx] - prevBoundVal) / 64;
+            int width = tiers[idx] - prevBoundVal;
+            if ((width & 63) != 0) {
+                aligned64 = false;
+            }
+            this.tierLongs[idx] = (width + 63) / 64;
             prevBoundVal = tiers[idx];
         }
+        this.allTiers64Aligned = aligned64;
 
         this.tierOffsets = new int[numTiers];
         this.tierSizes = new int[numTiers];
@@ -195,9 +213,42 @@ public class FlatIndex implements Index {
             this.tierVectors[idx] = tierSegments[idx].asByteBuffer();
             offset += this.tierLongs[idx];
         }
+        this.totalTierLongs = offset;
 
         this.transformOperator = new TransformOperator(dimension, tiers);
         this.numWorkers = Runtime.getRuntime().availableProcessors();
+    }
+
+    private long[] packQueryByTiers(long[] rawPacked) {
+        if (allTiers64Aligned) {
+            return rawPacked;
+        }
+        long[] perTier = new long[totalTierLongs];
+        int startDim = 0;
+        for (int t = 0; t < numTiers; t++) {
+            int width = tierSizes[t];
+            int count = tierLongs[t];
+            int base = tierOffsets[t];
+            for (int l = 0; l < count; l++) {
+                perTier[base + l] = TransformOperator.extractTierWord(rawPacked, startDim, width, l);
+            }
+            startDim = tiers[t];
+        }
+        return perTier;
+    }
+
+    static long readTierWord(MemorySegment seg, long offset, int validBytes) {
+        if (validBytes >= 8) {
+            return seg.get(ValueLayout.JAVA_LONG_UNALIGNED, offset);
+        } else if (validBytes == 4) {
+            return seg.get(ValueLayout.JAVA_INT_UNALIGNED, offset) & 0xFFFFFFFFL;
+        } else {
+            long word = 0L;
+            for (int b = 0; b < validBytes; b++) {
+                word |= ((long) seg.get(ValueLayout.JAVA_BYTE, offset + b) & 0xFFL) << (b * 8);
+            }
+            return word;
+        }
     }
 
     /// Returns the virtual memory address of the given tier segment for zero-copy DMA/FPGA access.
@@ -303,9 +354,9 @@ public class FlatIndex implements Index {
                 for (int k = 0; k < numTiers; k++) {
                     int width = tiers[k] - prevBound;
                     long bytesPerRecord = switch (qMode) {
-                        case 1 -> (width / 4);
+                        case 1 -> 2L * ((width + 7) / 8);
                         case 2 -> (width * 4L);
-                        default -> (width / 8);
+                        default -> (width + 7) / 8;
                     };
                     long tierLen = totalRecords * bytesPerRecord;
                     if (currentOffset + tierLen > fileSize || currentOffset < 0 || tierLen < 0) {
@@ -434,9 +485,9 @@ public class FlatIndex implements Index {
             int width = tiers[k] - prevBound;
             Path tierPath = Path.of(basePath + "_tier_" + k + ".bin");
             long bytesPerRecord = switch (qMode) {
-                case 1 -> (width / 4);
+                case 1 -> 2L * ((width + 7) / 8);
                 case 2 -> (width * 4L);
-                default -> (width / 8);
+                default -> (width + 7) / 8;
             };
             try (FileChannel channel = FileChannel.open(tierPath, StandardOpenOption.READ)) {
                 tierSegments[k] = channel.map(FileChannel.MapMode.READ_ONLY, 0, totalRecords * bytesPerRecord,
@@ -515,11 +566,276 @@ public class FlatIndex implements Index {
             return empty;
         }
 
-        if (hasPrefixTable) {
+        if (hasPrefixTable && size > 2048) {
             return searchWithPrefixRouting(queries, k);
         }
 
         return searchLinearScanParallel(queries, k);
+    }
+
+    private void evaluateCandidateGate2(
+            long rowIdx,
+            int activeT,
+            float[] zQuery,
+            long[] bQuery,
+            long[] bQueryMask,
+            int[] topDists,
+            long[] topRowIds,
+            int kCandidate) {
+        if (metadataSegment != null && (metadataSegment.get(ValueLayout.JAVA_LONG, rowIdx * 8L) & 1L) == 1L) {
+            return;
+        }
+
+        int currentLimit = topDists[kCandidate - 1];
+        int totalDist = 0;
+
+        if (qMode == 1) { // 2-bit QJL
+            for (int tierIdx = 0; tierIdx <= activeT; tierIdx++) {
+                int numLongs = tierLongs[tierIdx];
+                int width = tierSizes[tierIdx];
+                int offset = tierOffsets[tierIdx];
+                MemorySegment tierSeg = tierSegments[tierIdx];
+                int tierDist = 0;
+                if ((width & 63) == 0) {
+                    long baseOffset = rowIdx * (numLongs * 16L);
+                    int l = 0;
+                    for (; l + 3 < numLongs; l += 4) {
+                        long s0 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
+                        long m0 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + (l * 8L));
+                        long s1 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 1) * 8L));
+                        long m1 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + ((l + 1) * 8L));
+                        long s2 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 2) * 8L));
+                        long m2 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + ((l + 2) * 8L));
+                        long s3 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 3) * 8L));
+                        long m3 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + ((l + 3) * 8L));
+
+                        tierDist += 4 * Long.bitCount(m0 & bQueryMask[offset + l] & (s0 ^ bQuery[offset + l])) + Long.bitCount(m0 ^ bQueryMask[offset + l])
+                                  + 4 * Long.bitCount(m1 & bQueryMask[offset + l + 1] & (s1 ^ bQuery[offset + l + 1])) + Long.bitCount(m1 ^ bQueryMask[offset + l + 1])
+                                  + 4 * Long.bitCount(m2 & bQueryMask[offset + l + 2] & (s2 ^ bQuery[offset + l + 2])) + Long.bitCount(m2 ^ bQueryMask[offset + l + 2])
+                                  + 4 * Long.bitCount(m3 & bQueryMask[offset + l + 3] & (s3 ^ bQuery[offset + l + 3])) + Long.bitCount(m3 ^ bQueryMask[offset + l + 3]);
+                    }
+                    for (; l < numLongs; l++) {
+                        long dbSign = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
+                        long dbMask = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + (l * 8L));
+                        long qSign = bQuery[offset + l];
+                        long qMask = bQueryMask[offset + l];
+                        tierDist += 4 * Long.bitCount(dbMask & qMask & (dbSign ^ qSign)) + Long.bitCount(dbMask ^ qMask);
+                    }
+                } else {
+                    int halfBytes = (width + 7) / 8;
+                    long baseOffset = rowIdx * (2L * halfBytes);
+                    for (int l = 0; l < numLongs; l++) {
+                        int validBytes = Math.min(8, halfBytes - l * 8);
+                        int remBits = Math.min(64, width - (l << 6));
+                        long bitMask = (remBits == 64) ? -1L : ((1L << remBits) - 1L);
+                        long dbSign = readTierWord(tierSeg, baseOffset + (l * 8L), validBytes) & bitMask;
+                        long dbMask = readTierWord(tierSeg, baseOffset + halfBytes + (l * 8L), validBytes) & bitMask;
+                        long qSign = bQuery[offset + l] & bitMask;
+                        long qMask = bQueryMask[offset + l] & bitMask;
+                        tierDist += 4 * Long.bitCount(dbMask & qMask & (dbSign ^ qSign)) + Long.bitCount(dbMask ^ qMask);
+                    }
+                }
+                totalDist += tierDist;
+                if (totalDist > currentLimit) break;
+            }
+        } else if (qMode == 2) { // Float-Hybrid
+            float[] dbFloat = DB_FLOAT_SCRATCH.get();
+            if (dbFloat == null || dbFloat.length < dimension) {
+                dbFloat = new float[dimension];
+                DB_FLOAT_SCRATCH.set(dbFloat);
+            }
+            int dimOffset = 0;
+            for (int tierIdx = 0; tierIdx < numTiers; tierIdx++) {
+                int width = tierSizes[tierIdx];
+                long baseOffset = rowIdx * (width * 4L);
+                MemorySegment.copy(tierSegments[tierIdx], ValueLayout.JAVA_FLOAT, baseOffset, dbFloat, dimOffset, width);
+                dimOffset += width;
+            }
+            totalDist = (int) (transformOperator.computeL2Float(zQuery, dbFloat) * 1000f);
+        } else { // 1-bit unrolled 8x
+            for (int tierIdx = 0; tierIdx <= activeT; tierIdx++) {
+                int numLongs = tierLongs[tierIdx];
+                int width = tierSizes[tierIdx];
+                int offset = tierOffsets[tierIdx];
+                MemorySegment tierSeg = tierSegments[tierIdx];
+                int tierDist = 0;
+                if ((width & 63) == 0) {
+                    long baseOffset = rowIdx * (numLongs * 8L);
+                    int l = 0;
+                    for (; l + 7 < numLongs; l += 8) {
+                        long w0 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
+                        long w1 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 1) * 8L));
+                        long w2 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 2) * 8L));
+                        long w3 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 3) * 8L));
+                        long w4 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 4) * 8L));
+                        long w5 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 5) * 8L));
+                        long w6 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 6) * 8L));
+                        long w7 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 7) * 8L));
+
+                        tierDist += Long.bitCount(bQuery[offset + l] ^ w0)
+                                  + Long.bitCount(bQuery[offset + l + 1] ^ w1)
+                                  + Long.bitCount(bQuery[offset + l + 2] ^ w2)
+                                  + Long.bitCount(bQuery[offset + l + 3] ^ w3)
+                                  + Long.bitCount(bQuery[offset + l + 4] ^ w4)
+                                  + Long.bitCount(bQuery[offset + l + 5] ^ w5)
+                                  + Long.bitCount(bQuery[offset + l + 6] ^ w6)
+                                  + Long.bitCount(bQuery[offset + l + 7] ^ w7);
+                    }
+                    for (; l < numLongs; l++) {
+                        long dbWord = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
+                        tierDist += Long.bitCount(bQuery[offset + l] ^ dbWord);
+                    }
+                } else {
+                    int tierBytes = (width + 7) / 8;
+                    long baseOffset = rowIdx * tierBytes;
+                    for (int l = 0; l < numLongs; l++) {
+                        int validBytes = Math.min(8, tierBytes - l * 8);
+                        int remBits = Math.min(64, width - (l << 6));
+                        long bitMask = (remBits == 64) ? -1L : ((1L << remBits) - 1L);
+                        long dbWord = readTierWord(tierSeg, baseOffset + (l * 8L), validBytes) & bitMask;
+                        tierDist += Long.bitCount((bQuery[offset + l] ^ dbWord) & bitMask);
+                    }
+                }
+                totalDist += tierDist;
+                if (totalDist > currentLimit) break;
+            }
+        }
+
+        if (totalDist < currentLimit) {
+            int pos = kCandidate - 1;
+            while (pos > 0 && totalDist < topDists[pos - 1]) {
+                topDists[pos] = topDists[pos - 1];
+                topRowIds[pos] = topRowIds[pos - 1];
+                pos--;
+            }
+            topDists[pos] = totalDist;
+            topRowIds[pos] = rowIdx;
+        }
+    }
+
+    private List<SearchResult> rerankGate3(
+            float[] query,
+            float[] zQuery,
+            int[] topDists,
+            long[] topRowIds,
+            int validCandidates,
+            int k) {
+        if (qMode == 2) {
+            int limit = Math.min(k, validCandidates);
+            List<SearchResult> queryResults = new ArrayList<>(limit);
+            for (int i = 0; i < limit; i++) {
+                long rowIdx = topRowIds[i];
+                long recordId = idsSegment.get(ValueLayout.JAVA_LONG, rowIdx * 8L);
+                queryResults.add(new SearchResult(recordId, topDists[i]));
+            }
+            return queryResults;
+        }
+
+        // Gate 3: Precision Sidecar Reranking with Early Distance Cutoff (zero syscalls, zero boxing)
+        double[] bestDists = new double[k];
+        long[] bestRowIds = new long[k];
+        Arrays.fill(bestDists, Double.MAX_VALUE);
+
+        float[] sidecarQuery = sidecarInWhtSpace ? zQuery : query;
+
+        if (fp8Segment != null) {
+            int lutSize = dimension * 256;
+            float[] queryLut = QUERY_LUT_SCRATCH.get();
+            if (queryLut == null || queryLut.length < lutSize) {
+                queryLut = new float[lutSize];
+                QUERY_LUT_SCRATCH.set(queryLut);
+            }
+            for (int d = 0; d < dimension; d++) {
+                float qVal = sidecarQuery[d];
+                int dBase = d << 8;
+                for (int b = 0; b < 256; b++) {
+                    float diff = qVal - FP8_E4M3_LUT[b];
+                    queryLut[dBase | b] = diff * diff;
+                }
+            }
+            for (int cIdx = 0; cIdx < validCandidates; cIdx++) {
+                long rowIdx = topRowIds[cIdx];
+                double currentLimit = bestDists[k - 1];
+                double dist = computeExactL2FP8_LUT(queryLut, rowIdx, currentLimit);
+                if (dist < currentLimit) {
+                    int pos = k - 1;
+                    while (pos > 0 && dist < bestDists[pos - 1]) {
+                        bestDists[pos] = bestDists[pos - 1];
+                        bestRowIds[pos] = bestRowIds[pos - 1];
+                        pos--;
+                    }
+                    bestDists[pos] = dist;
+                    bestRowIds[pos] = rowIdx;
+                }
+            }
+        } else if (fp4Segment != null) {
+            int numBlocks = (dimension + 15) / 16;
+            int bytesPerRecord = numBlocks * 9;
+            byte[] localFp4 = new byte[bytesPerRecord];
+            for (int cIdx = 0; cIdx < validCandidates; cIdx++) {
+                long rowIdx = topRowIds[cIdx];
+                double currentLimit = bestDists[k - 1];
+                double dist = computeExactL2FP4(sidecarQuery, rowIdx, localFp4, numBlocks, currentLimit);
+                if (dist < currentLimit) {
+                    int pos = k - 1;
+                    while (pos > 0 && dist < bestDists[pos - 1]) {
+                        bestDists[pos] = bestDists[pos - 1];
+                        bestRowIds[pos] = bestRowIds[pos - 1];
+                        pos--;
+                    }
+                    bestDists[pos] = dist;
+                    bestRowIds[pos] = rowIdx;
+                }
+            }
+        } else if (fp16Segment != null) {
+            short[] localFp16 = new short[dimension];
+            for (int cIdx = 0; cIdx < validCandidates; cIdx++) {
+                long rowIdx = topRowIds[cIdx];
+                double currentLimit = bestDists[k - 1];
+                double dist = computeExactL2FP16(query, rowIdx, localFp16, currentLimit);
+                if (dist < currentLimit) {
+                    int pos = k - 1;
+                    while (pos > 0 && dist < bestDists[pos - 1]) {
+                        bestDists[pos] = bestDists[pos - 1];
+                        bestRowIds[pos] = bestRowIds[pos - 1];
+                        pos--;
+                    }
+                    bestDists[pos] = dist;
+                    bestRowIds[pos] = rowIdx;
+                }
+            }
+        } else {
+            double queryL2Norm = 0.0;
+            double querySum = 0.0;
+            for (float val : zQuery) {
+                queryL2Norm += val * val;
+                querySum += val;
+            }
+            for (int cIdx = 0; cIdx < validCandidates; cIdx++) {
+                long rowIdx = topRowIds[cIdx];
+                double currentLimit = bestDists[k - 1];
+                double dist = computeAsymmetricL2DistanceOffHeap(zQuery, queryL2Norm, querySum, rowIdx);
+                if (dist < currentLimit) {
+                    int pos = k - 1;
+                    while (pos > 0 && dist < bestDists[pos - 1]) {
+                        bestDists[pos] = bestDists[pos - 1];
+                        bestRowIds[pos] = bestRowIds[pos - 1];
+                        pos--;
+                    }
+                    bestDists[pos] = dist;
+                    bestRowIds[pos] = rowIdx;
+                }
+            }
+        }
+
+        List<SearchResult> queryResults = new ArrayList<>(k);
+        for (int i = 0; i < k; i++) {
+            if (bestDists[i] != Double.MAX_VALUE) {
+                long recordId = idsSegment.get(ValueLayout.JAVA_LONG, bestRowIds[i] * 8L);
+                queryResults.add(new SearchResult(recordId, (int) (bestDists[i] * 1000000.0)));
+            }
+        }
+        return queryResults;
     }
 
     @SuppressWarnings("unchecked")
@@ -548,10 +864,10 @@ public class FlatIndex implements Index {
             if (qMode == 1) { // 2-bit
                 float qThreshold = TransformOperator.calculatePercentileThreshold(zQuery, 0.20f);
                 long[][] packed = transformOperator.quantize2Bit(zQuery, qThreshold);
-                bQuery = packed[0];
-                bQueryMask = packed[1];
+                bQuery = packQueryByTiers(packed[0]);
+                bQueryMask = packQueryByTiers(packed[1]);
             } else if (qMode == 0) { // 1-bit
-                bQuery = transformOperator.transformAndQuantize(query);
+                bQuery = packQueryByTiers(transformOperator.quantize1Bit(zQuery));
             } else {
                 bQuery = null;
             }
@@ -561,223 +877,21 @@ public class FlatIndex implements Index {
             Arrays.fill(topDists, Integer.MAX_VALUE);
 
             for (long rowIdx = 0; rowIdx < size; rowIdx++) {
-                if (metadataSegment != null && (metadataSegment.get(ValueLayout.JAVA_LONG, rowIdx * 8L) & 1L) == 1L) {
-                    continue;
-                }
-
-                int currentLimit = topDists[kCandidate - 1];
-                int totalDist = 0;
-
-                if (qMode == 1) { // 2-bit
-                    for (int tierIdx = 0; tierIdx <= activeT; tierIdx++) {
-                        int numLongs = tierLongs[tierIdx];
-                        int offset = tierOffsets[tierIdx];
-                        MemorySegment tierSeg = tierSegments[tierIdx];
-                        long baseOffset = rowIdx * (numLongs * 16L);
-                        int tierDist = 0;
-                        int l = 0;
-                        for (; l + 3 < numLongs; l += 4) {
-                            long s0 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
-                            long m0 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + (l * 8L));
-                            long s1 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 1) * 8L));
-                            long m1 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + ((l + 1) * 8L));
-                            long s2 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 2) * 8L));
-                            long m2 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + ((l + 2) * 8L));
-                            long s3 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 3) * 8L));
-                            long m3 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + ((l + 3) * 8L));
-
-                            tierDist += 4 * Long.bitCount(m0 & bQueryMask[offset + l] & (s0 ^ bQuery[offset + l])) + Long.bitCount(m0 ^ bQueryMask[offset + l])
-                                      + 4 * Long.bitCount(m1 & bQueryMask[offset + l + 1] & (s1 ^ bQuery[offset + l + 1])) + Long.bitCount(m1 ^ bQueryMask[offset + l + 1])
-                                      + 4 * Long.bitCount(m2 & bQueryMask[offset + l + 2] & (s2 ^ bQuery[offset + l + 2])) + Long.bitCount(m2 ^ bQueryMask[offset + l + 2])
-                                      + 4 * Long.bitCount(m3 & bQueryMask[offset + l + 3] & (s3 ^ bQuery[offset + l + 3])) + Long.bitCount(m3 ^ bQueryMask[offset + l + 3]);
-                        }
-                        for (; l < numLongs; l++) {
-                            long dbSign = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
-                            long dbMask = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + (l * 8L));
-                            long qSign = bQuery[offset + l];
-                            long qMask = bQueryMask[offset + l];
-                            tierDist += 4 * Long.bitCount(dbMask & qMask & (dbSign ^ qSign)) + Long.bitCount(dbMask ^ qMask);
-                        }
-                        totalDist += tierDist;
-                        if (totalDist > currentLimit) break;
-                    }
-                } else if (qMode == 2) { // Float
-                    float[] dbFloat = new float[dimension];
-                    int dimOffset = 0;
-                    for (int tierIdx = 0; tierIdx < numTiers; tierIdx++) {
-                        int width = tiers[tierIdx] - (tierIdx == 0 ? 0 : tiers[tierIdx - 1]);
-                        long baseOffset = rowIdx * (width * 4L);
-                        MemorySegment.copy(tierSegments[tierIdx], ValueLayout.JAVA_FLOAT, baseOffset, dbFloat, dimOffset, width);
-                        dimOffset += width;
-                    }
-                    totalDist = (int) (transformOperator.computeL2Float(zQuery, dbFloat) * 1000f);
-                } else { // 1-bit unrolled 8x
-                    for (int tierIdx = 0; tierIdx <= activeT; tierIdx++) {
-                        int numLongs = tierLongs[tierIdx];
-                        int offset = tierOffsets[tierIdx];
-                        MemorySegment tierSeg = tierSegments[tierIdx];
-                        long baseOffset = rowIdx * (numLongs * 8L);
-                        int tierDist = 0;
-                        int l = 0;
-                        for (; l + 7 < numLongs; l += 8) {
-                            long w0 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
-                            long w1 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 1) * 8L));
-                            long w2 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 2) * 8L));
-                            long w3 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 3) * 8L));
-                            long w4 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 4) * 8L));
-                            long w5 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 5) * 8L));
-                            long w6 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 6) * 8L));
-                            long w7 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 7) * 8L));
-
-                            tierDist += Long.bitCount(bQuery[offset + l] ^ w0)
-                                      + Long.bitCount(bQuery[offset + l + 1] ^ w1)
-                                      + Long.bitCount(bQuery[offset + l + 2] ^ w2)
-                                      + Long.bitCount(bQuery[offset + l + 3] ^ w3)
-                                      + Long.bitCount(bQuery[offset + l + 4] ^ w4)
-                                      + Long.bitCount(bQuery[offset + l + 5] ^ w5)
-                                      + Long.bitCount(bQuery[offset + l + 6] ^ w6)
-                                      + Long.bitCount(bQuery[offset + l + 7] ^ w7);
-                        }
-                        for (; l < numLongs; l++) {
-                            long dbWord = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
-                            tierDist += Long.bitCount(bQuery[offset + l] ^ dbWord);
-                        }
-                        totalDist += tierDist;
-                        if (totalDist > currentLimit) break;
-                    }
-                }
-
-                if (totalDist < currentLimit) {
-                    int pos = kCandidate - 1;
-                    while (pos > 0 && totalDist < topDists[pos - 1]) {
-                        topDists[pos] = topDists[pos - 1];
-                        topRowIds[pos] = topRowIds[pos - 1];
-                        pos--;
-                    }
-                    topDists[pos] = totalDist;
-                    topRowIds[pos] = rowIdx;
-                }
+                evaluateCandidateGate2(rowIdx, activeT, zQuery, bQuery, bQueryMask, topDists, topRowIds, kCandidate);
             }
 
-            List<Long> candidates = new ArrayList<>();
-            for (int i = 0; i < kCandidate; i++) {
-                if (topDists[i] != Integer.MAX_VALUE) {
-                    candidates.add(topRowIds[i]);
-                }
+            int validCandidates = 0;
+            while (validCandidates < kCandidate && topDists[validCandidates] != Integer.MAX_VALUE) {
+                validCandidates++;
             }
 
-            if (qMode == 2) {
-                List<SearchResult> queryResults = new ArrayList<>();
-                int limit = Math.min(k, candidates.size());
-                for (int i = 0; i < limit; i++) {
-                    long rowIdx = candidates.get(i);
-                    long recordId = idsSegment.get(ValueLayout.JAVA_LONG, rowIdx * 8L);
-                    queryResults.add(new SearchResult(recordId, topDists[i]));
-                }
-                finalResults[q] = queryResults;
-                return;
-            }
-
-            // Gate 3: Precision Sidecar Reranking with Early Distance Cutoff
-            double[] bestDists = new double[k];
-            long[] bestRowIds = new long[k];
-            Arrays.fill(bestDists, Double.MAX_VALUE);
-
-            if (fp8Segment != null) {
-                float[] queryLut = new float[dimension * 256];
-                for (int d = 0; d < dimension; d++) {
-                    float qVal = query[d];
-                    int dBase = d << 8;
-                    for (int b = 0; b < 256; b++) {
-                        float diff = qVal - FP8_E4M3_LUT[b];
-                        queryLut[dBase | b] = diff * diff;
-                    }
-                }
-                for (long rowIdx : candidates) {
-                    double currentLimit = bestDists[k - 1];
-                    double dist = computeExactL2FP8_LUT(queryLut, rowIdx, currentLimit);
-                    if (dist < currentLimit) {
-                        int pos = k - 1;
-                        while (pos > 0 && dist < bestDists[pos - 1]) {
-                            bestDists[pos] = bestDists[pos - 1];
-                            bestRowIds[pos] = bestRowIds[pos - 1];
-                            pos--;
-                        }
-                        bestDists[pos] = dist;
-                        bestRowIds[pos] = rowIdx;
-                    }
-                }
-            } else if (fp4Segment != null) {
-                int numBlocks = (dimension + 15) / 16;
-                int bytesPerRecord = numBlocks * 9;
-                byte[] localFp4 = new byte[bytesPerRecord];
-                for (long rowIdx : candidates) {
-                    double currentLimit = bestDists[k - 1];
-                    double dist = computeExactL2FP4(query, rowIdx, localFp4, numBlocks, currentLimit);
-                    if (dist < currentLimit) {
-                        int pos = k - 1;
-                        while (pos > 0 && dist < bestDists[pos - 1]) {
-                            bestDists[pos] = bestDists[pos - 1];
-                            bestRowIds[pos] = bestRowIds[pos - 1];
-                            pos--;
-                        }
-                        bestDists[pos] = dist;
-                        bestRowIds[pos] = rowIdx;
-                    }
-                }
-            } else if (fp16Segment != null) {
-                short[] localFp16 = new short[dimension];
-                for (long rowIdx : candidates) {
-                    double currentLimit = bestDists[k - 1];
-                    double dist = computeExactL2FP16(query, rowIdx, localFp16, currentLimit);
-                    if (dist < currentLimit) {
-                        int pos = k - 1;
-                        while (pos > 0 && dist < bestDists[pos - 1]) {
-                            bestDists[pos] = bestDists[pos - 1];
-                            bestRowIds[pos] = bestRowIds[pos - 1];
-                            pos--;
-                        }
-                        bestDists[pos] = dist;
-                        bestRowIds[pos] = rowIdx;
-                    }
-                }
-            } else {
-                double queryL2Norm = 0.0;
-                double querySum = 0.0;
-                for (float val : zQuery) {
-                    queryL2Norm += val * val;
-                    querySum += val;
-                }
-                for (long rowIdx : candidates) {
-                    double currentLimit = bestDists[k - 1];
-                    double dist = computeAsymmetricL2DistanceOffHeap(zQuery, queryL2Norm, querySum, rowIdx);
-                    if (dist < currentLimit) {
-                        int pos = k - 1;
-                        while (pos > 0 && dist < bestDists[pos - 1]) {
-                            bestDists[pos] = bestDists[pos - 1];
-                            bestRowIds[pos] = bestRowIds[pos - 1];
-                            pos--;
-                        }
-                        bestDists[pos] = dist;
-                        bestRowIds[pos] = rowIdx;
-                    }
-                }
-            }
-
-            List<SearchResult> queryResults = new ArrayList<>(k);
-            for (int i = 0; i < k; i++) {
-                if (bestDists[i] != Double.MAX_VALUE) {
-                    long recordId = idsSegment.get(ValueLayout.JAVA_LONG, bestRowIds[i] * 8L);
-                    queryResults.add(new SearchResult(recordId, (int) (bestDists[i] * 1000000.0)));
-                }
-            }
-            finalResults[q] = queryResults;
+            finalResults[q] = rerankGate3(query, zQuery, topDists, topRowIds, validCandidates, k);
         });
 
         return finalResults;
     }
 
-    /// Evaluates queries using Gate 0 direct-mapped 16-bit prefix routing ($2^{16} = 65,536$ buckets).
+    /// Evaluates queries using Gate 0 Multi-Index Hashing (MIH) 4x8 prefix routing with query-directed margin probing.
     @SuppressWarnings("unchecked")
     private List<SearchResult>[] searchWithPrefixRouting(float[][] queries, int k) {
         int numQueries = queries.length;
@@ -794,7 +908,7 @@ public class FlatIndex implements Index {
 
         int kCandidate = (int) Math.min(size, (fp16Segment != null || fp8Segment != null || fp4Segment != null)
                 ? Math.max(300, 30 * k)
-                : Math.max(50, 3 * k));
+                : Math.max(64, 4 * k));
 
         IntStream.range(0, numQueries).parallel().forEach(q -> {
             float[] query = queries[q];
@@ -806,20 +920,21 @@ public class FlatIndex implements Index {
             if (qMode == 1) { // 2-bit QJL
                 float qThreshold = TransformOperator.calculatePercentileThreshold(zQuery, 0.20f);
                 long[][] packed = transformOperator.quantize2Bit(zQuery, qThreshold);
-                bQuery = packed[0];
-                bQueryMask = packed[1];
-                long w0 = bQuery[0];
+                long w0 = packed[0][0];
                 queryChunkKeys[0] = (int) (w0 & 0xFFL);
                 queryChunkKeys[1] = (int) ((w0 >> 8) & 0xFFL);
                 queryChunkKeys[2] = (int) ((w0 >> 16) & 0xFFL);
                 queryChunkKeys[3] = (int) ((w0 >> 24) & 0xFFL);
+                bQuery = packQueryByTiers(packed[0]);
+                bQueryMask = packQueryByTiers(packed[1]);
             } else if (qMode == 0) { // 1-bit
-                bQuery = transformOperator.transformAndQuantize(query);
-                long w0 = bQuery[0];
+                long[] rawPacked = transformOperator.quantize1Bit(zQuery);
+                long w0 = rawPacked[0];
                 queryChunkKeys[0] = (int) (w0 & 0xFFL);
                 queryChunkKeys[1] = (int) ((w0 >> 8) & 0xFFL);
                 queryChunkKeys[2] = (int) ((w0 >> 16) & 0xFFL);
                 queryChunkKeys[3] = (int) ((w0 >> 24) & 0xFFL);
+                bQuery = packQueryByTiers(rawPacked);
             } else {
                 bQuery = null;
                 int k32 = 0;
@@ -847,9 +962,10 @@ public class FlatIndex implements Index {
                 Arrays.fill(visited, 0, visitedWords, 0L);
             }
 
-            // Adaptive multi-pass probing:
-            // Pass 1: Exact matches across all 4 chunks (4 buckets total)
+            int targetGather = (int) Math.min(size, Math.max(kCandidate * 4, 1024));
             int gatheredCount = 0;
+
+            // Pass 1: Exact matches across all 4 chunks (4 buckets total)
             for (int c = 0; c < 4; c++) {
                 int qKey = queryChunkKeys[c];
                 long chunkOffBase = c * (256L + 1L) * 4L;
@@ -864,493 +980,102 @@ public class FlatIndex implements Index {
                     if ((visited[wordIdx] & mask) != 0) continue;
                     visited[wordIdx] |= mask;
                     gatheredCount++;
-                    long rowIdx = rowIdxInt & 0xFFFFFFFFL;
+                    evaluateCandidateGate2(rowIdxInt & 0xFFFFFFFFL, activeT, zQuery, bQuery, bQueryMask, topDists, topRowIds, kCandidate);
+                }
+            }
 
-                    if (metadataSegment != null && (metadataSegment.get(ValueLayout.JAVA_LONG, rowIdx * 8L) & 1L) == 1L) {
-                        continue;
+            // Sort bit indices [0..7] within each chunk by ascending margin |zQuery[c*8 + bit]|
+            int[][] sortedBits = new int[4][8];
+            for (int c = 0; c < 4; c++) {
+                for (int b = 0; b < 8; b++) {
+                    sortedBits[c][b] = b;
+                }
+                int baseDim = c * 8;
+                for (int i = 1; i < 8; i++) {
+                    int keyBit = sortedBits[c][i];
+                    float keyMargin = (baseDim + keyBit < dimension) ? Math.abs(zQuery[baseDim + keyBit]) : Float.MAX_VALUE;
+                    int j = i - 1;
+                    while (j >= 0) {
+                        int prevBit = sortedBits[c][j];
+                        float prevMargin = (baseDim + prevBit < dimension) ? Math.abs(zQuery[baseDim + prevBit]) : Float.MAX_VALUE;
+                        if (prevMargin <= keyMargin) break;
+                        sortedBits[c][j + 1] = prevBit;
+                        j--;
                     }
+                    sortedBits[c][j + 1] = keyBit;
+                }
+            }
 
-                    int currentLimit = topDists[kCandidate - 1];
-                    int totalDist = 0;
-
-                    if (qMode == 1) { // 2-bit
-                        for (int tierIdx = 0; tierIdx <= activeT; tierIdx++) {
-                            int numLongs = tierLongs[tierIdx];
-                            int offset = tierOffsets[tierIdx];
-                            MemorySegment tierSeg = tierSegments[tierIdx];
-                            long baseOffset = rowIdx * (numLongs * 16L);
-                            int tierDist = 0;
-                            int l = 0;
-                            for (; l + 3 < numLongs; l += 4) {
-                                long s0 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
-                                long m0 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + (l * 8L));
-                                long s1 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 1) * 8L));
-                                long m1 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + ((l + 1) * 8L));
-                                long s2 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 2) * 8L));
-                                long m2 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + ((l + 2) * 8L));
-                                long s3 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 3) * 8L));
-                                long m3 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + ((l + 3) * 8L));
-
-                                tierDist += 4 * Long.bitCount(m0 & bQueryMask[offset + l] & (s0 ^ bQuery[offset + l])) + Long.bitCount(m0 ^ bQueryMask[offset + l])
-                                          + 4 * Long.bitCount(m1 & bQueryMask[offset + l + 1] & (s1 ^ bQuery[offset + l + 1])) + Long.bitCount(m1 ^ bQueryMask[offset + l + 1])
-                                          + 4 * Long.bitCount(m2 & bQueryMask[offset + l + 2] & (s2 ^ bQuery[offset + l + 2])) + Long.bitCount(m2 ^ bQueryMask[offset + l + 2])
-                                          + 4 * Long.bitCount(m3 & bQueryMask[offset + l + 3] & (s3 ^ bQuery[offset + l + 3])) + Long.bitCount(m3 ^ bQueryMask[offset + l + 3]);
-                            }
-                            for (; l < numLongs; l++) {
-                                long dbSign = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
-                                long dbMask = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + (l * 8L));
-                                long qSign = bQuery[offset + l];
-                                long qMask = bQueryMask[offset + l];
-                                tierDist += 4 * Long.bitCount(dbMask & qMask & (dbSign ^ qSign)) + Long.bitCount(dbMask ^ qMask);
-                            }
-                            totalDist += tierDist;
-                            if (totalDist > currentLimit) break;
+            // Pass 2: Query-directed Hamming-1 neighbor buckets ordered by lowest margin across all 4 chunks
+            if (gatheredCount < targetGather) {
+                outerPass2:
+                for (int rank = 0; rank < 8; rank++) {
+                    for (int c = 0; c < 4; c++) {
+                        int bit = sortedBits[c][rank];
+                        int bKey = queryChunkKeys[c] ^ (1 << bit);
+                        long chunkOffBase = c * (256L + 1L) * 4L;
+                        long chunkPostBase = (long) c * size * 4L;
+                        int start = prefixOffsetsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, chunkOffBase + (bKey * 4L));
+                        int end = prefixOffsetsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, chunkOffBase + ((bKey + 1) * 4L));
+                        for (int p = start; p < end; p++) {
+                            int rowIdxInt = prefixPostingsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, chunkPostBase + (p * 4L));
+                            if (rowIdxInt < 0 || rowIdxInt >= size) continue;
+                            int wordIdx = rowIdxInt >>> 6;
+                            long mask = 1L << (rowIdxInt & 63);
+                            if ((visited[wordIdx] & mask) != 0) continue;
+                            visited[wordIdx] |= mask;
+                            gatheredCount++;
+                            evaluateCandidateGate2(rowIdxInt & 0xFFFFFFFFL, activeT, zQuery, bQuery, bQueryMask, topDists, topRowIds, kCandidate);
                         }
-                    } else if (qMode == 2) { // Float-Hybrid
-                        float[] dbFloat = new float[dimension];
-                        int dimOffset = 0;
-                        for (int tierIdx = 0; tierIdx < numTiers; tierIdx++) {
-                            int width = tiers[tierIdx] - (tierIdx == 0 ? 0 : tiers[tierIdx - 1]);
-                            long baseOffset = rowIdx * (width * 4L);
-                            MemorySegment.copy(tierSegments[tierIdx], ValueLayout.JAVA_FLOAT, baseOffset, dbFloat, dimOffset, width);
-                            dimOffset += width;
-                        }
-                        totalDist = (int) (transformOperator.computeL2Float(zQuery, dbFloat) * 1000f);
-                    } else { // 1-bit unrolled 8x
-                        for (int tierIdx = 0; tierIdx <= activeT; tierIdx++) {
-                            int numLongs = tierLongs[tierIdx];
-                            int offset = tierOffsets[tierIdx];
-                            MemorySegment tierSeg = tierSegments[tierIdx];
-                            long baseOffset = rowIdx * (numLongs * 8L);
-                            int tierDist = 0;
-                            int l = 0;
-                            for (; l + 7 < numLongs; l += 8) {
-                                long w0 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
-                                long w1 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 1) * 8L));
-                                long w2 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 2) * 8L));
-                                long w3 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 3) * 8L));
-                                long w4 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 4) * 8L));
-                                long w5 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 5) * 8L));
-                                long w6 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 6) * 8L));
-                                long w7 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 7) * 8L));
-
-                                tierDist += Long.bitCount(bQuery[offset + l] ^ w0)
-                                          + Long.bitCount(bQuery[offset + l + 1] ^ w1)
-                                          + Long.bitCount(bQuery[offset + l + 2] ^ w2)
-                                          + Long.bitCount(bQuery[offset + l + 3] ^ w3)
-                                          + Long.bitCount(bQuery[offset + l + 4] ^ w4)
-                                          + Long.bitCount(bQuery[offset + l + 5] ^ w5)
-                                          + Long.bitCount(bQuery[offset + l + 6] ^ w6)
-                                          + Long.bitCount(bQuery[offset + l + 7] ^ w7);
-                            }
-                            for (; l < numLongs; l++) {
-                                long dbWord = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
-                                tierDist += Long.bitCount(bQuery[offset + l] ^ dbWord);
-                            }
-                            totalDist += tierDist;
-                            if (totalDist > currentLimit) break;
-                        }
-                    }
-
-                    if (totalDist < currentLimit) {
-                        int pos = kCandidate - 1;
-                        while (pos > 0 && totalDist < topDists[pos - 1]) {
-                            topDists[pos] = topDists[pos - 1];
-                            topRowIds[pos] = topRowIds[pos - 1];
-                            pos--;
-                        }
-                        topDists[pos] = totalDist;
-                        topRowIds[pos] = rowIdx;
+                        if (gatheredCount >= targetGather) break outerPass2;
                     }
                 }
             }
 
-            // Pass 2: Hamming-1 neighbor buckets if candidate pool needs more diversity
+            // Pass 3: Query-directed Hamming-2 neighbor buckets across all 4 chunks if still undersaturated
             if (gatheredCount < kCandidate * 2) {
-                for (int c = 0; c < 4; c++) {
-                    int qKey = queryChunkKeys[c];
-                    long chunkOffBase = c * (256L + 1L) * 4L;
-                    long chunkPostBase = (long) c * size * 4L;
-                    for (int bit = 0; bit < 8; bit++) {
-                        int bKey = qKey ^ (1 << bit);
-                        int start = prefixOffsetsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, chunkOffBase + (bKey * 4L));
-                        int end = prefixOffsetsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, chunkOffBase + ((bKey + 1) * 4L));
-                        for (int p = start; p < end; p++) {
-                            int rowIdxInt = prefixPostingsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, chunkPostBase + (p * 4L));
-                            if (rowIdxInt < 0 || rowIdxInt >= size) continue;
-                            int wordIdx = rowIdxInt >>> 6;
-                            long mask = 1L << (rowIdxInt & 63);
-                            if ((visited[wordIdx] & mask) != 0) continue;
-                            visited[wordIdx] |= mask;
-                            gatheredCount++;
-                            long rowIdx = rowIdxInt & 0xFFFFFFFFL;
-
-                            if (metadataSegment != null && (metadataSegment.get(ValueLayout.JAVA_LONG, rowIdx * 8L) & 1L) == 1L) {
-                                continue;
+                outerPass3:
+                for (int r1 = 0; r1 < 8; r1++) {
+                    for (int r2 = r1 + 1; r2 < 8; r2++) {
+                        for (int c = 0; c < 4; c++) {
+                            int b1 = sortedBits[c][r1];
+                            int b2 = sortedBits[c][r2];
+                            int bKey = queryChunkKeys[c] ^ (1 << b1) ^ (1 << b2);
+                            long chunkOffBase = c * (256L + 1L) * 4L;
+                            long chunkPostBase = (long) c * size * 4L;
+                            int start = prefixOffsetsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, chunkOffBase + (bKey * 4L));
+                            int end = prefixOffsetsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, chunkOffBase + ((bKey + 1) * 4L));
+                            for (int p = start; p < end; p++) {
+                                int rowIdxInt = prefixPostingsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, chunkPostBase + (p * 4L));
+                                if (rowIdxInt < 0 || rowIdxInt >= size) continue;
+                                int wordIdx = rowIdxInt >>> 6;
+                                long mask = 1L << (rowIdxInt & 63);
+                                if ((visited[wordIdx] & mask) != 0) continue;
+                                visited[wordIdx] |= mask;
+                                gatheredCount++;
+                                evaluateCandidateGate2(rowIdxInt & 0xFFFFFFFFL, activeT, zQuery, bQuery, bQueryMask, topDists, topRowIds, kCandidate);
                             }
-
-                            int currentLimit = topDists[kCandidate - 1];
-                            int totalDist = 0;
-
-                            if (qMode == 1) { // 2-bit
-                                for (int tierIdx = 0; tierIdx <= activeT; tierIdx++) {
-                                    int numLongs = tierLongs[tierIdx];
-                                    int offset = tierOffsets[tierIdx];
-                                    MemorySegment tierSeg = tierSegments[tierIdx];
-                                    long baseOffset = rowIdx * (numLongs * 16L);
-                                    int tierDist = 0;
-                                    int l = 0;
-                                    for (; l + 3 < numLongs; l += 4) {
-                                        long s0 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
-                                        long m0 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + (l * 8L));
-                                        long s1 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 1) * 8L));
-                                        long m1 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + ((l + 1) * 8L));
-                                        long s2 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 2) * 8L));
-                                        long m2 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + ((l + 2) * 8L));
-                                        long s3 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 3) * 8L));
-                                        long m3 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + ((l + 3) * 8L));
-
-                                        tierDist += 4 * Long.bitCount(m0 & bQueryMask[offset + l] & (s0 ^ bQuery[offset + l])) + Long.bitCount(m0 ^ bQueryMask[offset + l])
-                                                  + 4 * Long.bitCount(m1 & bQueryMask[offset + l + 1] & (s1 ^ bQuery[offset + l + 1])) + Long.bitCount(m1 ^ bQueryMask[offset + l + 1])
-                                                  + 4 * Long.bitCount(m2 & bQueryMask[offset + l + 2] & (s2 ^ bQuery[offset + l + 2])) + Long.bitCount(m2 ^ bQueryMask[offset + l + 2])
-                                                  + 4 * Long.bitCount(m3 & bQueryMask[offset + l + 3] & (s3 ^ bQuery[offset + l + 3])) + Long.bitCount(m3 ^ bQueryMask[offset + l + 3]);
-                                    }
-                                    for (; l < numLongs; l++) {
-                                        long dbSign = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
-                                        long dbMask = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + (l * 8L));
-                                        long qSign = bQuery[offset + l];
-                                        long qMask = bQueryMask[offset + l];
-                                        tierDist += 4 * Long.bitCount(dbMask & qMask & (dbSign ^ qSign)) + Long.bitCount(dbMask ^ qMask);
-                                    }
-                                    totalDist += tierDist;
-                                    if (totalDist > currentLimit) break;
-                                }
-                            } else if (qMode == 2) { // Float-Hybrid
-                                float[] dbFloat = new float[dimension];
-                                int dimOffset = 0;
-                                for (int tierIdx = 0; tierIdx < numTiers; tierIdx++) {
-                                    int width = tiers[tierIdx] - (tierIdx == 0 ? 0 : tiers[tierIdx - 1]);
-                                    long baseOffset = rowIdx * (width * 4L);
-                                    MemorySegment.copy(tierSegments[tierIdx], ValueLayout.JAVA_FLOAT, baseOffset, dbFloat, dimOffset, width);
-                                    dimOffset += width;
-                                }
-                                totalDist = (int) (transformOperator.computeL2Float(zQuery, dbFloat) * 1000f);
-                            } else { // 1-bit unrolled 8x
-                                for (int tierIdx = 0; tierIdx <= activeT; tierIdx++) {
-                                    int numLongs = tierLongs[tierIdx];
-                                    int offset = tierOffsets[tierIdx];
-                                    MemorySegment tierSeg = tierSegments[tierIdx];
-                                    long baseOffset = rowIdx * (numLongs * 8L);
-                                    int tierDist = 0;
-                                    int l = 0;
-                                    for (; l + 7 < numLongs; l += 8) {
-                                        long w0 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
-                                        long w1 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 1) * 8L));
-                                        long w2 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 2) * 8L));
-                                        long w3 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 3) * 8L));
-                                        long w4 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 4) * 8L));
-                                        long w5 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 5) * 8L));
-                                        long w6 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 6) * 8L));
-                                        long w7 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 7) * 8L));
-
-                                        tierDist += Long.bitCount(bQuery[offset + l] ^ w0)
-                                                  + Long.bitCount(bQuery[offset + l + 1] ^ w1)
-                                                  + Long.bitCount(bQuery[offset + l + 2] ^ w2)
-                                                  + Long.bitCount(bQuery[offset + l + 3] ^ w3)
-                                                  + Long.bitCount(bQuery[offset + l + 4] ^ w4)
-                                                  + Long.bitCount(bQuery[offset + l + 5] ^ w5)
-                                                  + Long.bitCount(bQuery[offset + l + 6] ^ w6)
-                                                  + Long.bitCount(bQuery[offset + l + 7] ^ w7);
-                                    }
-                                    for (; l < numLongs; l++) {
-                                        long dbWord = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
-                                        tierDist += Long.bitCount(bQuery[offset + l] ^ dbWord);
-                                    }
-                                    totalDist += tierDist;
-                                    if (totalDist > currentLimit) break;
-                                }
-                            }
-
-                            if (totalDist < currentLimit) {
-                                int pos = kCandidate - 1;
-                                while (pos > 0 && totalDist < topDists[pos - 1]) {
-                                    topDists[pos] = topDists[pos - 1];
-                                    topRowIds[pos] = topRowIds[pos - 1];
-                                    pos--;
-                                }
-                                topDists[pos] = totalDist;
-                                topRowIds[pos] = rowIdx;
-                            }
+                            if (gatheredCount >= kCandidate * 2) break outerPass3;
                         }
                     }
-                    if (gatheredCount >= kCandidate * 2) break;
                 }
             }
 
-            // Pass 3: Hamming-2 neighbor buckets on primary chunk 0 if still undersaturated
-            if (gatheredCount < kCandidate) {
-                int qKey0 = queryChunkKeys[0];
-                long chunkOffBase = 0L;
-                long chunkPostBase = 0L;
-                for (int b1 = 0; b1 < 8; b1++) {
-                    for (int b2 = b1 + 1; b2 < 8; b2++) {
-                        int bKey = qKey0 ^ (1 << b1) ^ (1 << b2);
-                        int start = prefixOffsetsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, chunkOffBase + (bKey * 4L));
-                        int end = prefixOffsetsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, chunkOffBase + ((bKey + 1) * 4L));
-                        for (int p = start; p < end; p++) {
-                            int rowIdxInt = prefixPostingsSegment.get(ValueLayout.JAVA_INT_UNALIGNED, chunkPostBase + (p * 4L));
-                            if (rowIdxInt < 0 || rowIdxInt >= size) continue;
-                            int wordIdx = rowIdxInt >>> 6;
-                            long mask = 1L << (rowIdxInt & 63);
-                            if ((visited[wordIdx] & mask) != 0) continue;
-                            visited[wordIdx] |= mask;
-                            gatheredCount++;
-                            long rowIdx = rowIdxInt & 0xFFFFFFFFL;
-
-                            if (metadataSegment != null && (metadataSegment.get(ValueLayout.JAVA_LONG, rowIdx * 8L) & 1L) == 1L) {
-                                continue;
-                            }
-
-                            int currentLimit = topDists[kCandidate - 1];
-                            int totalDist = 0;
-
-                            if (qMode == 1) { // 2-bit
-                                for (int tierIdx = 0; tierIdx <= activeT; tierIdx++) {
-                                    int numLongs = tierLongs[tierIdx];
-                                    int offset = tierOffsets[tierIdx];
-                                    MemorySegment tierSeg = tierSegments[tierIdx];
-                                    long baseOffset = rowIdx * (numLongs * 16L);
-                                    int tierDist = 0;
-                                    int l = 0;
-                                    for (; l + 3 < numLongs; l += 4) {
-                                        long s0 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
-                                        long m0 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + (l * 8L));
-                                        long s1 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 1) * 8L));
-                                        long m1 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + ((l + 1) * 8L));
-                                        long s2 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 2) * 8L));
-                                        long m2 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + ((l + 2) * 8L));
-                                        long s3 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 3) * 8L));
-                                        long m3 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + ((l + 3) * 8L));
-
-                                        tierDist += 4 * Long.bitCount(m0 & bQueryMask[offset + l] & (s0 ^ bQuery[offset + l])) + Long.bitCount(m0 ^ bQueryMask[offset + l])
-                                                  + 4 * Long.bitCount(m1 & bQueryMask[offset + l + 1] & (s1 ^ bQuery[offset + l + 1])) + Long.bitCount(m1 ^ bQueryMask[offset + l + 1])
-                                                  + 4 * Long.bitCount(m2 & bQueryMask[offset + l + 2] & (s2 ^ bQuery[offset + l + 2])) + Long.bitCount(m2 ^ bQueryMask[offset + l + 2])
-                                                  + 4 * Long.bitCount(m3 & bQueryMask[offset + l + 3] & (s3 ^ bQuery[offset + l + 3])) + Long.bitCount(m3 ^ bQueryMask[offset + l + 3]);
-                                    }
-                                    for (; l < numLongs; l++) {
-                                        long dbSign = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
-                                        long dbMask = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L) + (l * 8L));
-                                        long qSign = bQuery[offset + l];
-                                        long qMask = bQueryMask[offset + l];
-                                        tierDist += 4 * Long.bitCount(dbMask & qMask & (dbSign ^ qSign)) + Long.bitCount(dbMask ^ qMask);
-                                    }
-                                    totalDist += tierDist;
-                                    if (totalDist > currentLimit) break;
-                                }
-                            } else if (qMode == 2) { // Float-Hybrid
-                                float[] dbFloat = new float[dimension];
-                                int dimOffset = 0;
-                                for (int tierIdx = 0; tierIdx < numTiers; tierIdx++) {
-                                    int width = tiers[tierIdx] - (tierIdx == 0 ? 0 : tiers[tierIdx - 1]);
-                                    long baseOffset = rowIdx * (width * 4L);
-                                    MemorySegment.copy(tierSegments[tierIdx], ValueLayout.JAVA_FLOAT, baseOffset, dbFloat, dimOffset, width);
-                                    dimOffset += width;
-                                }
-                                totalDist = (int) (transformOperator.computeL2Float(zQuery, dbFloat) * 1000f);
-                            } else { // 1-bit unrolled 8x
-                                for (int tierIdx = 0; tierIdx <= activeT; tierIdx++) {
-                                    int numLongs = tierLongs[tierIdx];
-                                    int offset = tierOffsets[tierIdx];
-                                    MemorySegment tierSeg = tierSegments[tierIdx];
-                                    long baseOffset = rowIdx * (numLongs * 8L);
-                                    int tierDist = 0;
-                                    int l = 0;
-                                    for (; l + 7 < numLongs; l += 8) {
-                                        long w0 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
-                                        long w1 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 1) * 8L));
-                                        long w2 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 2) * 8L));
-                                        long w3 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 3) * 8L));
-                                        long w4 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 4) * 8L));
-                                        long w5 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 5) * 8L));
-                                        long w6 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 6) * 8L));
-                                        long w7 = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + ((l + 7) * 8L));
-
-                                        tierDist += Long.bitCount(bQuery[offset + l] ^ w0)
-                                                  + Long.bitCount(bQuery[offset + l + 1] ^ w1)
-                                                  + Long.bitCount(bQuery[offset + l + 2] ^ w2)
-                                                  + Long.bitCount(bQuery[offset + l + 3] ^ w3)
-                                                  + Long.bitCount(bQuery[offset + l + 4] ^ w4)
-                                                  + Long.bitCount(bQuery[offset + l + 5] ^ w5)
-                                                  + Long.bitCount(bQuery[offset + l + 6] ^ w6)
-                                                  + Long.bitCount(bQuery[offset + l + 7] ^ w7);
-                                    }
-                                    for (; l < numLongs; l++) {
-                                        long dbWord = tierSeg.get(ValueLayout.JAVA_LONG, baseOffset + (l * 8L));
-                                        tierDist += Long.bitCount(bQuery[offset + l] ^ dbWord);
-                                    }
-                                    totalDist += tierDist;
-                                    if (totalDist > currentLimit) break;
-                                }
-                            }
-
-                            if (totalDist < currentLimit) {
-                                int pos = kCandidate - 1;
-                                while (pos > 0 && totalDist < topDists[pos - 1]) {
-                                    topDists[pos] = topDists[pos - 1];
-                                    topRowIds[pos] = topRowIds[pos - 1];
-                                    pos--;
-                                }
-                                topDists[pos] = totalDist;
-                                topRowIds[pos] = rowIdx;
-                            }
-                        }
-                    }
-                    if (gatheredCount >= kCandidate * 2) break;
-                }
+            int validCandidates = 0;
+            while (validCandidates < kCandidate && topDists[validCandidates] != Integer.MAX_VALUE) {
+                validCandidates++;
             }
 
-            List<Long> candidates = new ArrayList<>();
-            for (int i = 0; i < kCandidate; i++) {
-                if (topDists[i] != Integer.MAX_VALUE) {
-                    candidates.add(topRowIds[i]);
-                }
-            }
-
-            if (candidates.isEmpty()) {
+            if (validCandidates == 0) {
                 int limit = (int) Math.min(size, kCandidate);
-                for (long rowIdx = 0; rowIdx < limit; rowIdx++) {
-                    candidates.add(rowIdx);
-                }
-            }
-
-            if (qMode == 2) {
-                List<SearchResult> queryResults = new ArrayList<>();
-                int limit = Math.min(k, candidates.size());
                 for (int i = 0; i < limit; i++) {
-                    long rowIdx = candidates.get(i);
-                    long recordId = idsSegment.get(ValueLayout.JAVA_LONG, rowIdx * 8L);
-                    queryResults.add(new SearchResult(recordId, topDists[i]));
+                    topRowIds[i] = i;
+                    topDists[i] = 0;
                 }
-                finalResults[q] = queryResults;
-                return;
+                validCandidates = limit;
             }
 
-            // Task 4: Proactive Async DMA Prefetch for Gate 3 Precision Sidecars
-            if (fp8Segment != null) {
-                for (long rId : candidates) {
-                    try {
-                        fp8Segment.asSlice(rId * (long) dimension, (long) dimension).load();
-                    } catch (Exception ignored) {}
-                }
-            } else if (fp4Segment != null) {
-                int bytesPerRec = ((dimension + 15) / 16) * 9;
-                for (long rId : candidates) {
-                    try {
-                        fp4Segment.asSlice(rId * (long) bytesPerRec, (long) bytesPerRec).load();
-                    } catch (Exception ignored) {}
-                }
-            } else if (fp16Segment != null) {
-                for (long rId : candidates) {
-                    try {
-                        fp16Segment.asSlice(rId * (long) dimension * 2L, (long) dimension * 2L).load();
-                    } catch (Exception ignored) {}
-                }
-            }
-
-            // Gate 3: Precision Sidecar Reranking with Early Distance Cutoff
-            double[] bestDists = new double[k];
-            long[] bestRowIds = new long[k];
-            Arrays.fill(bestDists, Double.MAX_VALUE);
-
-            if (fp8Segment != null) {
-                float[] queryLut = new float[dimension * 256];
-                for (int d = 0; d < dimension; d++) {
-                    float qVal = query[d];
-                    int dBase = d << 8;
-                    for (int b = 0; b < 256; b++) {
-                        float diff = qVal - FP8_E4M3_LUT[b];
-                        queryLut[dBase | b] = diff * diff;
-                    }
-                }
-                for (long rowIdx : candidates) {
-                    double currentLimit = bestDists[k - 1];
-                    double dist = computeExactL2FP8_LUT(queryLut, rowIdx, currentLimit);
-                    if (dist < currentLimit) {
-                        int pos = k - 1;
-                        while (pos > 0 && dist < bestDists[pos - 1]) {
-                            bestDists[pos] = bestDists[pos - 1];
-                            bestRowIds[pos] = bestRowIds[pos - 1];
-                            pos--;
-                        }
-                        bestDists[pos] = dist;
-                        bestRowIds[pos] = rowIdx;
-                    }
-                }
-            } else if (fp4Segment != null) {
-                int numBlocks = (dimension + 15) / 16;
-                int bytesPerRecord = numBlocks * 9;
-                byte[] localFp4 = new byte[bytesPerRecord];
-                for (long rowIdx : candidates) {
-                    double currentLimit = bestDists[k - 1];
-                    double dist = computeExactL2FP4(query, rowIdx, localFp4, numBlocks, currentLimit);
-                    if (dist < currentLimit) {
-                        int pos = k - 1;
-                        while (pos > 0 && dist < bestDists[pos - 1]) {
-                            bestDists[pos] = bestDists[pos - 1];
-                            bestRowIds[pos] = bestRowIds[pos - 1];
-                            pos--;
-                        }
-                        bestDists[pos] = dist;
-                        bestRowIds[pos] = rowIdx;
-                    }
-                }
-            } else if (fp16Segment != null) {
-                short[] localFp16 = new short[dimension];
-                for (long rowIdx : candidates) {
-                    double currentLimit = bestDists[k - 1];
-                    double dist = computeExactL2FP16(query, rowIdx, localFp16, currentLimit);
-                    if (dist < currentLimit) {
-                        int pos = k - 1;
-                        while (pos > 0 && dist < bestDists[pos - 1]) {
-                            bestDists[pos] = bestDists[pos - 1];
-                            bestRowIds[pos] = bestRowIds[pos - 1];
-                            pos--;
-                        }
-                        bestDists[pos] = dist;
-                        bestRowIds[pos] = rowIdx;
-                    }
-                }
-            } else {
-                double queryL2Norm = 0.0;
-                double querySum = 0.0;
-                for (float val : zQuery) {
-                    queryL2Norm += val * val;
-                    querySum += val;
-                }
-                for (long rowIdx : candidates) {
-                    double currentLimit = bestDists[k - 1];
-                    double dist = computeAsymmetricL2DistanceOffHeap(zQuery, queryL2Norm, querySum, rowIdx);
-                    if (dist < currentLimit) {
-                        int pos = k - 1;
-                        while (pos > 0 && dist < bestDists[pos - 1]) {
-                            bestDists[pos] = bestDists[pos - 1];
-                            bestRowIds[pos] = bestRowIds[pos - 1];
-                            pos--;
-                        }
-                        bestDists[pos] = dist;
-                        bestRowIds[pos] = rowIdx;
-                    }
-                }
-            }
-
-            List<SearchResult> queryResults = new ArrayList<>(k);
-            for (int i = 0; i < k; i++) {
-                if (bestDists[i] != Double.MAX_VALUE) {
-                    long recordId = idsSegment.get(ValueLayout.JAVA_LONG, bestRowIds[i] * 8L);
-                    queryResults.add(new SearchResult(recordId, (int) (bestDists[i] * 1000000.0)));
-                }
-            }
-            finalResults[q] = queryResults;
+            finalResults[q] = rerankGate3(query, zQuery, topDists, topRowIds, validCandidates, k);
         });
 
         return finalResults;
@@ -1431,28 +1156,30 @@ public class FlatIndex implements Index {
 
     private double computeAsymmetricL2DistanceOffHeap(float[] query, double queryL2Norm, double querySum, long rowIdx) {
         int totalMaskPopcount = 0;
-        int queryOffsetLongs = 0;
 
         if (qMode == 1) { // 2-bit mode
             double sumPositive = 0.0;
             double sumActive = 0.0;
+            int tierStartDim = 0;
             for (int tierIdx = 0; tierIdx < numTiers; tierIdx++) {
                 int numLongs = tierLongs[tierIdx];
-                long baseOffset = rowIdx * (numLongs * 16L);
+                int width = tierSizes[tierIdx];
+                int halfBytes = (width + 7) / 8;
+                long baseOffset = rowIdx * (2L * halfBytes);
 
                 for (int l = 0; l < numLongs; l++) {
-                    long mask = tierSegments[tierIdx].get(ValueLayout.JAVA_LONG,
-                            baseOffset + (numLongs * 8L) + (l * 8));
+                    int validBytes = Math.min(8, halfBytes - l * 8);
+                    int limit = Math.min(64, width - (l << 6));
+                    long limitMask = limit == 64 ? -1L : (1L << limit) - 1L;
+                    long mask = readTierWord(tierSegments[tierIdx], baseOffset + halfBytes + (l * 8L), validBytes) & limitMask;
                     if (mask == 0L)
                         continue;
 
                     totalMaskPopcount += Long.bitCount(mask);
-                    long word = tierSegments[tierIdx].get(ValueLayout.JAVA_LONG, baseOffset + (l * 8));
+                    long word = readTierWord(tierSegments[tierIdx], baseOffset + (l * 8L), validBytes) & limitMask;
 
-                    int bitOffset = (queryOffsetLongs + l) * 64;
-                    int limit = Math.min(64, query.length - bitOffset);
-                    long limitMask = limit == 64 ? -1L : (1L << limit) - 1L;
-                    long active = mask & limitMask;
+                    int bitOffset = tierStartDim + (l << 6);
+                    long active = mask;
                     while (active != 0) {
                         int bitIdx = Long.numberOfTrailingZeros(active);
                         float qVal = query[bitOffset + bitIdx];
@@ -1463,29 +1190,32 @@ public class FlatIndex implements Index {
                         active &= active - 1;
                     }
                 }
-                queryOffsetLongs += numLongs;
+                tierStartDim += width;
             }
             return totalMaskPopcount + queryL2Norm - 4.0 * sumPositive + 2.0 * sumActive;
         } else { // 1-bit mode
             double sumPositive = 0.0;
-            queryOffsetLongs = 0;
+            int tierStartDim = 0;
             for (int tierIdx = 0; tierIdx < numTiers; tierIdx++) {
                 int numLongs = tierLongs[tierIdx];
-                long baseOffset = rowIdx * (numLongs * 8L);
+                int width = tierSizes[tierIdx];
+                int tierBytes = (width + 7) / 8;
+                long baseOffset = rowIdx * tierBytes;
 
                 for (int l = 0; l < numLongs; l++) {
-                    long word = tierSegments[tierIdx].get(ValueLayout.JAVA_LONG, baseOffset + (l * 8));
-                    int bitOffset = (queryOffsetLongs + l) * 64;
-                    int limit = Math.min(64, query.length - bitOffset);
+                    int validBytes = Math.min(8, tierBytes - l * 8);
+                    int limit = Math.min(64, width - (l << 6));
                     long limitMask = limit == 64 ? -1L : (1L << limit) - 1L;
-                    long active = word & limitMask;
+                    long word = readTierWord(tierSegments[tierIdx], baseOffset + (l * 8L), validBytes) & limitMask;
+                    int bitOffset = tierStartDim + (l << 6);
+                    long active = word;
                     while (active != 0) {
                         int bitIdx = Long.numberOfTrailingZeros(active);
                         sumPositive += query[bitOffset + bitIdx];
                         active &= active - 1;
                     }
                 }
-                queryOffsetLongs += numLongs;
+                tierStartDim += width;
             }
             return query.length + queryL2Norm + 2.0 * querySum - 4.0 * sumPositive;
         }
@@ -1504,53 +1234,53 @@ public class FlatIndex implements Index {
 
         if (queries == null || queries.length == 0)
             return 0;
-        int numQueries = queries.length;
         if (size == 0)
             return 0;
 
         long currentChunkSize = this.chunkSize;
         long numChunks = (size + currentChunkSize - 1) / currentChunkSize;
 
-        Arena arena = Arena.global();
-        MemorySegment[] threadLocalMasks = new MemorySegment[numWorkers];
-        for (int w = 0; w < numWorkers; w++) {
-            threadLocalMasks[w] = arena.allocate(size);
-        }
-
-        IntStream.range(0, (int) numChunks).parallel().forEach(c -> {
-            long startIdx = c * currentChunkSize;
-            long endIdx = Math.min(startIdx + currentChunkSize, size);
-            int workerId = (int) (c % numWorkers);
-            executeVotingRange(startIdx, endIdx, queries, families, thresholds, threadLocalMasks[workerId]);
-        });
-
-        int numThreads = Runtime.getRuntime().availableProcessors();
-        long recordsPerThread = size / numThreads;
-        if (recordsPerThread == 0) {
-            numThreads = 1;
-            recordsPerThread = size;
-        }
-        final int activeThreads = numThreads;
-        final long finalRecordsPerThread = recordsPerThread;
-
-        return IntStream.range(0, activeThreads).parallel().mapToLong(t -> {
-            long startIdx = t * finalRecordsPerThread;
-            long endIdx = (t == activeThreads - 1) ? size : (t + 1) * finalRecordsPerThread;
-            long resonantCount = 0;
-            for (long i = startIdx; i < endIdx; i++) {
-                byte mergedVal = 0;
-                for (int w = 0; w < numWorkers; w++) {
-                    mergedVal |= threadLocalMasks[w].get(ValueLayout.JAVA_BYTE, i);
-                }
-                if (finalVotingMask != null) {
-                    finalVotingMask.set(ValueLayout.JAVA_BYTE, i, mergedVal);
-                }
-                if (Integer.bitCount(mergedVal & 0xFF) >= 5) {
-                    resonantCount++;
-                }
+        try (Arena arena = Arena.ofShared()) {
+            MemorySegment[] threadLocalMasks = new MemorySegment[numWorkers];
+            for (int w = 0; w < numWorkers; w++) {
+                threadLocalMasks[w] = arena.allocate(size);
             }
-            return resonantCount;
-        }).sum();
+
+            IntStream.range(0, (int) numChunks).parallel().forEach(c -> {
+                long startIdx = c * currentChunkSize;
+                long endIdx = Math.min(startIdx + currentChunkSize, size);
+                int workerId = (int) (c % numWorkers);
+                executeVotingRange(startIdx, endIdx, queries, families, thresholds, threadLocalMasks[workerId]);
+            });
+
+            int numThreads = Runtime.getRuntime().availableProcessors();
+            long recordsPerThread = size / numThreads;
+            if (recordsPerThread == 0) {
+                numThreads = 1;
+                recordsPerThread = size;
+            }
+            final int activeThreads = numThreads;
+            final long finalRecordsPerThread = recordsPerThread;
+
+            return IntStream.range(0, activeThreads).parallel().mapToLong(t -> {
+                long startIdx = t * finalRecordsPerThread;
+                long endIdx = (t == activeThreads - 1) ? size : (t + 1) * finalRecordsPerThread;
+                long resonantCount = 0;
+                for (long i = startIdx; i < endIdx; i++) {
+                    byte mergedVal = 0;
+                    for (int w = 0; w < numWorkers; w++) {
+                        mergedVal |= threadLocalMasks[w].get(ValueLayout.JAVA_BYTE, i);
+                    }
+                    if (finalVotingMask != null) {
+                        finalVotingMask.set(ValueLayout.JAVA_BYTE, i, mergedVal);
+                    }
+                    if (Integer.bitCount(mergedVal & 0xFF) >= 5) {
+                        resonantCount++;
+                    }
+                }
+                return resonantCount;
+            }).sum();
+        }
     }
 
     private void executeVotingRange(long startIdx, long endIdx, float[][] queries, int[] families, int[] thresholds,
@@ -1560,14 +1290,14 @@ public class FlatIndex implements Index {
         long[][] bQueries = new long[numQueries][];
         long[][] bQueriesMask = new long[numQueries][];
         for (int q = 0; q < numQueries; q++) {
+            float[] z = transformOperator.preconditionAndRotate(queries[q]);
             if (qMode == 1) {
-                float[] z = transformOperator.preconditionAndRotate(queries[q]);
                 float qThreshold = TransformOperator.calculatePercentileThreshold(z, 0.20f);
                 long[][] packed = transformOperator.quantize2Bit(z, qThreshold);
-                bQueries[q] = packed[0];
-                bQueriesMask[q] = packed[1];
+                bQueries[q] = packQueryByTiers(packed[0]);
+                bQueriesMask[q] = packQueryByTiers(packed[1]);
             } else {
-                bQueries[q] = transformOperator.transformAndQuantize(queries[q]);
+                bQueries[q] = packQueryByTiers(transformOperator.quantize1Bit(z));
             }
         }
 
@@ -1579,59 +1309,59 @@ public class FlatIndex implements Index {
             }
         }
 
-        int totalLongs = dimension / 64;
-        long[] dbWords = new long[totalLongs];
-        long[] dbMasks = new long[totalLongs];
+        long[] dbWords = new long[totalTierLongs];
+        long[] dbMasks = new long[totalTierLongs];
 
         MemorySegment metaSeg = this.metadataSegment;
         MemorySegment[] localTiers = this.tierSegments;
-        MemorySegment tier0 = localTiers[0];
 
         for (long i = startIdx; i < endIdx; i++) {
             long metaVal = (metaSeg != null) ? metaSeg.get(ValueLayout.JAVA_LONG, i * 8) : 2L;
             if ((metaVal & 1L) == 1L)
                 continue;
 
-            // Loading Tier 0
-            int numLongs0 = tierLongs[0];
+            // Load active tiers 0..T
             if (qMode == 1) { // 2-bit mode
-                long baseOffset0 = i * (numLongs0 * 16L);
-                long t0Sign = tier0.get(ValueLayout.JAVA_LONG, baseOffset0);
-                long t0Mask = tier0.get(ValueLayout.JAVA_LONG, baseOffset0 + (numLongs0 * 8L));
-
-                dbWords[0] = t0Sign;
-                dbMasks[0] = t0Mask;
-                if (numLongs0 > 1) {
-                    MemorySegment.copy(tier0, ValueLayout.JAVA_LONG, baseOffset0 + 8, dbWords, 1, numLongs0 - 1);
-                    MemorySegment.copy(tier0, ValueLayout.JAVA_LONG, baseOffset0 + (numLongs0 * 8L) + 8, dbMasks, 1, numLongs0 - 1);
-                }
-            } else { // 1-bit mode
-                long baseOffset0 = i * (numLongs0 * 8L);
-                long t0Val = tier0.get(ValueLayout.JAVA_LONG, baseOffset0);
-
-                dbWords[0] = t0Val;
-                if (numLongs0 > 1) {
-                    MemorySegment.copy(tier0, ValueLayout.JAVA_LONG, baseOffset0 + 8, dbWords, 1, numLongs0 - 1);
-                }
-            }
-
-            // Load remaining active tiers up to T
-            if (qMode == 1) { // 2-bit mode
-                for (int tierIdx = 1; tierIdx <= T; tierIdx++) {
+                for (int tierIdx = 0; tierIdx <= T; tierIdx++) {
                     int numLongs = tierLongs[tierIdx];
+                    int width = tierSizes[tierIdx];
                     int offset = tierOffsets[tierIdx];
                     MemorySegment tierSeg = localTiers[tierIdx];
-                    long baseOffset = i * (numLongs * 16L);
-                    MemorySegment.copy(tierSeg, ValueLayout.JAVA_LONG, baseOffset, dbWords, offset, numLongs);
-                    MemorySegment.copy(tierSeg, ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L), dbMasks, offset, numLongs);
+                    if ((width & 63) == 0) {
+                        long baseOffset = i * (numLongs * 16L);
+                        MemorySegment.copy(tierSeg, ValueLayout.JAVA_LONG, baseOffset, dbWords, offset, numLongs);
+                        MemorySegment.copy(tierSeg, ValueLayout.JAVA_LONG, baseOffset + (numLongs * 8L), dbMasks, offset, numLongs);
+                    } else {
+                        int halfBytes = (width + 7) / 8;
+                        long baseOffset = i * (2L * halfBytes);
+                        for (int l = 0; l < numLongs; l++) {
+                            int validBytes = Math.min(8, halfBytes - l * 8);
+                            int remBits = Math.min(64, width - (l << 6));
+                            long bitMask = (remBits == 64) ? -1L : ((1L << remBits) - 1L);
+                            dbWords[offset + l] = readTierWord(tierSeg, baseOffset + (l * 8L), validBytes) & bitMask;
+                            dbMasks[offset + l] = readTierWord(tierSeg, baseOffset + halfBytes + (l * 8L), validBytes) & bitMask;
+                        }
+                    }
                 }
             } else { // 1-bit mode
-                for (int tierIdx = 1; tierIdx <= T; tierIdx++) {
+                for (int tierIdx = 0; tierIdx <= T; tierIdx++) {
                     int numLongs = tierLongs[tierIdx];
+                    int width = tierSizes[tierIdx];
                     int offset = tierOffsets[tierIdx];
                     MemorySegment tierSeg = localTiers[tierIdx];
-                    long baseOffset = i * (numLongs * 8L);
-                    MemorySegment.copy(tierSeg, ValueLayout.JAVA_LONG, baseOffset, dbWords, offset, numLongs);
+                    if ((width & 63) == 0) {
+                        long baseOffset = i * (numLongs * 8L);
+                        MemorySegment.copy(tierSeg, ValueLayout.JAVA_LONG, baseOffset, dbWords, offset, numLongs);
+                    } else {
+                        int tierBytes = (width + 7) / 8;
+                        long baseOffset = i * tierBytes;
+                        for (int l = 0; l < numLongs; l++) {
+                            int validBytes = Math.min(8, tierBytes - l * 8);
+                            int remBits = Math.min(64, width - (l << 6));
+                            long bitMask = (remBits == 64) ? -1L : ((1L << remBits) - 1L);
+                            dbWords[offset + l] = readTierWord(tierSeg, baseOffset + (l * 8L), validBytes) & bitMask;
+                        }
+                    }
                 }
             }
 

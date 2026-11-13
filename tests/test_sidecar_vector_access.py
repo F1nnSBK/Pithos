@@ -137,14 +137,23 @@ class TestSidecarVectorAccess(unittest.TestCase):
                 # Buffer should be None
                 self.assertIsNone(idx.get_sidecar_buffer())
 
-                # Reconstructed vectors should have shape (N, dim)
+                # Reconstructed vectors should have shape (N, dim) and ~sqrt(2/pi) ~= 0.80 cosine similarity
                 recon = idx.get_vectors()
                 self.assertEqual(recon.shape, (num_vecs, dim))
+                cos_sims = np.sum(recon * vecs, axis=1) / (
+                    np.linalg.norm(recon, axis=1) * np.linalg.norm(vecs, axis=1)
+                )
+                self.assertGreater(float(np.mean(cos_sims)), 0.75)
 
-                # Rerank should still work (via sign reconstruction)
+                # Rerank should recover exact target vector as top-1 (via back-projected sign reconstruction)
                 query = vecs[3]
                 ranked_ids, scores = idx.rerank(query, candidate_indices=[1, 2, 3, 4], k=2)
                 self.assertEqual(len(ranked_ids), 2)
+                self.assertEqual(int(ranked_ids[0]), 3)
+
+                # Python search fallback on SidecarMode.NONE should also work without raising RuntimeError
+                py_res = idx.search(query, k=5, force_python=True)
+                self.assertEqual(py_res[0].id, 3)
 
     def test_query_planetary_grid_auto_rerank(self):
         """Test query_planetary_grid with automatic sidecar reranking and tuple unpacking."""

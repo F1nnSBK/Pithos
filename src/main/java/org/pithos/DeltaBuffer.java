@@ -12,14 +12,18 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.PriorityQueue;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import com.lmax.disruptor.BlockingWaitStrategy;
 import com.lmax.disruptor.RingBuffer;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
+
+import jdk.incubator.vector.FloatVector;
+import jdk.incubator.vector.VectorOperators;
+import jdk.incubator.vector.VectorSpecies;
 
 /// # DeltaBuffer
 ///
@@ -34,8 +38,20 @@ import com.lmax.disruptor.dsl.ProducerType;
 /// 5. **Flush & Compaction:** When `liveSize() >= flushThreshold`, the buffer can be drained and merged into the base index.
 public class DeltaBuffer {
 
-    /// A single buffered entry containing record ID, raw float vector, and tombstone status.
-    private record BufferEntry(long id, float[] vector, boolean tombstone) {}
+    private static final VectorSpecies<Float> SPECIES = FloatVector.SPECIES_PREFERRED;
+
+    /// A single buffered entry containing record ID, raw float vector, and mutable volatile tombstone status.
+    private static final class BufferEntry {
+        final long id;
+        final float[] vector;
+        volatile boolean tombstone;
+
+        BufferEntry(long id, float[] vector, boolean tombstone) {
+            this.id = id;
+            this.vector = vector;
+            this.tombstone = tombstone;
+        }
+    }
 
     /// Disruptor mutation event for lock-free write ingestion and WAL serialization.
     public static final class MutationEvent {
@@ -61,9 +77,11 @@ public class DeltaBuffer {
     private final int flushThreshold;
     private final String walPath;
     private FileChannel walChannel;
+    private final ByteBuffer walWriteBuffer;
 
-    /// Ordered list of inserted entries (append-only, tombstones included).
-    private final List<BufferEntry> entries;
+    /// Ordered list of inserted entries (append-only, tombstones included), guarded by rwLock.
+    private final ArrayList<BufferEntry> entries;
+    private final ReentrantReadWriteLock rwLock = new ReentrantReadWriteLock();
 
     /// Count of live (non-tombstoned) entries.
     private final AtomicInteger liveCount = new AtomicInteger(0);
@@ -88,7 +106,8 @@ public class DeltaBuffer {
         this.dimension = dimension;
         this.flushThreshold = flushThreshold;
         this.walPath = walPath;
-        this.entries = new CopyOnWriteArrayList<>();
+        this.entries = new ArrayList<>(Math.max(16, Math.min(flushThreshold, 16384)));
+        this.walWriteBuffer = walPath != null ? ByteBuffer.allocateDirect(9 + dimension * 4) : null;
         if (walPath != null) {
             try {
                 Path path = Path.of(walPath);
@@ -115,25 +134,37 @@ public class DeltaBuffer {
             try {
                 if (event.type == 1) { // INSERT
                     if (walChannel != null) {
-                        writeInsertToWal(event.id, event.vector);
+                        writeInsertToWal(event.id, event.vector, endOfBatch);
                     }
-                    entries.add(new BufferEntry(event.id, event.vector, false));
+                    rwLock.writeLock().lock();
+                    try {
+                        entries.add(new BufferEntry(event.id, event.vector, false));
+                    } finally {
+                        rwLock.writeLock().unlock();
+                    }
                     liveCount.incrementAndGet();
                     if (event.future != null) {
                         event.future.complete(true);
                     }
                 } else if (event.type == 2) { // DELETE
                     boolean found = false;
-                    for (int i = 0; i < entries.size(); i++) {
-                        BufferEntry e = entries.get(i);
-                        if (e.id() == event.id && !e.tombstone()) {
-                            entries.set(i, new BufferEntry(e.id(), e.vector(), true));
-                            liveCount.decrementAndGet();
-                            found = true;
+                    rwLock.readLock().lock();
+                    try {
+                        for (int i = 0, n = entries.size(); i < n; i++) {
+                            BufferEntry e = entries.get(i);
+                            if (e.id == event.id && !e.tombstone) {
+                                e.tombstone = true;
+                                liveCount.decrementAndGet();
+                                found = true;
+                            }
                         }
+                    } finally {
+                        rwLock.readLock().unlock();
                     }
                     if (found && walChannel != null) {
-                        writeDeleteToWal(event.id);
+                        writeDeleteToWal(event.id, endOfBatch);
+                    } else if (endOfBatch && walChannel != null) {
+                        walChannel.force(false);
                     }
                     if (event.future != null) {
                         event.future.complete(found);
@@ -194,7 +225,12 @@ public class DeltaBuffer {
 
     /// Returns the total entry count including tombstones.
     public int totalSize() {
-        return entries.size();
+        rwLock.readLock().lock();
+        try {
+            return entries.size();
+        } finally {
+            rwLock.readLock().unlock();
+        }
     }
 
     /// Returns the vector dimension.
@@ -224,8 +260,6 @@ public class DeltaBuffer {
     /// @param k number of neighbors to retrieve
     /// @return list of nearest neighbors sorted ascending by score
     public List<Index.SearchResult> searchKnn(float[] query, int k) {
-
-
         if (k <= 0 || liveCount.get() == 0) {
             return List.of();
         }
@@ -233,16 +267,24 @@ public class DeltaBuffer {
         PriorityQueue<long[]> heap = new PriorityQueue<>(
                 (a, b) -> Long.compare(b[0], a[0]));
 
-        for (BufferEntry e : entries) {
-            if (e.tombstone()) continue;
-            float dist = exactL2(query, e.vector());
-            long distBits = Float.floatToRawIntBits(dist) & 0xFFFFFFFFL;
-            if (heap.size() < k) {
-                heap.offer(new long[]{distBits, e.id()});
-            } else if (distBits < heap.peek()[0]) {
-                heap.poll();
-                heap.offer(new long[]{distBits, e.id()});
+        rwLock.readLock().lock();
+        try {
+            for (int i = 0, n = entries.size(); i < n; i++) {
+                BufferEntry e = entries.get(i);
+                if (e.tombstone) continue;
+                float dist = exactL2(query, e.vector);
+                long distBits = Float.floatToRawIntBits(dist) & 0xFFFFFFFFL;
+                if (heap.size() < k) {
+                    heap.offer(new long[]{distBits, e.id});
+                } else if (distBits < heap.peek()[0]) {
+                    long[] reused = heap.poll();
+                    reused[0] = distBits;
+                    reused[1] = e.id;
+                    heap.offer(reused);
+                }
             }
+        } finally {
+            rwLock.readLock().unlock();
         }
 
         List<Index.SearchResult> results = new ArrayList<>(heap.size());
@@ -256,8 +298,18 @@ public class DeltaBuffer {
     }
 
     private static float exactL2(float[] a, float[] b) {
-        float sum = 0.0f;
-        for (int i = 0; i < a.length; i++) {
+        int n = Math.min(a.length, b.length);
+        int i = 0;
+        int upper = SPECIES.loopBound(n);
+        FloatVector vSum = FloatVector.zero(SPECIES);
+        for (; i < upper; i += SPECIES.length()) {
+            FloatVector va = FloatVector.fromArray(SPECIES, a, i);
+            FloatVector vb = FloatVector.fromArray(SPECIES, b, i);
+            FloatVector diff = va.sub(vb);
+            vSum = diff.fma(diff, vSum);
+        }
+        float sum = vSum.reduceLanes(VectorOperators.ADD);
+        for (; i < n; i++) {
             float d = a[i] - b[i];
             sum += d * d;
         }
@@ -281,16 +333,22 @@ public class DeltaBuffer {
         try (DataOutputStream out = new DataOutputStream(
                 Files.newOutputStream(Path.of(path)))) {
             List<BufferEntry> snapshot = new ArrayList<>();
-            for (BufferEntry e : entries) {
-                if (!e.tombstone()) {
-                    snapshot.add(e);
+            rwLock.readLock().lock();
+            try {
+                for (int i = 0, n = entries.size(); i < n; i++) {
+                    BufferEntry e = entries.get(i);
+                    if (!e.tombstone) {
+                        snapshot.add(e);
+                    }
                 }
+            } finally {
+                rwLock.readLock().unlock();
             }
             out.writeInt(dimension);
             out.writeInt(snapshot.size());
             for (BufferEntry e : snapshot) {
-                out.writeLong(e.id());
-                for (float v : e.vector()) {
+                out.writeLong(e.id);
+                for (float v : e.vector) {
                     out.writeFloat(v);
                 }
             }
@@ -326,13 +384,19 @@ public class DeltaBuffer {
     /// @return list of live vector records
     public synchronized List<VectorRecord> drainLiveEntries() {
         List<VectorRecord> result = new ArrayList<>();
-        for (BufferEntry e : entries) {
-            if (!e.tombstone()) {
-                result.add(new VectorRecord(e.id(), e.vector()));
+        rwLock.writeLock().lock();
+        try {
+            for (int i = 0, n = entries.size(); i < n; i++) {
+                BufferEntry e = entries.get(i);
+                if (!e.tombstone) {
+                    result.add(new VectorRecord(e.id, e.vector));
+                }
             }
+            entries.clear();
+            liveCount.set(0);
+        } finally {
+            rwLock.writeLock().unlock();
         }
-        entries.clear();
-        liveCount.set(0);
         if (walChannel != null) {
             try {
                 walChannel.truncate(0);
@@ -370,10 +434,10 @@ public class DeltaBuffer {
                 entries.add(new BufferEntry(id, vec, false));
                 liveCount.incrementAndGet();
             } else if (type == 2) {
-                for (int i = 0; i < entries.size(); i++) {
+                for (int i = 0, n = entries.size(); i < n; i++) {
                     BufferEntry e = entries.get(i);
-                    if (e.id() == id && !e.tombstone()) {
-                        entries.set(i, new BufferEntry(e.id(), e.vector(), true));
+                    if (e.id == id && !e.tombstone) {
+                        e.tombstone = true;
                         liveCount.decrementAndGet();
                     }
                 }
@@ -382,29 +446,33 @@ public class DeltaBuffer {
         walChannel.position(size);
     }
 
-    private void writeInsertToWal(long id, float[] vector) throws IOException {
-        ByteBuffer bb = ByteBuffer.allocate(9 + dimension * 4);
-        bb.put((byte) 1);
-        bb.putLong(id);
+    private void writeInsertToWal(long id, float[] vector, boolean endOfBatch) throws IOException {
+        walWriteBuffer.clear();
+        walWriteBuffer.put((byte) 1);
+        walWriteBuffer.putLong(id);
         for (float v : vector) {
-            bb.putFloat(v);
+            walWriteBuffer.putFloat(v);
         }
-        bb.flip();
-        while (bb.hasRemaining()) {
-            walChannel.write(bb);
+        walWriteBuffer.flip();
+        while (walWriteBuffer.hasRemaining()) {
+            walChannel.write(walWriteBuffer);
         }
-        walChannel.force(false);
+        if (endOfBatch) {
+            walChannel.force(false);
+        }
     }
 
-    private void writeDeleteToWal(long id) throws IOException {
-        ByteBuffer bb = ByteBuffer.allocate(9);
-        bb.put((byte) 2);
-        bb.putLong(id);
-        bb.flip();
-        while (bb.hasRemaining()) {
-            walChannel.write(bb);
+    private void writeDeleteToWal(long id, boolean endOfBatch) throws IOException {
+        walWriteBuffer.clear();
+        walWriteBuffer.put((byte) 2);
+        walWriteBuffer.putLong(id);
+        walWriteBuffer.flip();
+        while (walWriteBuffer.hasRemaining()) {
+            walChannel.write(walWriteBuffer);
         }
-        walChannel.force(false);
+        if (endOfBatch) {
+            walChannel.force(false);
+        }
     }
 
     /// Closes the delta buffer, shuts down the Disruptor write ring buffer, and releases open WAL channels.
@@ -414,6 +482,7 @@ public class DeltaBuffer {
         }
         if (walChannel != null) {
             try {
+                walChannel.force(false);
                 walChannel.close();
                 walChannel = null;
             } catch (IOException e) {

@@ -490,13 +490,16 @@ public class VectorDb {
         int numTiers = tiers.length;
 
         int[] tierLongs = new int[numTiers];
+        int[] tierWidths = new int[numTiers];
+        long[] tierBytesPerRecord = new long[numTiers];
         FileChannel[] tierChannels = new FileChannel[numTiers];
         MemorySegment[] tierMappeds = new MemorySegment[numTiers];
 
         int prevBound = 0;
         for (int k = 0; k < numTiers; k++) {
             int width = tiers[k] - prevBound;
-            tierLongs[k] = width / 64;
+            tierWidths[k] = width;
+            tierLongs[k] = (width + 63) / 64;
             prevBound = tiers[k];
 
             Path tierPath = Path.of(basePath + "_tier_" + k + ".bin");
@@ -506,10 +509,11 @@ public class VectorDb {
                     StandardOpenOption.READ,
                     StandardOpenOption.TRUNCATE_EXISTING);
             long bytesPerRecord = switch (qMode) {
-                case 1 -> (width / 4); // 2-bit: 2 bits/dim -> width/4 bytes
-                case 2 -> (width * 4L); // Float-Hybrid: raw float32 -> 4 bytes/dim
-                default -> (width / 8); // 1-bit: 1 bit/dim -> width/8 bytes
+                case 1 -> 2L * ((width + 7) / 8); // 2-bit: sign bytes + mask bytes
+                case 2 -> (width * 4L);           // Float-Hybrid: raw float32 -> 4 bytes/dim
+                default -> (width + 7) / 8;       // 1-bit: 1 bit/dim -> ceil(width/8) bytes
             };
+            tierBytesPerRecord[k] = bytesPerRecord;
             tierMappeds[k] = tierChannels[k].map(FileChannel.MapMode.READ_WRITE, 0, totalRecords * bytesPerRecord,
                     Arena.global());
         }
@@ -517,48 +521,50 @@ public class VectorDb {
         try {
             java.util.stream.IntStream.range(0, (int) totalRecords).parallel().forEach(i -> {
                 VectorRecord rec = records.get(i);
+                float[] z = transformer.preconditionAndRotate(rec.vector());
                 if (qMode == 1) { // 2-bit mode
-                    float[] z = transformer.preconditionAndRotate(rec.vector());
                     float threshold = TransformOperator.calculatePercentileThreshold(z, 0.20f);
                     long[][] packed = transformer.quantize2Bit(z, threshold);
                     long[] signPacked = packed[0];
                     long[] maskPacked = packed[1];
 
-                    int longOffset = 0;
                     for (int k = 0; k < numTiers; k++) {
+                        int startDim = (k == 0) ? 0 : tiers[k - 1];
+                        int width = tierWidths[k];
                         int count = tierLongs[k];
-                        long baseOffset = (long) i * (count * 16L);
+                        int halfBytes = (width + 7) / 8;
+                        long baseOffset = (long) i * tierBytesPerRecord[k];
                         for (int l = 0; l < count; l++) {
-                            tierMappeds[k].set(ValueLayout.JAVA_LONG, baseOffset + (l * 8L), signPacked[longOffset + l]);
-                            tierMappeds[k].set(ValueLayout.JAVA_LONG, baseOffset + (count * 8L) + (l * 8L),
-                                    maskPacked[longOffset + l]);
+                            long sWord = TransformOperator.extractTierWord(signPacked, startDim, width, l);
+                            long mWord = TransformOperator.extractTierWord(maskPacked, startDim, width, l);
+                            int validBytes = Math.min(8, halfBytes - l * 8);
+                            PithosContainer.writeTierWord(tierMappeds[k], baseOffset + (l * 8L), sWord, validBytes);
+                            PithosContainer.writeTierWord(tierMappeds[k], baseOffset + halfBytes + (l * 8L), mWord, validBytes);
                         }
-                        longOffset += count;
                     }
                 } else if (qMode == 2) { // Float-Hybrid: write raw float32 values
-                    float[] z = transformer.preconditionAndRotate(rec.vector());
-                    int longOffset = 0;
                     for (int k = 0; k < numTiers; k++) {
-                        int count = tierLongs[k];
                         int startDim = (k == 0) ? 0 : tiers[k - 1];
-                        int width = tiers[k] - startDim;
+                        int width = tierWidths[k];
                         long baseOffset = (long) i * width * 4L;
                         for (int l = 0; l < width; l++) {
                             int raw = Float.floatToRawIntBits(z[startDim + l]);
                             tierMappeds[k].set(ValueLayout.JAVA_INT_UNALIGNED, baseOffset + (l * 4L), raw);
                         }
-                        longOffset += count;
                     }
                 } else { // 1-bit mode
-                    long[] packed = transformer.transformAndQuantize(rec.vector());
-                    int longOffset = 0;
+                    long[] packed = transformer.quantize1Bit(z);
                     for (int k = 0; k < numTiers; k++) {
+                        int startDim = (k == 0) ? 0 : tiers[k - 1];
+                        int width = tierWidths[k];
                         int count = tierLongs[k];
-                        long baseOffset = (long) i * (count * 8L);
+                        int tierBytes = (width + 7) / 8;
+                        long baseOffset = (long) i * tierBytesPerRecord[k];
                         for (int l = 0; l < count; l++) {
-                            tierMappeds[k].set(ValueLayout.JAVA_LONG, baseOffset + (l * 8L), packed[longOffset + l]);
+                            long word = TransformOperator.extractTierWord(packed, startDim, width, l);
+                            int validBytes = Math.min(8, tierBytes - l * 8);
+                            PithosContainer.writeTierWord(tierMappeds[k], baseOffset + (l * 8L), word, validBytes);
                         }
-                        longOffset += count;
                     }
                 }
             });
@@ -573,16 +579,17 @@ public class VectorDb {
             }
         }
 
-        // 5. Write Sidecar Files (FP16, FP8 E4M3, or FP4 NVFP4) in parallel
+        // 5. Write Sidecar Files (FP16 raw, FP8 E4M3 and FP4 NVFP4 in rotated WHT space z) in parallel
         if (sidecarMode == SIDECAR_FP16) {
             Path fp16Path = Path.of(basePath + "_fp16.bin");
             try (FileChannel channel = FileChannel.open(fp16Path,
                     StandardOpenOption.CREATE,
                     StandardOpenOption.WRITE,
                     StandardOpenOption.READ,
-                    StandardOpenOption.TRUNCATE_EXISTING)) {
+                    StandardOpenOption.TRUNCATE_EXISTING);
+                 Arena writeArena = Arena.ofShared()) {
                 long fp16Bytes = totalRecords * dimension * 2L;
-                MemorySegment fp16Mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, fp16Bytes, Arena.global());
+                MemorySegment fp16Mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, fp16Bytes, writeArena);
                 java.util.stream.IntStream.range(0, (int) totalRecords).parallel().forEach(i -> {
                     float[] vec = records.get(i).vector();
                     long rowOffset = (long) i * dimension * 2L;
@@ -599,14 +606,15 @@ public class VectorDb {
                     StandardOpenOption.CREATE,
                     StandardOpenOption.WRITE,
                     StandardOpenOption.READ,
-                    StandardOpenOption.TRUNCATE_EXISTING)) {
+                    StandardOpenOption.TRUNCATE_EXISTING);
+                 Arena writeArena = Arena.ofShared()) {
                 long fp8Bytes = totalRecords * dimension * 1L;
-                MemorySegment fp8Mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, fp8Bytes, Arena.global());
+                MemorySegment fp8Mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, fp8Bytes, writeArena);
                 java.util.stream.IntStream.range(0, (int) totalRecords).parallel().forEach(i -> {
-                    float[] vec = records.get(i).vector();
+                    float[] z = transformer.preconditionAndRotate(records.get(i).vector());
                     long rowOffset = (long) i * dimension;
                     for (int d = 0; d < dimension; d++) {
-                        byte fp8 = encodeFP8_E4M3(vec[d]);
+                        byte fp8 = encodeFP8_E4M3(z[d]);
                         fp8Mapped.set(ValueLayout.JAVA_BYTE, rowOffset + d, fp8);
                     }
                 });
@@ -621,11 +629,12 @@ public class VectorDb {
                     StandardOpenOption.CREATE,
                     StandardOpenOption.WRITE,
                     StandardOpenOption.READ,
-                    StandardOpenOption.TRUNCATE_EXISTING)) {
+                    StandardOpenOption.TRUNCATE_EXISTING);
+                 Arena writeArena = Arena.ofShared()) {
                 long fp4Bytes = totalRecords * (long) bytesPerRecord;
-                MemorySegment fp4Mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, fp4Bytes, Arena.global());
+                MemorySegment fp4Mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, fp4Bytes, writeArena);
                 java.util.stream.IntStream.range(0, (int) totalRecords).parallel().forEach(i -> {
-                    float[] vec = records.get(i).vector();
+                    float[] z = transformer.preconditionAndRotate(records.get(i).vector());
                     long rowOffset = (long) i * bytesPerRecord;
                     for (int b = 0; b < numBlocks; b++) {
                         int blockStart = b * blockSize;
@@ -633,7 +642,7 @@ public class VectorDb {
                         for (int j = 0; j < blockSize; j++) {
                             int dimIdx = blockStart + j;
                             if (dimIdx < dimension) {
-                                float abs = Math.abs(vec[dimIdx]);
+                                float abs = Math.abs(z[dimIdx]);
                                 if (abs > maxAbs) maxAbs = abs;
                             }
                         }
@@ -646,8 +655,8 @@ public class VectorDb {
                         for (int j = 0; j < 8; j++) {
                             int d0 = blockStart + j * 2;
                             int d1 = blockStart + j * 2 + 1;
-                            float v0 = (d0 < dimension) ? vec[d0] * invScale : 0.0f;
-                            float v1 = (d1 < dimension) ? vec[d1] * invScale : 0.0f;
+                            float v0 = (d0 < dimension) ? z[d0] * invScale : 0.0f;
+                            float v1 = (d1 < dimension) ? z[d1] * invScale : 0.0f;
                             byte n0 = encodeFP4_E2M1_Nibble(v0);
                             byte n1 = encodeFP4_E2M1_Nibble(v1);
                             byte packed = (byte) ((n1 << 4) | (n0 & 0xF));

@@ -60,155 +60,57 @@ public final class TransformOperator {
         this.signs = Arrays.copyOf(customSigns, customSigns.length);
     }
 
-    /// Computes the cumulative spectral energy distribution Φ(k) from frozen projection/LoRA weights W ∈ ℝ^(D × D₀).
+    /// Computes the cumulative prefix energy distribution Φ(k) from projection/LoRA weights W ∈ ℝ^(D × D₀)
+    /// without destructive global eigenvalue sorting.
     ///
     /// ### Mathematical Foundation:
-    /// 1. Form the symmetric Gram matrix:
-    ///    `A = W · Wᵀ ∈ ℝ^(D × D)`
-    /// 2. Compute eigenvalues λᵢ using the Jacobi eigenvalue algorithm with SIMD vectorization.
-    /// 3. Singular values are σᵢ = √(max(0, λᵢ)).
-    /// 4. Sort σᵢ descending and calculate the cumulative energy ratio:
-    ///    `Φ(k) = (∑_{i=1}^k σᵢ²) / (∑_{i=1}^D σᵢ²)`
+    /// Because Pithos applies a block-diagonal Walsh-Hadamard Transform (H_BD) that rotates each
+    /// Matryoshka tier block orthogonally in-place without permuting coordinates across tiers,
+    /// Parseval's theorem guarantees that the spectral energy within prefix [0..k] equals the
+    /// unsorted cumulative squared Euclidean row norms of W:
+    /// 1. Compute coordinate row energy in O(D · D₀) using SIMD FMA lanes:
+    ///    `eᵢ = ||W_{i,:}||₂² = ∑_{j=0}^{D₀-1} W_{i,j}²`
+    /// 2. Accumulate prefix energy ratio in native coordinate order (preserving spatial geometry):
+    ///    `Φ(k) = (∑_{i=0}^k eᵢ) / (∑_{i=0}^{D-1} eᵢ)`
     ///
     /// @param flatW row-major flattened weight matrix of size D × D₀
     /// @param D output dimension (rows of W)
     /// @param D0 bottleneck/LoRA rank dimension (columns of W)
-    /// @return cumulative energy array Φ of length D, where Φ[D-1] = 1.0
-
+    /// @return cumulative prefix energy array Φ of length D, where Φ[D-1] = 1.0
     public static float[] computeCumulativeEnergy(float[] flatW, int D, int D0) {
-        // Construct symmetric covariance matrix A = W * W^T
-        float[][] A = new float[D][D];
+        float[] rowEnergies = new float[D];
+        float totalEnergy = 0.0f;
+        int kBound = SPECIES.loopBound(D0);
+
         for (int i = 0; i < D; i++) {
             int rowOffsetI = i * D0;
-            for (int j = 0; j < D; j++) {
-                int rowOffsetJ = j * D0;
-                float sum = 0.0f;
-                int k = 0;
-                int kBound = SPECIES.loopBound(D0);
-                FloatVector vSum = FloatVector.zero(SPECIES);
-                for (; k < kBound; k += SPECIES.length()) {
-                    FloatVector va = FloatVector.fromArray(SPECIES, flatW, rowOffsetI + k);
-                    FloatVector vb = FloatVector.fromArray(SPECIES, flatW, rowOffsetJ + k);
-                    vSum = va.fma(vb, vSum);
-                }
-                sum = vSum.reduceLanes(VectorOperators.ADD);
-                for (; k < D0; k++) {
-                    sum += flatW[rowOffsetI + k] * flatW[rowOffsetJ + k];
-                }
-                A[i][j] = sum;
+            int k = 0;
+            FloatVector vSum = FloatVector.zero(SPECIES);
+            for (; k < kBound; k += SPECIES.length()) {
+                FloatVector va = FloatVector.fromArray(SPECIES, flatW, rowOffsetI + k);
+                vSum = va.fma(va, vSum);
             }
+            float sum = vSum.reduceLanes(VectorOperators.ADD);
+            for (; k < D0; k++) {
+                float val = flatW[rowOffsetI + k];
+                sum += val * val;
+            }
+            rowEnergies[i] = sum;
+            totalEnergy += sum;
         }
 
-        // Compute eigenvalues using SIMD Jacobi rotation
-        float[] eigenvalues = jacobiEigenvalues(A, D);
-
-        // Singular values are square roots of eigenvalues
-        float[] sigmas = new float[D];
-        float sumSigmasSq = 0.0f;
-        for (int i = 0; i < D; i++) {
-            sigmas[i] = (float) Math.sqrt(Math.max(0.0, eigenvalues[i]));
-            sumSigmasSq += sigmas[i] * sigmas[i];
-        }
-
-        // Sort singular values in descending order
-        Arrays.sort(sigmas);
-        for (int i = 0; i < D / 2; i++) {
-            float temp = sigmas[i];
-            sigmas[i] = sigmas[D - 1 - i];
-            sigmas[D - 1 - i] = temp;
-        }
-
-        // Compute cumulative spectral energy ratio Phi
         float[] phi = new float[D];
         float runningSum = 0.0f;
         for (int i = 0; i < D; i++) {
-            runningSum += sigmas[i] * sigmas[i];
-            phi[i] = sumSigmasSq > 0 ? (runningSum / sumSigmasSq) : 0.0f;
+            runningSum += rowEnergies[i];
+            phi[i] = totalEnergy > 0.0f ? (runningSum / totalEnergy) : ((float) (i + 1) / D);
         }
         return phi;
     }
 
-    /// Computes all eigenvalues of a real symmetric matrix A ∈ ℝ^(n × n) using Jacobi rotations.
-    ///
-    /// At each iteration, finds the maximal off-diagonal element A_pq and applies an orthogonal
-    /// plane rotation R(p, q, θ) parameterized by:
-    /// `tan(2θ) = 2 · A_pq / (A_qq - A_pp)`
-    /// Row updates are vectorized via `FloatVector`.
-    private static float[] jacobiEigenvalues(float[][] A, int n) {
-
-        int maxIterations = 100;
-        for (int iter = 0; iter < maxIterations; iter++) {
-            int p = 0;
-            int q = 1;
-            float maxVal = Math.abs(A[0][1]);
-            for (int i = 0; i < n; i++) {
-                for (int j = i + 1; j < n; j++) {
-                    float absVal = Math.abs(A[i][j]);
-                    if (absVal > maxVal) {
-                        maxVal = absVal;
-                        p = i;
-                        q = j;
-                    }
-                }
-            }
-
-            if (maxVal < 1e-6f) {
-                break;
-            }
-
-            float apq = A[p][q];
-            float app = A[p][p];
-            float aqq = A[q][q];
-
-            float theta = 0.5f * (aqq - app) / apq;
-            float t = (float) (1.0 / (Math.abs(theta) + Math.sqrt(1.0 + theta * theta)));
-            if (theta < 0) {
-                t = -t;
-            }
-
-            float c = (float) (1.0 / Math.sqrt(1.0 + t * t));
-            float s = t * c;
-
-            // Perform Jacobi rotation using Java Vector API on rows A[p] and A[q]
-            int i = 0;
-            int upper = SPECIES.loopBound(n);
-            for (; i < upper; i += SPECIES.length()) {
-                FloatVector vp = FloatVector.fromArray(SPECIES, A[p], i);
-                FloatVector vq = FloatVector.fromArray(SPECIES, A[q], i);
-
-                FloatVector vpNew = vp.mul(c).sub(vq.mul(s));
-                FloatVector vqNew = vp.mul(s).add(vq.mul(c));
-
-                vpNew.intoArray(A[p], i);
-                vqNew.intoArray(A[q], i);
-            }
-            for (; i < n; i++) {
-                float ap = A[p][i];
-                float aq = A[q][i];
-                A[p][i] = c * ap - s * aq;
-                A[q][i] = s * ap + c * aq;
-            }
-
-            // Update diagonal and annihilate intersection
-            A[p][q] = 0.0f;
-            A[q][p] = 0.0f;
-            A[p][p] = app - t * apq;
-            A[q][q] = aqq + t * apq;
-
-            // Maintain symmetry: synchronize columns
-            for (int j = 0; j < n; j++) {
-                if (j != p && j != q) {
-                    A[j][p] = A[p][j];
-                    A[j][q] = A[q][j];
-                }
-            }
-        }
-
-        float[] eigenvalues = new float[n];
-        for (int i = 0; i < n; i++) {
-            eigenvalues[i] = A[i][i];
-        }
-        return eigenvalues;
+    /// Returns a defensive copy of the tier step boundaries.
+    public int[] getTiers() {
+        return Arrays.copyOf(tiers, tiers.length);
     }
 
     /// Preconditions an input vector with Rademacher signs, rotates it via block-diagonal Hadamard,
@@ -217,42 +119,46 @@ public final class TransformOperator {
     /// @param x raw input float vector of length `dimension`
     /// @return packed 64-bit `long[]` array of length ⌈D / 64⌉
     public long[] transformAndQuantize(float[] x) {
-        if (x.length != dimension) {
-            throw new IllegalArgumentException("Input vector size " + x.length + " must match dimension " + dimension);
-        }
+        return quantize1Bit(preconditionAndRotate(x));
+    }
 
-        // 1. Rademacher Preconditioning (Sign-flip)
-        float[] z = new float[dimension];
-        int i = 0;
-        int upperBound = SPECIES.loopBound(dimension);
-        for (; i < upperBound; i += SPECIES.length()) {
-            FloatVector va = FloatVector.fromArray(SPECIES, x, i);
-            FloatVector vb = FloatVector.fromArray(SPECIES, signs, i);
-            va.mul(vb).intoArray(z, i);
+    /// Binarizes an already preconditioned and rotated vector z into packed 64-bit words (1 bit per dimension),
+    /// avoiding redundant Rademacher and Walsh-Hadamard transforms.
+    ///
+    /// @param z rotated float vector of length `dimension`
+    /// @return packed 64-bit `long[]` array of length ⌈D / 64⌉
+    public long[] quantize1Bit(float[] z) {
+        if (z.length != dimension) {
+            throw new IllegalArgumentException("Rotated vector size " + z.length + " must match dimension " + dimension);
         }
-        for (; i < dimension; i++) {
-            z[i] = x[i] * signs[i];
-        }
-
-        // 2. Block-Diagonal Hadamard Rotation
-        int start = 0;
-        for (int tier : tiers) {
-            int width = tier - start;
-            rotateBlock(z, start, width);
-            start = tier;
-        }
-
-        // 3. 1-Bit Binarization & Packing into longs (64 bits per long)
         int numLongs = (dimension + 63) / 64;
         long[] packed = new long[numLongs];
         for (int j = 0; j < dimension; j++) {
             if (z[j] >= 0.0f) {
-                int longIdx = j / 64;
-                int bitIdx = j % 64;
-                packed[longIdx] |= (1L << bitIdx);
+                packed[j >>> 6] |= (1L << (j & 63));
             }
         }
         return packed;
+    }
+
+    /// Extracts a 64-bit word for a specific tier `[startDim, startDim + width)` from a contiguous bit-packed array.
+    /// Supports arbitrary tier boundaries and widths (including sub-64-bit and non-64-aligned tiers).
+    public static long extractTierWord(long[] packed, int startDim, int width, int wordIdx) {
+        int bitPos = startDim + (wordIdx << 6);
+        int remBits = width - (wordIdx << 6);
+        if (remBits <= 0) {
+            return 0L;
+        }
+        int srcIdx = bitPos >>> 6;
+        int shift = bitPos & 63;
+        long word = (srcIdx < packed.length) ? (packed[srcIdx] >>> shift) : 0L;
+        if (shift != 0 && (srcIdx + 1) < packed.length) {
+            word |= (packed[srcIdx + 1] << (64 - shift));
+        }
+        if (remBits < 64) {
+            word &= (1L << remBits) - 1L;
+        }
+        return word;
     }
 
     /// Preconditions an input vector with Rademacher signs and rotates it via block-diagonal Hadamard.
@@ -374,11 +280,11 @@ public final class TransformOperator {
         float[] x = new float[dimension];
         System.arraycopy(z, 0, x, 0, dimension);
 
-        // 1. Rotate by block Hadamard
+        // 1. Inverse rotate by block Hadamard / Kronecker transpose
         int start = 0;
         for (int tier : tiers) {
             int width = tier - start;
-            rotateBlock(x, start, width);
+            rotateBlock(x, start, width, true);
             start = tier;
         }
 
@@ -399,6 +305,10 @@ public final class TransformOperator {
     /// Dispatches block rotation: uses O(D · log D) Fast Walsh-Hadamard Transform (FWHT) if
     /// block width is a power of two, otherwise applies Kronecker factorized rotation.
     private void rotateBlock(float[] z, int start, int width) {
+        rotateBlock(z, start, width, false);
+    }
+
+    private void rotateBlock(float[] z, int start, int width, boolean inverse) {
         if ((width & (width - 1)) == 0) {
             fwht(z, start, width);
         } else {
@@ -408,7 +318,7 @@ public final class TransformOperator {
                 u *= 2;
             }
             int v = width / u;
-            kroneckerRotate(z, start, u, v);
+            kroneckerRotate(z, start, u, v, inverse);
         }
     }
 
@@ -461,9 +371,9 @@ public final class TransformOperator {
     }
 
     /// Kronecker-factorized orthogonal rotation for non-power-of-two block widths:
-    /// `R = H_u ⊗ Ω_v`
+    /// `R = H_u ⊗ Ω_v` (and inverse `R^T = H_u ⊗ Ω_v^T`)
     /// where Ω_v ∈ ℝ^(v × v) is an orthogonal DCT-II basis matrix and H_u is a Walsh-Hadamard matrix of size u.
-    private void kroneckerRotate(float[] a, int start, int u, int v) {
+    private void kroneckerRotate(float[] a, int start, int u, int v, boolean inverse) {
 
         // Construct deterministic orthogonal matrix Omega_v using DCT basis
         float[][] omega = new float[v][v];
@@ -477,14 +387,20 @@ public final class TransformOperator {
             }
         }
 
-        // Apply Omega_v to each block of size v
+        // Apply Omega_v (or Omega_v^T when inverse == true) to each block of size v
         float[] temp = new float[u * v];
         for (int block = 0; block < u; block++) {
             int blockStart = start + block * v;
             for (int i = 0; i < v; i++) {
                 float sum = 0.0f;
-                for (int j = 0; j < v; j++) {
-                    sum += omega[i][j] * a[blockStart + j];
+                if (inverse) {
+                    for (int j = 0; j < v; j++) {
+                        sum += omega[j][i] * a[blockStart + j];
+                    }
+                } else {
+                    for (int j = 0; j < v; j++) {
+                        sum += omega[i][j] * a[blockStart + j];
+                    }
                 }
                 temp[block * v + i] = sum;
             }

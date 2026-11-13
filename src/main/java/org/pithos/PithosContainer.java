@@ -320,19 +320,23 @@ public final class PithosContainer {
         long[] tierOffsets = new long[numTiers];
         long[] tierLengths = new long[numTiers];
         int[] tierLongs = new int[numTiers];
+        int[] tierWidths = new int[numTiers];
+        long[] tierBytesPerRecord = new long[numTiers];
 
         long currentOffset = align64(idsOffset + idsLength);
         int prevBound = 0;
         for (int k = 0; k < numTiers; k++) {
             int width = tiers[k] - prevBound;
-            tierLongs[k] = width / 64;
+            tierWidths[k] = width;
+            tierLongs[k] = (width + 63) / 64;
             prevBound = tiers[k];
 
             long bytesPerRecord = switch (qMode) {
-                case 1 -> (width / 4); // 2-bit QJL: 2 bits/dim
-                case 2 -> (width * 4L); // Float-Hybrid: 4 bytes/dim
-                default -> (width / 8); // 1-bit: 1 bit/dim
+                case 1 -> 2L * ((width + 7) / 8); // 2-bit QJL: sign bytes + mask bytes
+                case 2 -> (width * 4L);           // Float-Hybrid: 4 bytes/dim
+                default -> (width + 7) / 8;       // 1-bit: 1 bit/dim (ceil to byte)
             };
+            tierBytesPerRecord[k] = bytesPerRecord;
             tierOffsets[k] = currentOffset;
             tierLengths[k] = numVectors * bytesPerRecord;
             currentOffset = align64(currentOffset + tierLengths[k]);
@@ -386,6 +390,7 @@ public final class PithosContainer {
         }
 
         // Build Table of Contents (TOC) JSON
+        String sidecarSpace = (sidecarMode == VectorDb.SIDECAR_FP8 || sidecarMode == VectorDb.SIDECAR_FP4) ? "wht" : "raw";
         StringBuilder tocBuilder = new StringBuilder();
         tocBuilder.append("{\n");
         tocBuilder.append("  \"format\": \"pithos_v2\",\n");
@@ -397,7 +402,7 @@ public final class PithosContainer {
                     .append(", \"length\": ").append(tierLengths[k]).append(", \"dim_boundary\": ").append(tiers[k]).append(" },\n");
         }
         tocBuilder.append("    \"sidecar\": { \"offset\": ").append(sidecarOffset).append(", \"length\": ").append(sidecarLength)
-                .append(", \"format\": \"").append(sidecarFormat).append("\" },\n");
+                .append(", \"format\": \"").append(sidecarFormat).append("\", \"space\": \"").append(sidecarSpace).append("\" },\n");
         tocBuilder.append("    \"prefix_table\": { \"offset\": ").append(prefixTableOffset).append(", \"length\": ").append(prefixTableLength)
                 .append(", \"num_chunks\": 4, \"num_buckets_per_chunk\": 256, \"format\": \"mih_csr_4x8\" },\n");
         tocBuilder.append("    \"metadata\": { \"offset\": ").append(metadataOffset).append(", \"length\": ").append(metadataLength)
@@ -413,14 +418,15 @@ public final class PithosContainer {
 
         long totalFileSize = currentOffset + TRAILER_SIZE;
 
-        // Open target file and map for writing
+        // Open target file and map for writing in a bounded shared Arena
         try (FileChannel channel = FileChannel.open(targetFile,
                 StandardOpenOption.CREATE,
                 StandardOpenOption.WRITE,
                 StandardOpenOption.READ,
-                StandardOpenOption.TRUNCATE_EXISTING)) {
+                StandardOpenOption.TRUNCATE_EXISTING);
+             Arena writeArena = Arena.ofShared()) {
 
-            MemorySegment mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, totalFileSize, Arena.global());
+            MemorySegment mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, totalFileSize, writeArena);
 
             // 1. Write Superblock (128 Bytes)
             for (int i = 0; i < 8; i++) {
@@ -452,16 +458,17 @@ public final class PithosContainer {
                 mapped.set(ValueLayout.JAVA_LONG, idsOffset + (i * 8L), records.get(i).id());
             });
 
-            // 3. Write Quantization Tiers Section & Compute 4x8 MIH Chunk Postings in parallel
+            // 3. Write Quantization Tiers, Precision Sidecar, & Compute 4x8 MIH Chunk Postings in parallel
             int[][] chunkBucketKeys = new int[NUM_MIH_CHUNKS][(int) numVectors];
             int[][] chunkBucketCounts = new int[NUM_MIH_CHUNKS][NUM_MIH_BUCKETS];
 
             TransformOperator transformer = new TransformOperator(dimension, tiers);
             java.util.stream.IntStream.range(0, (int) numVectors).parallel().forEach(i -> {
                 VectorRecord rec = records.get(i);
+                float[] rawVec = rec.vector();
+                float[] z = transformer.preconditionAndRotate(rawVec);
                 int[] keys = new int[4];
                 if (qMode == 1) { // 2-bit QJL Residuals
-                    float[] z = transformer.preconditionAndRotate(rec.vector());
                     float threshold = TransformOperator.calculatePercentileThreshold(z, 0.20f);
                     long[][] packed = transformer.quantize2Bit(z, threshold);
                     long[] signPacked = packed[0];
@@ -472,18 +479,21 @@ public final class PithosContainer {
                     keys[2] = (int) ((w0 >> 16) & 0xFFL);
                     keys[3] = (int) ((w0 >> 24) & 0xFFL);
 
-                    int longOffset = 0;
                     for (int k = 0; k < numTiers; k++) {
+                        int startDim = (k == 0) ? 0 : tiers[k - 1];
+                        int width = tierWidths[k];
                         int count = tierLongs[k];
-                        long baseOffset = tierOffsets[k] + ((long) i * (count * 16L));
+                        int halfBytes = (width + 7) / 8;
+                        long baseOffset = tierOffsets[k] + ((long) i * tierBytesPerRecord[k]);
                         for (int l = 0; l < count; l++) {
-                            mapped.set(ValueLayout.JAVA_LONG, baseOffset + (l * 8L), signPacked[longOffset + l]);
-                            mapped.set(ValueLayout.JAVA_LONG, baseOffset + (count * 8L) + (l * 8L), maskPacked[longOffset + l]);
+                            long sWord = TransformOperator.extractTierWord(signPacked, startDim, width, l);
+                            long mWord = TransformOperator.extractTierWord(maskPacked, startDim, width, l);
+                            int validBytes = Math.min(8, halfBytes - l * 8);
+                            writeTierWord(mapped, baseOffset + (l * 8L), sWord, validBytes);
+                            writeTierWord(mapped, baseOffset + halfBytes + (l * 8L), mWord, validBytes);
                         }
-                        longOffset += count;
                     }
                 } else if (qMode == 2) { // Float-Hybrid raw float32
-                    float[] z = transformer.preconditionAndRotate(rec.vector());
                     int k32 = 0;
                     for (int j = 0; j < Math.min(32, dimension); j++) {
                         if (z[j] >= 0.0f) {
@@ -495,38 +505,85 @@ public final class PithosContainer {
                     keys[2] = ((k32 >> 16) & 0xFF);
                     keys[3] = ((k32 >> 24) & 0xFF);
 
-                    int longOffset = 0;
                     for (int k = 0; k < numTiers; k++) {
-                        int count = tierLongs[k];
                         int startDim = (k == 0) ? 0 : tiers[k - 1];
-                        int width = tiers[k] - startDim;
+                        int width = tierWidths[k];
                         long baseOffset = tierOffsets[k] + ((long) i * width * 4L);
                         for (int l = 0; l < width; l++) {
                             int raw = Float.floatToRawIntBits(z[startDim + l]);
                             mapped.set(ValueLayout.JAVA_INT_UNALIGNED, baseOffset + (l * 4L), raw);
                         }
-                        longOffset += count;
                     }
                 } else { // 1-bit default
-                    long[] packed = transformer.transformAndQuantize(rec.vector());
+                    long[] packed = transformer.quantize1Bit(z);
                     long w0 = packed[0];
                     keys[0] = (int) (w0 & 0xFFL);
                     keys[1] = (int) ((w0 >> 8) & 0xFFL);
                     keys[2] = (int) ((w0 >> 16) & 0xFFL);
                     keys[3] = (int) ((w0 >> 24) & 0xFFL);
 
-                    int longOffset = 0;
                     for (int k = 0; k < numTiers; k++) {
+                        int startDim = (k == 0) ? 0 : tiers[k - 1];
+                        int width = tierWidths[k];
                         int count = tierLongs[k];
-                        long baseOffset = tierOffsets[k] + ((long) i * (count * 8L));
+                        int tierBytes = (width + 7) / 8;
+                        long baseOffset = tierOffsets[k] + ((long) i * tierBytesPerRecord[k]);
                         for (int l = 0; l < count; l++) {
-                            mapped.set(ValueLayout.JAVA_LONG, baseOffset + (l * 8L), packed[longOffset + l]);
+                            long word = TransformOperator.extractTierWord(packed, startDim, width, l);
+                            int validBytes = Math.min(8, tierBytes - l * 8);
+                            writeTierWord(mapped, baseOffset + (l * 8L), word, validBytes);
                         }
-                        longOffset += count;
                     }
                 }
                 for (int c = 0; c < NUM_MIH_CHUNKS; c++) {
                     chunkBucketKeys[c][i] = keys[c];
+                }
+
+                // Write Precision Sidecar directly in the same parallel pass (FP8 and FP4 in rotated WHT space z)
+                if (sidecarMode == VectorDb.SIDECAR_FP16) {
+                    long rowOffset = sidecarOffset + ((long) i * dimension * 2L);
+                    for (int d = 0; d < dimension; d++) {
+                        short fp16 = Float.floatToFloat16(rawVec[d]);
+                        mapped.set(ValueLayout.JAVA_SHORT_UNALIGNED, rowOffset + d * 2L, fp16);
+                    }
+                } else if (sidecarMode == VectorDb.SIDECAR_FP8) {
+                    long rowOffset = sidecarOffset + ((long) i * dimension);
+                    for (int d = 0; d < dimension; d++) {
+                        byte fp8 = VectorDb.encodeFP8_E4M3(z[d]);
+                        mapped.set(ValueLayout.JAVA_BYTE, rowOffset + d, fp8);
+                    }
+                } else if (sidecarMode == VectorDb.SIDECAR_FP4) {
+                    int blockSize = 16;
+                    int numBlocks = (dimension + blockSize - 1) / blockSize;
+                    int bytesPerRecord = numBlocks * 9;
+                    long rowOffset = sidecarOffset + ((long) i * bytesPerRecord);
+                    for (int b = 0; b < numBlocks; b++) {
+                        int blockStart = b * blockSize;
+                        float maxAbs = 0.0f;
+                        for (int j = 0; j < blockSize; j++) {
+                            int dimIdx = blockStart + j;
+                            if (dimIdx < dimension) {
+                                float abs = Math.abs(z[dimIdx]);
+                                if (abs > maxAbs) maxAbs = abs;
+                            }
+                        }
+                        float scale = maxAbs / 6.0f;
+                        byte scaleByte = VectorDb.encodeFP8_E4M3(scale);
+                        long blockOffset = rowOffset + b * 9L;
+                        mapped.set(ValueLayout.JAVA_BYTE, blockOffset, scaleByte);
+
+                        float invScale = (scale > 0.0f) ? (1.0f / scale) : 0.0f;
+                        for (int j = 0; j < 8; j++) {
+                            int d0 = blockStart + j * 2;
+                            int d1 = blockStart + j * 2 + 1;
+                            float v0 = (d0 < dimension) ? z[d0] * invScale : 0.0f;
+                            float v1 = (d1 < dimension) ? z[d1] * invScale : 0.0f;
+                            byte n0 = VectorDb.encodeFP4_E2M1_Nibble(v0);
+                            byte n1 = VectorDb.encodeFP4_E2M1_Nibble(v1);
+                            byte packed = (byte) ((n1 << 4) | (n0 & 0xF));
+                            mapped.set(ValueLayout.JAVA_BYTE, blockOffset + 1 + j, packed);
+                        }
+                    }
                 }
             });
 
@@ -571,62 +628,6 @@ public final class PithosContainer {
                 }
             });
 
-            // 5. Write Precision Sidecar Section in parallel
-            if (sidecarMode == VectorDb.SIDECAR_FP16) {
-                java.util.stream.IntStream.range(0, (int) numVectors).parallel().forEach(i -> {
-                    float[] vec = records.get(i).vector();
-                    long rowOffset = sidecarOffset + ((long) i * dimension * 2L);
-                    for (int d = 0; d < dimension; d++) {
-                        short fp16 = Float.floatToFloat16(vec[d]);
-                        mapped.set(ValueLayout.JAVA_SHORT_UNALIGNED, rowOffset + d * 2L, fp16);
-                    }
-                });
-            } else if (sidecarMode == VectorDb.SIDECAR_FP8) {
-                java.util.stream.IntStream.range(0, (int) numVectors).parallel().forEach(i -> {
-                    float[] vec = records.get(i).vector();
-                    long rowOffset = sidecarOffset + ((long) i * dimension);
-                    for (int d = 0; d < dimension; d++) {
-                        byte fp8 = VectorDb.encodeFP8_E4M3(vec[d]);
-                        mapped.set(ValueLayout.JAVA_BYTE, rowOffset + d, fp8);
-                    }
-                });
-            } else if (sidecarMode == VectorDb.SIDECAR_FP4) {
-                int blockSize = 16;
-                int numBlocks = (dimension + blockSize - 1) / blockSize;
-                int bytesPerRecord = numBlocks * 9;
-                java.util.stream.IntStream.range(0, (int) numVectors).parallel().forEach(i -> {
-                    float[] vec = records.get(i).vector();
-                    long rowOffset = sidecarOffset + ((long) i * bytesPerRecord);
-                    for (int b = 0; b < numBlocks; b++) {
-                        int blockStart = b * blockSize;
-                        float maxAbs = 0.0f;
-                        for (int j = 0; j < blockSize; j++) {
-                            int dimIdx = blockStart + j;
-                            if (dimIdx < dimension) {
-                                float abs = Math.abs(vec[dimIdx]);
-                                if (abs > maxAbs) maxAbs = abs;
-                            }
-                        }
-                        float scale = maxAbs / 6.0f;
-                        byte scaleByte = VectorDb.encodeFP8_E4M3(scale);
-                        long blockOffset = rowOffset + b * 9L;
-                        mapped.set(ValueLayout.JAVA_BYTE, blockOffset, scaleByte);
-
-                        float invScale = (scale > 0.0f) ? (1.0f / scale) : 0.0f;
-                        for (int j = 0; j < 8; j++) {
-                            int d0 = blockStart + j * 2;
-                            int d1 = blockStart + j * 2 + 1;
-                            float v0 = (d0 < dimension) ? vec[d0] * invScale : 0.0f;
-                            float v1 = (d1 < dimension) ? vec[d1] * invScale : 0.0f;
-                            byte n0 = VectorDb.encodeFP4_E2M1_Nibble(v0);
-                            byte n1 = VectorDb.encodeFP4_E2M1_Nibble(v1);
-                            byte packed = (byte) ((n1 << 4) | (n0 & 0xF));
-                            mapped.set(ValueLayout.JAVA_BYTE, blockOffset + 1 + j, packed);
-                        }
-                    }
-                });
-            }
-
             // 5. Write Generic Metadata Payload Section
             if (metadataPayload != null && metadataPayload.length > 0) {
                 for (int i = 0; i < metadataPayload.length; i++) {
@@ -648,6 +649,18 @@ public final class PithosContainer {
             }
 
             mapped.force();
+        }
+    }
+
+    static void writeTierWord(MemorySegment seg, long offset, long word, int validBytes) {
+        if (validBytes >= 8) {
+            seg.set(ValueLayout.JAVA_LONG_UNALIGNED, offset, word);
+        } else if (validBytes == 4) {
+            seg.set(ValueLayout.JAVA_INT_UNALIGNED, offset, (int) word);
+        } else {
+            for (int b = 0; b < validBytes; b++) {
+                seg.set(ValueLayout.JAVA_BYTE, offset + b, (byte) ((word >>> (b * 8)) & 0xFFL));
+            }
         }
     }
 }

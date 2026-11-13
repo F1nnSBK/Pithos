@@ -85,15 +85,8 @@ def main():
         with VectorDb() as db:
             index = db.load_index(f"idx_{label}", path)
 
-            import platform
-            is_arm64 = platform.machine().lower() in ("arm64", "aarch64")
-            
-            if sidecar_mode == SidecarMode.NONE and is_arm64:
-                print(f"  [SKIPPED] Search unsupported on ARM64 for SidecarMode.NONE")
-                lat_per_query_us = 0.0
-                qps = 0.0
-                r1 = 0.0
-                r10 = 0.0
+            if False:
+                pass
             else:
                 # Warmup
                 _ = index.search(queries[:5], k=k)
