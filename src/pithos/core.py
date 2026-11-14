@@ -939,6 +939,8 @@ class Index:
         if meta and "mips_transformer" in meta:
             from .mips import SphericalLiftingTransformer
             self._mips_transformer = SphericalLiftingTransformer.from_dict(meta["mips_transformer"])
+            if self.tier_count > 1:
+                self.set_energy_budget(0.5)
 
     def __setattr__(self, name: str, value: Any) -> None:
         """Protects Index attributes against silent assignment bugs (FAISS standard)."""
@@ -1187,8 +1189,6 @@ class Index:
         elif force_python:
             self._python_search_fallback(q_arr, k, out_ids, out_dists)
         elif getattr(self, "_mips_transformer", None) is not None:
-            if self.tier_count > 1:
-                self.set_energy_budget(0.5)
             native_k = max(k, min(max(k * 16, 128), max(1, len(self))))
             native_ids = np.empty((num_queries, native_k), dtype=np.int64)
             native_dists = np.empty((num_queries, native_k), dtype=np.int32)
@@ -1651,7 +1651,7 @@ class Index:
         return [self.dimension]
 
     def _is_sidecar_in_wht_space(self) -> bool:
-        """Returns True if the container TOC marks the sidecar as stored in rotated WHT space."""
+        """Returns True if the index sidecar is stored in rotated WHT space."""
         c_path = self._base_path if self._base_path.endswith(".pithos") else f"{self._base_path}.pithos"
         if os.path.exists(c_path) and os.path.isfile(c_path):
             try:
@@ -1659,7 +1659,7 @@ class Index:
                 return toc.get("sections", {}).get("sidecar", {}).get("space") == "wht"
             except Exception:
                 return False
-        return False
+        return self.sidecar_mode in (SidecarMode.FP8, SidecarMode.FP4)
 
     def get_vectors(
         self,
@@ -2023,6 +2023,7 @@ def _write_pithos_container_file(
 
         sidecar_bytes = b""
         sidecar_format = "none"
+        sidecar_space = "raw"
         if actual_sidecar == SidecarMode.FP16:
             fp16_file = f"{tmp_base}_fp16.bin"
             if os.path.exists(fp16_file) and os.path.getsize(fp16_file) == num_records * dimension * 2:
@@ -2037,8 +2038,10 @@ def _write_pithos_container_file(
                 with open(fp8_file, "rb") as f:
                     sidecar_bytes = f.read()
             else:
-                sidecar_bytes = _encode_fp8_e4m3_array(vecs).tobytes()
+                rot_vecs = _precondition_and_rotate_array(vecs, dimension, tiers_arr)
+                sidecar_bytes = _encode_fp8_e4m3_array(rot_vecs).tobytes()
             sidecar_format = "fp8_e4m3"
+            sidecar_space = "wht"
         elif actual_sidecar == SidecarMode.FP4:
             fp4_file = f"{tmp_base}_fp4.bin"
             num_blocks = (dimension + 15) // 16
@@ -2047,8 +2050,10 @@ def _write_pithos_container_file(
                 with open(fp4_file, "rb") as f:
                     sidecar_bytes = f.read()
             else:
-                sidecar_bytes = _encode_nvfp4_blocks_array(vecs).tobytes()
+                rot_vecs = _precondition_and_rotate_array(vecs, dimension, tiers_arr)
+                sidecar_bytes = _encode_nvfp4_blocks_array(rot_vecs).tobytes()
             sidecar_format = "nvfp4_e2m1"
+            sidecar_space = "wht"
 
         meta_bytes = metadata_payload if metadata_payload else b""
         meta_format = metadata_format if metadata_format else "raw"
@@ -2103,6 +2108,7 @@ def _write_pithos_container_file(
             "offset": sidecar_offset,
             "length": sidecar_len,
             "format": sidecar_format,
+            "space": sidecar_space,
         }
         toc_dict["sections"]["prefix_table"] = {
             "offset": prefix_table_offset,
@@ -2503,15 +2509,6 @@ class VectorDb:
                         )
                 except Exception:
                     pass
-            if q_mode == QuantizationMode.ONE_BIT:
-                prev_b = 0
-                has_sub64 = False
-                for tb in tiers_arr:
-                    if ((int(tb) - prev_b) & 63) != 0:
-                        has_sub64 = True
-                    prev_b = int(tb)
-                if has_sub64:
-                    _populate_sub64_container_tiers(path, vecs, dimension, tiers_arr)
         else:
             _write_pithos_container_file(
                 path=path,

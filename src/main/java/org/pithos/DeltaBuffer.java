@@ -9,10 +9,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.PriorityQueue;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -81,6 +83,7 @@ public class DeltaBuffer {
 
     /// Ordered list of inserted entries (append-only, tombstones included), guarded by rwLock.
     private final ArrayList<BufferEntry> entries;
+    private final Set<Long> shadowedIds = ConcurrentHashMap.newKeySet();
     private final ReentrantReadWriteLock rwLock = new ReentrantReadWriteLock();
 
     /// Count of live (non-tombstoned) entries.
@@ -103,11 +106,17 @@ public class DeltaBuffer {
     /// @param flushThreshold soft limit on live entries before flush is recommended
     /// @param walPath path to the on-disk WAL file (or `null` for in-memory only)
     public DeltaBuffer(int dimension, int flushThreshold, String walPath) {
+        if (dimension <= 0) {
+            throw new IllegalArgumentException("Dimension must be positive: " + dimension);
+        }
+        int initialCapacity = Math.clamp(flushThreshold, 16, 16384);
         this.dimension = dimension;
         this.flushThreshold = flushThreshold;
         this.walPath = walPath;
-        this.entries = new ArrayList<>(Math.max(16, Math.min(flushThreshold, 16384)));
+        this.entries = new ArrayList<>(initialCapacity);
         this.walWriteBuffer = walPath != null ? ByteBuffer.allocateDirect(9 + dimension * 4) : null;
+        super();
+
         if (walPath != null) {
             try {
                 Path path = Path.of(walPath);
@@ -124,20 +133,18 @@ public class DeltaBuffer {
             }
         }
 
-        ThreadFactory tf = r -> {
-            Thread t = new Thread(r, "pithos-deltabuffer-writer");
-            t.setDaemon(true);
-            return t;
-        };
+        var tf = Thread.ofPlatform().daemon(true).name("pithos-deltabuffer-writer").factory();
         this.disruptor = new Disruptor<>(MutationEvent::new, 65536, tf, ProducerType.MULTI, new BlockingWaitStrategy());
-        this.disruptor.handleEventsWith((event, sequence, endOfBatch) -> {
+        this.disruptor.handleEventsWith((event, _, endOfBatch) -> {
             try {
                 if (event.type == 1) { // INSERT
                     if (walChannel != null) {
                         writeInsertToWal(event.id, event.vector, endOfBatch);
                     }
+                    shadowedIds.add(event.id);
                     rwLock.writeLock().lock();
                     try {
+                        tombstoneActiveEntriesLocked(event.id);
                         entries.add(new BufferEntry(event.id, event.vector, false));
                     } finally {
                         rwLock.writeLock().unlock();
@@ -147,24 +154,16 @@ public class DeltaBuffer {
                         event.future.complete(true);
                     }
                 } else if (event.type == 2) { // DELETE
-                    boolean found = false;
-                    rwLock.readLock().lock();
+                    shadowedIds.add(event.id);
+                    boolean found;
+                    rwLock.writeLock().lock();
                     try {
-                        for (int i = 0, n = entries.size(); i < n; i++) {
-                            BufferEntry e = entries.get(i);
-                            if (e.id == event.id && !e.tombstone) {
-                                e.tombstone = true;
-                                liveCount.decrementAndGet();
-                                found = true;
-                            }
-                        }
+                        found = tombstoneActiveEntriesLocked(event.id);
                     } finally {
-                        rwLock.readLock().unlock();
+                        rwLock.writeLock().unlock();
                     }
-                    if (found && walChannel != null) {
+                    if (walChannel != null) {
                         writeDeleteToWal(event.id, endOfBatch);
-                    } else if (endOfBatch && walChannel != null) {
-                        walChannel.force(false);
                     }
                     if (event.future != null) {
                         event.future.complete(found);
@@ -180,6 +179,34 @@ public class DeltaBuffer {
         });
         this.disruptor.start();
         this.ringBuffer = disruptor.getRingBuffer();
+    }
+
+    private boolean tombstoneActiveEntriesLocked(long id) {
+        boolean found = false;
+        for (int i = 0, n = entries.size(); i < n; i++) {
+            BufferEntry e = entries.get(i);
+            if (e.id == id && !e.tombstone) {
+                e.tombstone = true;
+                liveCount.decrementAndGet();
+                found = true;
+            }
+        }
+        return found;
+    }
+
+    /// Returns `true` if any ID has been inserted into or deleted via this delta buffer.
+    public boolean hasShadowedIds() {
+        return !shadowedIds.isEmpty();
+    }
+
+    /// Returns the count of distinct IDs shadowed (inserted/updated/deleted) in this delta buffer.
+    public int shadowedCount() {
+        return shadowedIds.size();
+    }
+
+    /// Returns `true` if the given base-index ID is superseded or deleted by this delta buffer.
+    public boolean isShadowed(long id) {
+        return shadowedIds.contains(id);
     }
 
     /// Inserts a new vector record into the delta buffer and appends it to the WAL.
@@ -293,7 +320,7 @@ public class DeltaBuffer {
             float d = Float.intBitsToFloat((int) entry[0]);
             results.add(new Index.SearchResult(entry[1], (int) (d * 1_000_000f)));
         }
-        results.sort((a, b) -> Integer.compare(a.score(), b.score()));
+        results.sort(Comparator.comparingInt(Index.SearchResult::score));
         return results;
     }
 
@@ -393,6 +420,7 @@ public class DeltaBuffer {
                 }
             }
             entries.clear();
+            shadowedIds.clear();
             liveCount.set(0);
         } finally {
             rwLock.writeLock().unlock();
@@ -401,7 +429,7 @@ public class DeltaBuffer {
             try {
                 walChannel.truncate(0);
                 walChannel.force(false);
-            } catch (IOException e) {
+            } catch (IOException _) {
                 // Ignore truncation errors
             }
         }
@@ -431,16 +459,13 @@ public class DeltaBuffer {
                 for (int d = 0; d < dimension; d++) {
                     vec[d] = buffer.getFloat();
                 }
+                shadowedIds.add(id);
+                tombstoneActiveEntriesLocked(id);
                 entries.add(new BufferEntry(id, vec, false));
                 liveCount.incrementAndGet();
             } else if (type == 2) {
-                for (int i = 0, n = entries.size(); i < n; i++) {
-                    BufferEntry e = entries.get(i);
-                    if (e.id == id && !e.tombstone) {
-                        e.tombstone = true;
-                        liveCount.decrementAndGet();
-                    }
-                }
+                shadowedIds.add(id);
+                tombstoneActiveEntriesLocked(id);
             }
         }
         walChannel.position(size);
@@ -485,7 +510,7 @@ public class DeltaBuffer {
                 walChannel.force(false);
                 walChannel.close();
                 walChannel = null;
-            } catch (IOException e) {
+            } catch (IOException _) {
                 // Ignore
             }
         }

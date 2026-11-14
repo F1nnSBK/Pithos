@@ -5,17 +5,14 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ThreadFactory;
 import java.util.stream.IntStream;
 
 /// # FlatIndex
@@ -31,10 +28,9 @@ import java.util.stream.IntStream;
 /// 3. **Gate 3 (Exact In-Engine Reranking):**
 ///    - **FP16 Sidecar Path:** Exact Euclidean L2 distance calculated directly from IEEE 754 half-precision floats:
 ///      `d_L2²(q, x) = ∑_{d=0}^{D-1} (q_d - fp16ToFloat(x_d^fp16))²`
-///    - **Asymmetric Fallback Path:** Exact continuous query against uncompressed rotated coordinates:
-///      `d_asym(z_q, b_d) = ||z_q||² + D + 2 · ∑_{j=0}^{D-1} z_{q, j} - 4 · ∑_{j : b_{d, j} = 1} z_{q, j}`
+///    - **Asymmetric Fallback Path:** Exact continuous query against normalized binary/ternary coordinates.
 ///
-/// Threading is coordinated via an **LMAX Disruptor lock-free ring buffer** with thread-local nearest-neighbor heaps.
+/// Scans execute in parallel across batches or disjoint index chunks with bounded per-query candidate heaps.
 public class FlatIndex implements Index {
 
     public static final float[] FP8_E4M3_LUT = new float[256];
@@ -184,7 +180,9 @@ public class FlatIndex implements Index {
         this.metadataPayloadSegment = metadataPayloadSegment;
         this.isSingleFileContainer = (userMetadataJson != null || metadataPayloadSegment != null);
         this.sidecarInWhtSpace = !this.isSingleFileContainer
-                || (userMetadataJson != null && userMetadataJson.contains("\"space\": \"wht\""));
+                || (userMetadataJson != null
+                        && (userMetadataJson.contains("\"space\": \"wht\"")
+                                || userMetadataJson.contains("\"space\":\"wht\"")));
         this.prefixOffsetsSegment = prefixOffsetsSegment;
         this.prefixPostingsSegment = prefixPostingsSegment;
         this.hasPrefixTable = (prefixOffsetsSegment != null && prefixPostingsSegment != null);
@@ -267,12 +265,12 @@ public class FlatIndex implements Index {
 
     /// Returns the virtual memory address of the metadata column segment.
     public long getMetadataAddress() {
-        return metadataSegment.address();
+        return metadataSegment != null ? metadataSegment.address() : 0L;
     }
 
     /// Returns the byte size of the metadata column segment.
     public long getMetadataByteSize() {
-        return metadataSegment.byteSize();
+        return metadataSegment != null ? metadataSegment.byteSize() : 0L;
     }
 
     /// Returns the virtual memory address of the IDs column segment.
@@ -339,7 +337,8 @@ public class FlatIndex implements Index {
                 int sidecarMode = sb.sidecarType();
 
                 long fileSize = channel.size();
-                MemorySegment containerSegment = channel.map(FileChannel.MapMode.READ_ONLY, 0, fileSize, Arena.global());
+                Arena indexArena = Arena.ofAuto();
+                MemorySegment containerSegment = channel.map(FileChannel.MapMode.READ_ONLY, 0, fileSize, indexArena);
 
                 long idsOffset = PithosContainer.align64(PithosContainer.SUPERBLOCK_SIZE);
                 long idsLength = totalRecords * 8L;
@@ -440,9 +439,10 @@ public class FlatIndex implements Index {
         }
 
         // 2. Legacy Multi-File PLAN Layout Fallback
+        Arena indexArena = Arena.ofAuto();
         MemorySegment mappedBase;
         try (FileChannel channel = FileChannel.open(mainPath, StandardOpenOption.READ)) {
-            mappedBase = channel.map(FileChannel.MapMode.READ_ONLY, 0, 64, Arena.global());
+            mappedBase = channel.map(FileChannel.MapMode.READ_ONLY, 0, 64, indexArena);
         }
 
         byte m0 = mappedBase.get(ValueLayout.JAVA_BYTE, 0);
@@ -470,13 +470,13 @@ public class FlatIndex implements Index {
         Path idsPath = Path.of(basePath + "_ids.bin");
         MemorySegment idsSegment;
         try (FileChannel channel = FileChannel.open(idsPath, StandardOpenOption.READ)) {
-            idsSegment = channel.map(FileChannel.MapMode.READ_ONLY, 0, totalRecords * 8, Arena.global());
+            idsSegment = channel.map(FileChannel.MapMode.READ_ONLY, 0, totalRecords * 8, indexArena);
         }
 
         Path metadataPath = Path.of(basePath + "_metadata.bin");
         MemorySegment metadataSegment;
         try (FileChannel channel = FileChannel.open(metadataPath, StandardOpenOption.READ)) {
-            metadataSegment = channel.map(FileChannel.MapMode.READ_ONLY, 0, totalRecords * 8, Arena.global());
+            metadataSegment = channel.map(FileChannel.MapMode.READ_ONLY, 0, totalRecords * 8, indexArena);
         }
 
         MemorySegment[] tierSegments = new MemorySegment[numTiers];
@@ -491,7 +491,7 @@ public class FlatIndex implements Index {
             };
             try (FileChannel channel = FileChannel.open(tierPath, StandardOpenOption.READ)) {
                 tierSegments[k] = channel.map(FileChannel.MapMode.READ_ONLY, 0, totalRecords * bytesPerRecord,
-                        Arena.global());
+                        indexArena);
             }
             prevBound = tiers[k];
         }
@@ -513,30 +513,30 @@ public class FlatIndex implements Index {
 
         MemorySegment fp16Segment = null;
         Path fp16Path = Path.of(basePath + "_fp16.bin");
-        if (fp16Path.toFile().exists()) {
+        if (Files.exists(fp16Path)) {
             try (FileChannel channel = FileChannel.open(fp16Path, StandardOpenOption.READ)) {
                 fp16Segment = channel.map(FileChannel.MapMode.READ_ONLY, 0, totalRecords * dimension * 2L,
-                        Arena.global());
+                        indexArena);
             }
         }
 
         MemorySegment fp8Segment = null;
         Path fp8Path = Path.of(basePath + "_fp8.bin");
-        if (fp8Path.toFile().exists()) {
+        if (Files.exists(fp8Path)) {
             try (FileChannel channel = FileChannel.open(fp8Path, StandardOpenOption.READ)) {
                 fp8Segment = channel.map(FileChannel.MapMode.READ_ONLY, 0, totalRecords * dimension * 1L,
-                        Arena.global());
+                        indexArena);
             }
         }
 
         MemorySegment fp4Segment = null;
         Path fp4Path = Path.of(basePath + "_fp4.bin");
-        if (fp4Path.toFile().exists()) {
+        if (Files.exists(fp4Path)) {
             int numBlocks = (dimension + 15) / 16;
             long bytesPerRecord = numBlocks * 9L;
             try (FileChannel channel = FileChannel.open(fp4Path, StandardOpenOption.READ)) {
                 fp4Segment = channel.map(FileChannel.MapMode.READ_ONLY, 0, totalRecords * bytesPerRecord,
-                        Arena.global());
+                        indexArena);
             }
         }
 
@@ -788,11 +788,10 @@ public class FlatIndex implements Index {
                 }
             }
         } else if (fp16Segment != null) {
-            short[] localFp16 = new short[dimension];
             for (int cIdx = 0; cIdx < validCandidates; cIdx++) {
                 long rowIdx = topRowIds[cIdx];
                 double currentLimit = bestDists[k - 1];
-                double dist = computeExactL2FP16(query, rowIdx, localFp16, currentLimit);
+                double dist = computeExactL2FP16(query, rowIdx, currentLimit);
                 if (dist < currentLimit) {
                     int pos = k - 1;
                     while (pos > 0 && dist < bestDists[pos - 1]) {
@@ -838,56 +837,103 @@ public class FlatIndex implements Index {
         return queryResults;
     }
 
+    private static void insertTopCandidate(int[] topDists, long[] topRowIds, int kCandidate, int dist, long rowIdx) {
+        if (dist < topDists[kCandidate - 1]) {
+            int pos = kCandidate - 1;
+            while (pos > 0 && dist < topDists[pos - 1]) {
+                topDists[pos] = topDists[pos - 1];
+                topRowIds[pos] = topRowIds[pos - 1];
+                pos--;
+            }
+            topDists[pos] = dist;
+            topRowIds[pos] = rowIdx;
+        }
+    }
+
+    private record ChunkCandidates(int[] dists, long[] rowIds) {
+    }
+
+    private int activeTierIndex() {
+        for (int i = 0; i < numTiers; i++) {
+            if (cumulativeEnergy[i] >= targetEnergyBudget) {
+                return i;
+            }
+        }
+        return 0;
+    }
+
+    private List<SearchResult> searchSingleQueryLinear(float[] query, int activeT, int k, int kCandidate) {
+        if (kCandidate <= 0 || size == 0) {
+            return List.of();
+        }
+        float[] zQuery = transformOperator.preconditionAndRotate(query);
+        long[] bQuery = null;
+        long[] bQueryMask = null;
+        if (qMode == 1) {
+            float qThreshold = TransformOperator.calculatePercentileThreshold(zQuery, 0.20f);
+            long[][] packed = transformOperator.quantize2Bit(zQuery, qThreshold);
+            bQuery = packQueryByTiers(packed[0]);
+            bQueryMask = packQueryByTiers(packed[1]);
+        } else if (qMode == 0) {
+            bQuery = packQueryByTiers(transformOperator.quantize1Bit(zQuery));
+        }
+
+        int[] topDists = new int[kCandidate];
+        long[] topRowIds = new long[kCandidate];
+        Arrays.fill(topDists, Integer.MAX_VALUE);
+
+        if (size > chunkSize) {
+            long currentChunk = chunkSize;
+            int numChunks = (int) ((size + currentChunk - 1) / currentChunk);
+            final long[] finalBQuery = bQuery;
+            final long[] finalBQueryMask = bQueryMask;
+
+            List<ChunkCandidates> partialResults = IntStream.range(0, numChunks).parallel().mapToObj(c -> {
+                long startIdx = c * currentChunk;
+                long endIdx = Math.min(startIdx + currentChunk, size);
+                int[] localDists = new int[kCandidate];
+                long[] localRowIds = new long[kCandidate];
+                Arrays.fill(localDists, Integer.MAX_VALUE);
+                for (long rowIdx = startIdx; rowIdx < endIdx; rowIdx++) {
+                    evaluateCandidateGate2(rowIdx, activeT, zQuery, finalBQuery, finalBQueryMask, localDists, localRowIds, kCandidate);
+                }
+                return new ChunkCandidates(localDists, localRowIds);
+            }).toList();
+
+            for (ChunkCandidates chunk : partialResults) {
+                for (int i = 0; i < kCandidate && chunk.dists()[i] != Integer.MAX_VALUE; i++) {
+                    insertTopCandidate(topDists, topRowIds, kCandidate, chunk.dists()[i], chunk.rowIds()[i]);
+                }
+            }
+        } else {
+            for (long rowIdx = 0; rowIdx < size; rowIdx++) {
+                evaluateCandidateGate2(rowIdx, activeT, zQuery, bQuery, bQueryMask, topDists, topRowIds, kCandidate);
+            }
+        }
+
+        int validCandidates = 0;
+        while (validCandidates < kCandidate && topDists[validCandidates] != Integer.MAX_VALUE) {
+            validCandidates++;
+        }
+        return rerankGate3(query, zQuery, topDists, topRowIds, validCandidates, k);
+    }
+
     @SuppressWarnings("unchecked")
     private List<SearchResult>[] searchLinearScanParallel(float[][] queries, int k) {
         int numQueries = queries.length;
-        int tVal = 0;
-        for (int i = 0; i < numTiers; i++) {
-            if (cumulativeEnergy[i] >= targetEnergyBudget) {
-                tVal = i;
-                break;
-            }
-        }
-        final int activeT = tVal;
+        int activeT = activeTierIndex();
         int kCandidate = (int) Math.min(size, (fp16Segment != null || fp8Segment != null || fp4Segment != null)
                 ? Math.max(100, 20 * k)
                 : Math.max(50, 3 * k));
 
         List<SearchResult>[] finalResults = new List[numQueries];
+        if (numQueries == 1) {
+            finalResults[0] = searchSingleQueryLinear(queries[0], activeT, k, kCandidate);
+            return finalResults;
+        }
 
-        IntStream.range(0, numQueries).parallel().forEach(q -> {
-            float[] query = queries[q];
-            float[] zQuery = transformOperator.preconditionAndRotate(query);
-
-            long[] bQuery;
-            long[] bQueryMask = null;
-            if (qMode == 1) { // 2-bit
-                float qThreshold = TransformOperator.calculatePercentileThreshold(zQuery, 0.20f);
-                long[][] packed = transformOperator.quantize2Bit(zQuery, qThreshold);
-                bQuery = packQueryByTiers(packed[0]);
-                bQueryMask = packQueryByTiers(packed[1]);
-            } else if (qMode == 0) { // 1-bit
-                bQuery = packQueryByTiers(transformOperator.quantize1Bit(zQuery));
-            } else {
-                bQuery = null;
-            }
-
-            int[] topDists = new int[kCandidate];
-            long[] topRowIds = new long[kCandidate];
-            Arrays.fill(topDists, Integer.MAX_VALUE);
-
-            for (long rowIdx = 0; rowIdx < size; rowIdx++) {
-                evaluateCandidateGate2(rowIdx, activeT, zQuery, bQuery, bQueryMask, topDists, topRowIds, kCandidate);
-            }
-
-            int validCandidates = 0;
-            while (validCandidates < kCandidate && topDists[validCandidates] != Integer.MAX_VALUE) {
-                validCandidates++;
-            }
-
-            finalResults[q] = rerankGate3(query, zQuery, topDists, topRowIds, validCandidates, k);
-        });
-
+        IntStream.range(0, numQueries).parallel().forEach(q ->
+                finalResults[q] = searchSingleQueryLinear(queries[q], activeT, k, kCandidate));
         return finalResults;
     }
 
@@ -1139,7 +1185,7 @@ public class FlatIndex implements Index {
         return sum;
     }
 
-    private double computeExactL2FP16(float[] rawQuery, long rowIdx, short[] localFp16, double currentLimit) {
+    private double computeExactL2FP16(float[] rawQuery, long rowIdx, double currentLimit) {
         long rowOffset = rowIdx * dimension * 2L;
         double sum = 0.0;
         for (int d = 0; d < dimension; d++) {
@@ -1192,7 +1238,9 @@ public class FlatIndex implements Index {
                 }
                 tierStartDim += width;
             }
-            return totalMaskPopcount + queryL2Norm - 4.0 * sumPositive + 2.0 * sumActive;
+            double invSqrtM = totalMaskPopcount > 0 ? 1.0 / Math.sqrt(totalMaskPopcount) : 0.0;
+            double bNormSq = totalMaskPopcount > 0 ? 1.0 : 0.0;
+            return bNormSq + queryL2Norm + invSqrtM * (2.0 * sumActive - 4.0 * sumPositive);
         } else { // 1-bit mode
             double sumPositive = 0.0;
             int tierStartDim = 0;
@@ -1217,7 +1265,8 @@ public class FlatIndex implements Index {
                 }
                 tierStartDim += width;
             }
-            return query.length + queryL2Norm + 2.0 * querySum - 4.0 * sumPositive;
+            double invSqrtD = 1.0 / Math.sqrt(query.length);
+            return 1.0 + queryL2Norm + invSqrtD * (2.0 * querySum - 4.0 * sumPositive);
         }
     }
 
@@ -1228,65 +1277,15 @@ public class FlatIndex implements Index {
 
     @Override
     public long queryPlanetaryGrid(float[][] queries, int[] families, int[] thresholds, long rawMaskAddress, MemorySegment votingMask) {
-        final MemorySegment finalVotingMask = (votingMask == null && rawMaskAddress != 0L) 
-            ? MemorySegment.ofAddress(rawMaskAddress).reinterpret(size) 
-            : votingMask;
+        final MemorySegment finalVotingMask = (votingMask == null && rawMaskAddress != 0L)
+                ? MemorySegment.ofAddress(rawMaskAddress).reinterpret(size)
+                : votingMask;
 
-        if (queries == null || queries.length == 0)
+        if (queries == null || queries.length == 0 || size == 0) {
             return 0;
-        if (size == 0)
-            return 0;
-
-        long currentChunkSize = this.chunkSize;
-        long numChunks = (size + currentChunkSize - 1) / currentChunkSize;
-
-        try (Arena arena = Arena.ofShared()) {
-            MemorySegment[] threadLocalMasks = new MemorySegment[numWorkers];
-            for (int w = 0; w < numWorkers; w++) {
-                threadLocalMasks[w] = arena.allocate(size);
-            }
-
-            IntStream.range(0, (int) numChunks).parallel().forEach(c -> {
-                long startIdx = c * currentChunkSize;
-                long endIdx = Math.min(startIdx + currentChunkSize, size);
-                int workerId = (int) (c % numWorkers);
-                executeVotingRange(startIdx, endIdx, queries, families, thresholds, threadLocalMasks[workerId]);
-            });
-
-            int numThreads = Runtime.getRuntime().availableProcessors();
-            long recordsPerThread = size / numThreads;
-            if (recordsPerThread == 0) {
-                numThreads = 1;
-                recordsPerThread = size;
-            }
-            final int activeThreads = numThreads;
-            final long finalRecordsPerThread = recordsPerThread;
-
-            return IntStream.range(0, activeThreads).parallel().mapToLong(t -> {
-                long startIdx = t * finalRecordsPerThread;
-                long endIdx = (t == activeThreads - 1) ? size : (t + 1) * finalRecordsPerThread;
-                long resonantCount = 0;
-                for (long i = startIdx; i < endIdx; i++) {
-                    byte mergedVal = 0;
-                    for (int w = 0; w < numWorkers; w++) {
-                        mergedVal |= threadLocalMasks[w].get(ValueLayout.JAVA_BYTE, i);
-                    }
-                    if (finalVotingMask != null) {
-                        finalVotingMask.set(ValueLayout.JAVA_BYTE, i, mergedVal);
-                    }
-                    if (Integer.bitCount(mergedVal & 0xFF) >= 5) {
-                        resonantCount++;
-                    }
-                }
-                return resonantCount;
-            }).sum();
         }
-    }
 
-    private void executeVotingRange(long startIdx, long endIdx, float[][] queries, int[] families, int[] thresholds,
-            MemorySegment localMask) {
         int numQueries = queries.length;
-
         long[][] bQueries = new long[numQueries][];
         long[][] bQueriesMask = new long[numQueries][];
         for (int q = 0; q < numQueries; q++) {
@@ -1301,28 +1300,38 @@ public class FlatIndex implements Index {
             }
         }
 
-        int T = 0;
-        for (int i = 0; i < numTiers; i++) {
-            if (cumulativeEnergy[i] >= targetEnergyBudget) {
-                T = i;
-                break;
-            }
-        }
+        int activeT = activeTierIndex();
+        long currentChunkSize = this.chunkSize;
+        long numChunks = (size + currentChunkSize - 1) / currentChunkSize;
 
+        // Disjoint index chunks own distinct byte offsets in finalVotingMask, eliminating shared locks and merge passes
+        return IntStream.range(0, (int) numChunks).parallel().mapToLong(c -> {
+            long startIdx = c * currentChunkSize;
+            long endIdx = Math.min(startIdx + currentChunkSize, size);
+            return executeVotingRange(startIdx, endIdx, activeT, numQueries, bQueries, bQueriesMask, families, thresholds, finalVotingMask);
+        }).sum();
+    }
+
+    private long executeVotingRange(long startIdx, long endIdx, int activeT, int numQueries,
+            long[][] bQueries, long[][] bQueriesMask, int[] families, int[] thresholds, MemorySegment finalVotingMask) {
         long[] dbWords = new long[totalTierLongs];
         long[] dbMasks = new long[totalTierLongs];
 
         MemorySegment metaSeg = this.metadataSegment;
         MemorySegment[] localTiers = this.tierSegments;
+        long resonantCount = 0;
 
         for (long i = startIdx; i < endIdx; i++) {
-            long metaVal = (metaSeg != null) ? metaSeg.get(ValueLayout.JAVA_LONG, i * 8) : 2L;
-            if ((metaVal & 1L) == 1L)
+            long metaVal = (metaSeg != null) ? metaSeg.get(ValueLayout.JAVA_LONG, i * 8L) : 2L;
+            if ((metaVal & 1L) == 1L) {
+                if (finalVotingMask != null) {
+                    finalVotingMask.set(ValueLayout.JAVA_BYTE, i, (byte) 0);
+                }
                 continue;
+            }
 
-            // Load active tiers 0..T
-            if (qMode == 1) { // 2-bit mode
-                for (int tierIdx = 0; tierIdx <= T; tierIdx++) {
+            if (qMode == 1) {
+                for (int tierIdx = 0; tierIdx <= activeT; tierIdx++) {
                     int numLongs = tierLongs[tierIdx];
                     int width = tierSizes[tierIdx];
                     int offset = tierOffsets[tierIdx];
@@ -1343,8 +1352,8 @@ public class FlatIndex implements Index {
                         }
                     }
                 }
-            } else { // 1-bit mode
-                for (int tierIdx = 0; tierIdx <= T; tierIdx++) {
+            } else {
+                for (int tierIdx = 0; tierIdx <= activeT; tierIdx++) {
                     int numLongs = tierLongs[tierIdx];
                     int width = tierSizes[tierIdx];
                     int offset = tierOffsets[tierIdx];
@@ -1370,11 +1379,11 @@ public class FlatIndex implements Index {
                 int totalDist = 0;
                 boolean earlyExit = false;
 
-                for (int tierIdx = 0; tierIdx <= T; tierIdx++) {
+                for (int tierIdx = 0; tierIdx <= activeT; tierIdx++) {
                     int numLongs = tierLongs[tierIdx];
                     int offset = tierOffsets[tierIdx];
                     int tierDist = 0;
-                    if (qMode == 1) { // 2-bit mode
+                    if (qMode == 1) {
                         for (int l = 0; l < numLongs; l++) {
                             long qSign = bQueries[q][offset + l];
                             long qMask = bQueriesMask[q][offset + l];
@@ -1385,7 +1394,7 @@ public class FlatIndex implements Index {
                             long mask1 = dbMask ^ qMask;
                             tierDist += 4 * Long.bitCount(mask4) + Long.bitCount(mask1);
                         }
-                    } else { // 1-bit mode
+                    } else {
                         for (int l = 0; l < numLongs; l++) {
                             tierDist += Long.bitCount(bQueries[q][offset + l] ^ dbWords[offset + l]);
                         }
@@ -1402,8 +1411,14 @@ public class FlatIndex implements Index {
                     maskVal |= (byte) (1 << families[q]);
                 }
             }
-            localMask.set(ValueLayout.JAVA_BYTE, i, maskVal);
+            if (finalVotingMask != null) {
+                finalVotingMask.set(ValueLayout.JAVA_BYTE, i, maskVal);
+            }
+            if (Integer.bitCount(maskVal & 0xFF) >= 5) {
+                resonantCount++;
+            }
         }
+        return resonantCount;
     }
 
     @Override
@@ -1433,7 +1448,15 @@ public class FlatIndex implements Index {
 
     @Override
     public void close() {
-        // FlatIndex off-heap memory is managed via Arena or direct mmap
+        if (cudaInitialized && deviceTierBuffers != null) {
+            for (long devicePtr : deviceTierBuffers) {
+                if (devicePtr != 0L) {
+                    CudaMemoryManager.freeDevice(devicePtr);
+                }
+            }
+            deviceTierBuffers = null;
+            cudaInitialized = false;
+        }
     }
 
     // =========================================================================
@@ -1446,76 +1469,126 @@ public class FlatIndex implements Index {
     private long[] deviceTierBuffers;
     private boolean cudaInitialized = false;
 
-    private void ensureCudaInitialized() {
+    private synchronized void ensureCudaInitialized() {
         if (cudaInitialized || CudaDeviceManager.isAvailable() == 0) {
             return;
         }
-        deviceTierBuffers = new long[tierVectors.length];
-        for (int i = 0; i < tierVectors.length; i++) {
-            ByteBuffer tierBuffer = tierVectors[i];
-            deviceTierBuffers[i] = CudaMemoryManager.allocDevice(tierBuffer.capacity());
-            long hostPtr = CudaMemoryManager.getDirectBufferAddress(tierBuffer);
-            CudaMemoryManager.copyToDevice(deviceTierBuffers[i], hostPtr, tierBuffer.capacity());
+        long[] buffers = new long[tierVectors.length];
+        try {
+            for (int i = 0; i < tierVectors.length; i++) {
+                ByteBuffer tierBuffer = tierVectors[i];
+                long ptr = CudaMemoryManager.allocDevice(tierBuffer.capacity());
+                if (ptr == 0L) {
+                    throw new IllegalStateException("Failed to allocate CUDA device buffer for tier " + i);
+                }
+                buffers[i] = ptr;
+                long hostPtr = CudaMemoryManager.getDirectBufferAddress(tierBuffer);
+                if (CudaMemoryManager.copyToDevice(ptr, hostPtr, tierBuffer.capacity()) != 0) {
+                    throw new IllegalStateException("Failed to upload tier " + i + " to CUDA device");
+                }
+            }
+            this.deviceTierBuffers = buffers;
+            this.cudaInitialized = true;
+        } catch (RuntimeException _) {
+            for (long ptr : buffers) {
+                if (ptr != 0L) {
+                    CudaMemoryManager.freeDevice(ptr);
+                }
+            }
         }
-        cudaInitialized = true;
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public List<SearchResult>[] cudaBatchSearch(float[][] queries, int k) {
-        if (queries.length < GPU_BATCH_THRESHOLD || dimension < MIN_DIMENSION_FOR_GPU) {
+        if (queries == null || queries.length < GPU_BATCH_THRESHOLD || dimension < MIN_DIMENSION_FOR_GPU
+                || qMode != 0 || size == 0 || k <= 0 || CudaDeviceManager.isAvailable() == 0) {
             return batchSearch(queries, k);
         }
 
         ensureCudaInitialized();
+        if (!cudaInitialized || deviceTierBuffers == null) {
+            return batchSearch(queries, k);
+        }
 
         int numQueries = queries.length;
+        int dbCount = Math.toIntExact(size);
+        long queriesBytes = (long) numQueries * totalTierLongs * Long.BYTES;
+        long distancesBytes = (long) numQueries * dbCount * Integer.BYTES;
 
-        long hostQueries = CudaMemoryManager.allocPinned(numQueries * dimension * 4L);
-        long deviceQueries = CudaMemoryManager.allocDevice(numQueries * dimension * 4L);
-        long hostDistances = CudaMemoryManager.allocPinned(numQueries * size * 4L);
-
-        ByteBuffer queryBuffer = ByteBuffer.allocateDirect(numQueries * dimension * 4);
-        for (float[] query : queries) {
-            for (float val : query) {
-                queryBuffer.putFloat(val);
+        float[][] zQueries = new float[numQueries][];
+        ByteBuffer queryBuffer = ByteBuffer.allocateDirect(Math.toIntExact(queriesBytes))
+                .order(ByteOrder.nativeOrder());
+        for (int q = 0; q < numQueries; q++) {
+            zQueries[q] = transformOperator.preconditionAndRotate(queries[q]);
+            long[] bQuery = packQueryByTiers(transformOperator.quantize1Bit(zQueries[q]));
+            for (long word : bQuery) {
+                queryBuffer.putLong(word);
             }
         }
         queryBuffer.rewind();
 
-        long queryBufferPtr = CudaMemoryManager.getDirectBufferAddress(queryBuffer);
-        CudaMemoryManager.copyToDevice(deviceQueries, queryBufferPtr, numQueries * dimension * 4L);
-
-        int status = pithos_cuda_launch_batch_hamming(
-            deviceTierBuffers, deviceQueries, hostDistances,
-            Math.toIntExact(size), numQueries, tierVectors.length, tierOffsets, tierSizes
-        );
-
-        if (status != 0) {
-            CudaMemoryManager.freePinned(hostQueries);
-            CudaMemoryManager.freeDevice(deviceQueries);
-            CudaMemoryManager.freePinned(hostDistances);
-            return batchSearch(queries, k);
-        }
-
-        ByteBuffer distanceBuffer = ByteBuffer.allocateDirect(numQueries * Math.toIntExact(size) * 4);
-        long distanceBufferPtr = CudaMemoryManager.getDirectBufferAddress(distanceBuffer);
-        CudaMemoryManager.copyFromDevice(distanceBufferPtr, hostDistances, numQueries * Math.toIntExact(size) * 4L);
-
-        List<SearchResult>[] results = new List[numQueries];
-        for (int q = 0; q < numQueries; q++) {
-            List<SearchResult> queryResults = new ArrayList<>(k);
-            for (int i = 0; i < size && i < k; i++) {
-                int distance = distanceBuffer.getInt(q * Math.toIntExact(size) + i);
-                queryResults.add(new SearchResult(i, distance));
+        long deviceQueries = 0L;
+        long deviceDistances = 0L;
+        try {
+            deviceQueries = CudaMemoryManager.allocDevice(queriesBytes);
+            deviceDistances = CudaMemoryManager.allocDevice(distancesBytes);
+            if (deviceQueries == 0L || deviceDistances == 0L) {
+                return batchSearch(queries, k);
             }
-            results[q] = queryResults;
+
+            long queryBufferPtr = CudaMemoryManager.getDirectBufferAddress(queryBuffer);
+            if (CudaMemoryManager.copyToDevice(deviceQueries, queryBufferPtr, queriesBytes) != 0) {
+                return batchSearch(queries, k);
+            }
+
+            int status = pithos_cuda_launch_batch_hamming(
+                    deviceTierBuffers, deviceQueries, deviceDistances,
+                    dbCount, numQueries, tierVectors.length, tierOffsets, tierSizes);
+            if (status != 0) {
+                return batchSearch(queries, k);
+            }
+
+            ByteBuffer distanceBuffer = ByteBuffer.allocateDirect(Math.toIntExact(distancesBytes))
+                    .order(ByteOrder.nativeOrder());
+            long distanceBufferPtr = CudaMemoryManager.getDirectBufferAddress(distanceBuffer);
+            if (CudaMemoryManager.copyFromDevice(distanceBufferPtr, deviceDistances, distancesBytes) != 0) {
+                return batchSearch(queries, k);
+            }
+
+            int kCandidate = (int) Math.min(size, (fp16Segment != null || fp8Segment != null || fp4Segment != null)
+                    ? Math.max(100, 20 * k)
+                    : Math.max(50, 3 * k));
+
+            List<SearchResult>[] results = new List[numQueries];
+            for (int q = 0; q < numQueries; q++) {
+                int[] topDists = new int[kCandidate];
+                long[] topRowIds = new long[kCandidate];
+                Arrays.fill(topDists, Integer.MAX_VALUE);
+
+                for (int rowIdx = 0; rowIdx < dbCount; rowIdx++) {
+                    if (metadataSegment != null && (metadataSegment.get(ValueLayout.JAVA_LONG, rowIdx * 8L) & 1L) == 1L) {
+                        continue;
+                    }
+                    int dist = distanceBuffer.getInt((rowIdx * numQueries + q) * Integer.BYTES);
+                    insertTopCandidate(topDists, topRowIds, kCandidate, dist, rowIdx);
+                }
+
+                int validCandidates = 0;
+                while (validCandidates < kCandidate && topDists[validCandidates] != Integer.MAX_VALUE) {
+                    validCandidates++;
+                }
+                results[q] = rerankGate3(queries[q], zQueries[q], topDists, topRowIds, validCandidates, k);
+            }
+            return results;
+        } finally {
+            if (deviceQueries != 0L) {
+                CudaMemoryManager.freeDevice(deviceQueries);
+            }
+            if (deviceDistances != 0L) {
+                CudaMemoryManager.freeDevice(deviceDistances);
+            }
         }
-
-        CudaMemoryManager.freePinned(hostQueries);
-        CudaMemoryManager.freeDevice(deviceQueries);
-        CudaMemoryManager.freePinned(hostDistances);
-
-        return results;
     }
 
     @Override
@@ -1525,107 +1598,115 @@ public class FlatIndex implements Index {
 
     @Override
     public long cudaQueryPlanetaryGrid(float[][] queries, int[] families, int[] thresholds, long rawMaskAddress, MemorySegment votingMask) {
-        if (queries.length < GPU_BATCH_THRESHOLD || dimension < MIN_DIMENSION_FOR_GPU) {
+        if (queries == null || queries.length < GPU_BATCH_THRESHOLD || dimension < MIN_DIMENSION_FOR_GPU
+                || qMode != 0 || size == 0 || CudaDeviceManager.isAvailable() == 0) {
             return queryPlanetaryGrid(queries, families, thresholds, rawMaskAddress, votingMask);
         }
 
         ensureCudaInitialized();
+        if (!cudaInitialized || deviceTierBuffers == null) {
+            return queryPlanetaryGrid(queries, families, thresholds, rawMaskAddress, votingMask);
+        }
 
         int numQueries = queries.length;
-        int numWordsPerVector = (dimension + 63) / 64;
-        int numFamilies = families.length;
+        int dbCount = Math.toIntExact(size);
+        long queriesBytes = (long) numQueries * totalTierLongs * Long.BYTES;
+        long intArrayBytes = (long) numQueries * Integer.BYTES;
 
-        long hostQueries = CudaMemoryManager.allocPinned(numQueries * dimension * 4L);
-        long deviceQueries = CudaMemoryManager.allocDevice(numQueries * dimension * 4L);
-        long hostFamilies = CudaMemoryManager.allocPinned(numQueries * 4L);
-        long deviceFamilies = CudaMemoryManager.allocDevice(numQueries * 4L);
-        long hostThresholds = CudaMemoryManager.allocPinned(numQueries * 4L);
-        long deviceThresholds = CudaMemoryManager.allocDevice(numQueries * 4L);
-        long hostVotingMask = CudaMemoryManager.allocPinned(size);
-        long deviceVotingMask = CudaMemoryManager.allocDevice(size);
-
-        ByteBuffer queryBuffer = ByteBuffer.allocateDirect(numQueries * dimension * 4);
+        ByteBuffer queryBuffer = ByteBuffer.allocateDirect(Math.toIntExact(queriesBytes))
+                .order(ByteOrder.nativeOrder());
         for (float[] query : queries) {
-            for (float val : query) {
-                queryBuffer.putFloat(val);
+            float[] z = transformOperator.preconditionAndRotate(query);
+            long[] bQuery = packQueryByTiers(transformOperator.quantize1Bit(z));
+            for (long word : bQuery) {
+                queryBuffer.putLong(word);
             }
         }
         queryBuffer.rewind();
 
-        ByteBuffer familiesBuffer = ByteBuffer.allocateDirect(numQueries * 4);
+        ByteBuffer familiesBuffer = ByteBuffer.allocateDirect(Math.toIntExact(intArrayBytes))
+                .order(ByteOrder.nativeOrder());
         for (int family : families) {
             familiesBuffer.putInt(family);
         }
         familiesBuffer.rewind();
 
-        ByteBuffer thresholdsBuffer = ByteBuffer.allocateDirect(numQueries * 4);
+        ByteBuffer thresholdsBuffer = ByteBuffer.allocateDirect(Math.toIntExact(intArrayBytes))
+                .order(ByteOrder.nativeOrder());
         for (int threshold : thresholds) {
             thresholdsBuffer.putInt(threshold);
         }
         thresholdsBuffer.rewind();
 
-        long queryBufferPtr = CudaMemoryManager.getDirectBufferAddress(queryBuffer);
-        long familiesBufferPtr = CudaMemoryManager.getDirectBufferAddress(familiesBuffer);
-        long thresholdsBufferPtr = CudaMemoryManager.getDirectBufferAddress(thresholdsBuffer);
-
-        CudaMemoryManager.copyToDevice(deviceQueries, queryBufferPtr, numQueries * dimension * 4L);
-        CudaMemoryManager.copyToDevice(deviceFamilies, familiesBufferPtr, numQueries * 4L);
-        CudaMemoryManager.copyToDevice(deviceThresholds, thresholdsBufferPtr, numQueries * 4L);
-
-        int status = pithos_cuda_launch_voting(
-            deviceTierBuffers, deviceQueries, deviceFamilies, deviceThresholds,
-            deviceVotingMask, Math.toIntExact(size), numQueries, numFamilies, numWordsPerVector
-        );
-
-        if (status != 0) {
-            CudaMemoryManager.freePinned(hostQueries);
-            CudaMemoryManager.freeDevice(deviceQueries);
-            CudaMemoryManager.freePinned(hostFamilies);
-            CudaMemoryManager.freeDevice(deviceFamilies);
-            CudaMemoryManager.freePinned(hostThresholds);
-            CudaMemoryManager.freeDevice(deviceThresholds);
-            CudaMemoryManager.freePinned(hostVotingMask);
-            CudaMemoryManager.freeDevice(deviceVotingMask);
-            return queryPlanetaryGrid(queries, families, thresholds, rawMaskAddress, votingMask);
-        }
-
-        ByteBuffer votingBuffer = ByteBuffer.allocateDirect(Math.toIntExact(size));
-        long votingBufferPtr = CudaMemoryManager.getDirectBufferAddress(votingBuffer);
-        CudaMemoryManager.copyFromDevice(votingBufferPtr, deviceVotingMask, size);
-        
-        final MemorySegment finalVotingMask = (votingMask == null && rawMaskAddress != 0L) 
-            ? MemorySegment.ofAddress(rawMaskAddress).reinterpret(size) 
-            : votingMask;
-
-        long count = 0;
-        for (int i = 0; i < size; i++) {
-            byte v = votingBuffer.get(i);
-            if (v != 0) {
-                count++;
+        long deviceQueries = 0L;
+        long deviceFamilies = 0L;
+        long deviceThresholds = 0L;
+        long deviceVotingMask = 0L;
+        try {
+            deviceQueries = CudaMemoryManager.allocDevice(queriesBytes);
+            deviceFamilies = CudaMemoryManager.allocDevice(intArrayBytes);
+            deviceThresholds = CudaMemoryManager.allocDevice(intArrayBytes);
+            deviceVotingMask = CudaMemoryManager.allocDevice(size);
+            if (deviceQueries == 0L || deviceFamilies == 0L || deviceThresholds == 0L || deviceVotingMask == 0L) {
+                return queryPlanetaryGrid(queries, families, thresholds, rawMaskAddress, votingMask);
             }
-            if (finalVotingMask != null) {
-                finalVotingMask.set(ValueLayout.JAVA_BYTE, i, v);
+
+            if (CudaMemoryManager.copyToDevice(deviceQueries, CudaMemoryManager.getDirectBufferAddress(queryBuffer), queriesBytes) != 0
+                    || CudaMemoryManager.copyToDevice(deviceFamilies, CudaMemoryManager.getDirectBufferAddress(familiesBuffer), intArrayBytes) != 0
+                    || CudaMemoryManager.copyToDevice(deviceThresholds, CudaMemoryManager.getDirectBufferAddress(thresholdsBuffer), intArrayBytes) != 0) {
+                return queryPlanetaryGrid(queries, families, thresholds, rawMaskAddress, votingMask);
+            }
+
+            int status = pithos_cuda_launch_voting(
+                    deviceTierBuffers, deviceQueries, deviceFamilies, deviceThresholds,
+                    deviceVotingMask, dbCount, numQueries, families.length, totalTierLongs);
+            if (status != 0) {
+                return queryPlanetaryGrid(queries, families, thresholds, rawMaskAddress, votingMask);
+            }
+
+            ByteBuffer votingBuffer = ByteBuffer.allocateDirect(dbCount).order(ByteOrder.nativeOrder());
+            if (CudaMemoryManager.copyFromDevice(CudaMemoryManager.getDirectBufferAddress(votingBuffer), deviceVotingMask, size) != 0) {
+                return queryPlanetaryGrid(queries, families, thresholds, rawMaskAddress, votingMask);
+            }
+
+            final MemorySegment finalVotingMask = (votingMask == null && rawMaskAddress != 0L)
+                    ? MemorySegment.ofAddress(rawMaskAddress).reinterpret(size)
+                    : votingMask;
+
+            long count = 0;
+            for (int i = 0; i < dbCount; i++) {
+                boolean tombstoned = metadataSegment != null && (metadataSegment.get(ValueLayout.JAVA_LONG, i * 8L) & 1L) == 1L;
+                byte v = tombstoned ? 0 : votingBuffer.get(i);
+                if (Integer.bitCount(v & 0xFF) >= 5) {
+                    count++;
+                }
+                if (finalVotingMask != null) {
+                    finalVotingMask.set(ValueLayout.JAVA_BYTE, i, v);
+                }
+            }
+            return count;
+        } finally {
+            if (deviceQueries != 0L) {
+                CudaMemoryManager.freeDevice(deviceQueries);
+            }
+            if (deviceFamilies != 0L) {
+                CudaMemoryManager.freeDevice(deviceFamilies);
+            }
+            if (deviceThresholds != 0L) {
+                CudaMemoryManager.freeDevice(deviceThresholds);
+            }
+            if (deviceVotingMask != 0L) {
+                CudaMemoryManager.freeDevice(deviceVotingMask);
             }
         }
-
-        CudaMemoryManager.freePinned(hostQueries);
-        CudaMemoryManager.freeDevice(deviceQueries);
-        CudaMemoryManager.freePinned(hostFamilies);
-        CudaMemoryManager.freeDevice(deviceFamilies);
-        CudaMemoryManager.freePinned(hostThresholds);
-        CudaMemoryManager.freeDevice(deviceThresholds);
-        CudaMemoryManager.freePinned(hostVotingMask);
-        CudaMemoryManager.freeDevice(deviceVotingMask);
-
-        return count;
     }
 
     private static int pithos_cuda_launch_batch_hamming(
-        long[] deviceTierBuffers, long deviceQueries, long hostDistances,
+        long[] deviceTierBuffers, long deviceQueries, long deviceDistances,
         int numDbVectors, int numQueries, int numTiers, int[] tierOffsets, int[] tierSizes
     ) {
         return CudaNativeBindings.pithos_cuda_launch_batch_hamming(
-            deviceTierBuffers, deviceQueries, hostDistances,
+            deviceTierBuffers, deviceQueries, deviceDistances,
             numDbVectors, numQueries, numTiers, tierOffsets, tierSizes
         );
     }

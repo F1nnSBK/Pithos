@@ -284,5 +284,60 @@ class TestSidecarVectorAccess(unittest.TestCase):
                 self.assertEqual(decoded_m.shape, (3, dim))
                 np.testing.assert_allclose(decoded_m, vecs[[5, 25, 99]], atol=1e-3)
 
+    def test_04_multifile_fp8_fp4_and_stream_get_vectors(self):
+        """Validates WHT back-projection in get_vectors() for multi-file FP8/FP4 and streamed FP8 containers."""
+        np.random.seed(99)
+        dim = 128
+        tiers = [64, 128]
+        num_vecs = 80
+        vecs = np.random.randn(num_vecs, dim).astype(np.float32)
+        vecs /= np.linalg.norm(vecs, axis=1, keepdims=True)
+        ids = np.arange(num_vecs, dtype=np.int64)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fp8_multi = os.path.join(tmpdir, "multi_fp8")
+            VectorDb.compile_index(
+                base_path=fp8_multi,
+                records=vecs,
+                ids=ids,
+                tiers=tiers,
+                sidecar_mode=SidecarMode.FP8,
+            )
+            with VectorDb() as db:
+                idx8 = db.load_index("multi_fp8", fp8_multi)
+                decoded8 = idx8.get_vectors([0, 17, 63])
+                self.assertEqual(decoded8.shape, (3, dim))
+                cos8 = np.sum(decoded8 * vecs[[0, 17, 63]], axis=1) / np.linalg.norm(decoded8, axis=1)
+                self.assertTrue(np.all(cos8 > 0.98), f"Multi-file FP8 cosine fidelity too low: {cos8}")
+
+            fp4_multi = os.path.join(tmpdir, "multi_fp4")
+            VectorDb.compile_index(
+                base_path=fp4_multi,
+                records=vecs,
+                ids=ids,
+                tiers=tiers,
+                sidecar_mode=SidecarMode.FP4,
+            )
+            with VectorDb() as db:
+                idx4 = db.load_index("multi_fp4", fp4_multi)
+                decoded4 = idx4.get_vectors([0, 17, 63])
+                self.assertEqual(decoded4.shape, (3, dim))
+                cos4 = np.sum(decoded4 * vecs[[0, 17, 63]], axis=1) / np.linalg.norm(decoded4, axis=1)
+                self.assertTrue(np.all(cos4 > 0.90), f"Multi-file FP4 cosine fidelity too low: {cos4}")
+
+            stream_path = os.path.join(tmpdir, "stream_fp8.pithos")
+            VectorDb.compile_container_stream(
+                path=stream_path,
+                chunks=[(vecs[:40], ids[:40]), (vecs[40:], ids[40:])],
+                tiers=tiers,
+                sidecar_mode=SidecarMode.FP8,
+            )
+            with VectorDb() as db:
+                idx_s = db.load_index("stream_fp8", stream_path)
+                decoded_s = idx_s.get_vectors([5, 45, 79])
+                self.assertEqual(decoded_s.shape, (3, dim))
+                cos_s = np.sum(decoded_s * vecs[[5, 45, 79]], axis=1) / np.linalg.norm(decoded_s, axis=1)
+                self.assertTrue(np.all(cos_s > 0.98), f"Streamed FP8 cosine fidelity too low: {cos_s}")
+
 if __name__ == "__main__":
     unittest.main()

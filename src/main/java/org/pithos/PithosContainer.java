@@ -131,7 +131,7 @@ public final class PithosContainer {
         while (end < json.length() && (Character.isDigit(json.charAt(end)) || json.charAt(end) == '-')) end++;
         try {
             return Long.parseLong(json.substring(start, end));
-        } catch (Exception e) {
+        } catch (Exception _) {
             return 0;
         }
     }
@@ -184,7 +184,7 @@ public final class PithosContainer {
             byte[] magic = new byte[8];
             buf.get(magic);
             return Arrays.equals(magic, MAGIC_SUPERBLOCK);
-        } catch (IOException e) {
+        } catch (IOException _) {
             return false;
         }
     }

@@ -40,7 +40,6 @@ public enum DistanceMetric {
     /// @param byteOffset absolute byte offset into `segment`
     /// @param numLongs number of 64-bit words (W) to scan
     /// @return total Hamming distance
-
     public static int calculateSegment(long[] query, MemorySegment segment, long byteOffset, int numLongs) {
         int sum = 0;
         for (int i = 0; i < numLongs; i++) {

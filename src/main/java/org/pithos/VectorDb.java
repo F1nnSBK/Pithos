@@ -9,6 +9,7 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -86,7 +87,7 @@ public class VectorDb {
         if (index != null) {
             try {
                 index.close();
-            } catch (Exception e) {
+            } catch (Exception _) {
                 // ignore
             }
         }
@@ -98,7 +99,7 @@ public class VectorDb {
         for (Index index : indices.values()) {
             try {
                 index.close();
-            } catch (Exception e) {
+            } catch (Exception _) {
                 // ignore
             }
         }
@@ -197,25 +198,32 @@ public class VectorDb {
         Index index = indices.get(indexName);
         if (index == null)
             throw new IllegalArgumentException("Unknown index: " + indexName);
-
-        List<Index.SearchResult> baseResults = index.search(query, k);
-
-        DeltaBuffer buf = deltaBuffers.get(indexName);
-        if (buf == null || buf.liveSize() == 0) {
-            return baseResults;
+        if (k <= 0) {
+            return List.of();
         }
 
+        DeltaBuffer buf = deltaBuffers.get(indexName);
+        if (buf == null || (!buf.hasShadowedIds() && buf.liveSize() == 0)) {
+            return index.search(query, k);
+        }
+
+        int fetchK = (int) Math.min(index.size(), (long) k + buf.shadowedCount());
+        List<Index.SearchResult> baseResults = fetchK > 0 ? index.search(query, fetchK) : List.of();
         List<Index.SearchResult> deltaResults = buf.searchKnn(query, k);
 
-        // Merge and deduplicate by ID, then take top-K by score
+        // Delta entries override stale base records and tombstones filter deleted base IDs
         Map<Long, Index.SearchResult> merged = new LinkedHashMap<>();
-        for (Index.SearchResult r : baseResults)
+        for (Index.SearchResult r : deltaResults) {
             merged.put(r.id(), r);
-        for (Index.SearchResult r : deltaResults)
-            merged.putIfAbsent(r.id(), r);
+        }
+        for (Index.SearchResult r : baseResults) {
+            if (!buf.isShadowed(r.id())) {
+                merged.putIfAbsent(r.id(), r);
+            }
+        }
 
         return merged.values().stream()
-                .sorted((a, b) -> Integer.compare(a.score(), b.score()))
+                .sorted(Comparator.comparingInt(Index.SearchResult::score))
                 .limit(k)
                 .toList();
     }
@@ -326,8 +334,8 @@ public class VectorDb {
 
     /// Encodes planetary Latitude and Longitude into a 48-bit geodetic Morton code.
     public static long encodeGeodeticMorton(double latDeg, double lonDeg) {
-        double normLat = Math.max(0.0, Math.min(1.0, (latDeg + 90.0) / 180.0));
-        double normLon = Math.max(0.0, Math.min(1.0, (lonDeg + 180.0) / 360.0));
+        double normLat = Math.clamp((latDeg + 90.0) / 180.0, 0.0, 1.0);
+        double normLon = Math.clamp((lonDeg + 180.0) / 360.0, 0.0, 1.0);
 
         long x = (long) (normLon * ((1L << 24) - 1));
         long y = (long) (normLat * ((1L << 24) - 1));
@@ -426,9 +434,10 @@ public class VectorDb {
                 StandardOpenOption.CREATE,
                 StandardOpenOption.WRITE,
                 StandardOpenOption.READ,
-                StandardOpenOption.TRUNCATE_EXISTING)) {
+                StandardOpenOption.TRUNCATE_EXISTING);
+             Arena arena = Arena.ofConfined()) {
 
-            MemorySegment mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, 64, Arena.global());
+            MemorySegment mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, 64, arena);
 
             // Magic bytes
             mapped.set(ValueLayout.JAVA_BYTE, 0, (byte) 'P');
@@ -458,8 +467,9 @@ public class VectorDb {
                 StandardOpenOption.CREATE,
                 StandardOpenOption.WRITE,
                 StandardOpenOption.READ,
-                StandardOpenOption.TRUNCATE_EXISTING)) {
-            MemorySegment mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, totalRecords * 8, Arena.global());
+                StandardOpenOption.TRUNCATE_EXISTING);
+             Arena arena = Arena.ofConfined()) {
+            MemorySegment mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, totalRecords * 8, arena);
             for (int i = 0; i < totalRecords; i++) {
                 mapped.set(ValueLayout.JAVA_LONG, i * 8L, records.get(i).id());
             }
@@ -472,8 +482,9 @@ public class VectorDb {
                 StandardOpenOption.CREATE,
                 StandardOpenOption.WRITE,
                 StandardOpenOption.READ,
-                StandardOpenOption.TRUNCATE_EXISTING)) {
-            MemorySegment mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, totalRecords * 8, Arena.global());
+                StandardOpenOption.TRUNCATE_EXISTING);
+             Arena arena = Arena.ofConfined()) {
+            MemorySegment mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, totalRecords * 8, arena);
             for (int i = 0; i < totalRecords; i++) {
                 long metaWord = 2L; // bit 1 active, bit 0 tombstone = 0
                 if (hasSpatial) {
@@ -495,30 +506,30 @@ public class VectorDb {
         FileChannel[] tierChannels = new FileChannel[numTiers];
         MemorySegment[] tierMappeds = new MemorySegment[numTiers];
 
-        int prevBound = 0;
-        for (int k = 0; k < numTiers; k++) {
-            int width = tiers[k] - prevBound;
-            tierWidths[k] = width;
-            tierLongs[k] = (width + 63) / 64;
-            prevBound = tiers[k];
+        try (Arena tierArena = Arena.ofShared()) {
+            int prevBound = 0;
+            for (int k = 0; k < numTiers; k++) {
+                int width = tiers[k] - prevBound;
+                tierWidths[k] = width;
+                tierLongs[k] = (width + 63) / 64;
+                prevBound = tiers[k];
 
-            Path tierPath = Path.of(basePath + "_tier_" + k + ".bin");
-            tierChannels[k] = FileChannel.open(tierPath,
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.WRITE,
-                    StandardOpenOption.READ,
-                    StandardOpenOption.TRUNCATE_EXISTING);
-            long bytesPerRecord = switch (qMode) {
-                case 1 -> 2L * ((width + 7) / 8); // 2-bit: sign bytes + mask bytes
-                case 2 -> (width * 4L);           // Float-Hybrid: raw float32 -> 4 bytes/dim
-                default -> (width + 7) / 8;       // 1-bit: 1 bit/dim -> ceil(width/8) bytes
-            };
-            tierBytesPerRecord[k] = bytesPerRecord;
-            tierMappeds[k] = tierChannels[k].map(FileChannel.MapMode.READ_WRITE, 0, totalRecords * bytesPerRecord,
-                    Arena.global());
-        }
+                Path tierPath = Path.of(basePath + "_tier_" + k + ".bin");
+                tierChannels[k] = FileChannel.open(tierPath,
+                        StandardOpenOption.CREATE,
+                        StandardOpenOption.WRITE,
+                        StandardOpenOption.READ,
+                        StandardOpenOption.TRUNCATE_EXISTING);
+                long bytesPerRecord = switch (qMode) {
+                    case 1 -> 2L * ((width + 7) / 8); // 2-bit: sign bytes + mask bytes
+                    case 2 -> (width * 4L);           // Float-Hybrid: raw float32 -> 4 bytes/dim
+                    default -> (width + 7) / 8;       // 1-bit: 1 bit/dim -> ceil(width/8) bytes
+                };
+                tierBytesPerRecord[k] = bytesPerRecord;
+                tierMappeds[k] = tierChannels[k].map(FileChannel.MapMode.READ_WRITE, 0, totalRecords * bytesPerRecord,
+                        tierArena);
+            }
 
-        try {
             java.util.stream.IntStream.range(0, (int) totalRecords).parallel().forEach(i -> {
                 VectorRecord rec = records.get(i);
                 float[] z = transformer.preconditionAndRotate(rec.vector());
@@ -749,8 +760,9 @@ public class VectorDb {
         byte firstQMode;
         byte firstSidecarMode;
 
-        try (FileChannel channel = FileChannel.open(firstHeaderPath, StandardOpenOption.READ)) {
-            MemorySegment mapped = channel.map(FileChannel.MapMode.READ_ONLY, 0, 64, Arena.global());
+        try (FileChannel channel = FileChannel.open(firstHeaderPath, StandardOpenOption.READ);
+             Arena arena = Arena.ofConfined()) {
+            MemorySegment mapped = channel.map(FileChannel.MapMode.READ_ONLY, 0, 64, arena);
             if (mapped.get(ValueLayout.JAVA_BYTE, 0) != 'P' ||
                 mapped.get(ValueLayout.JAVA_BYTE, 1) != 'L' ||
                 mapped.get(ValueLayout.JAVA_BYTE, 2) != 'A' ||
@@ -775,8 +787,9 @@ public class VectorDb {
             if (!Files.exists(headerPath)) {
                 throw new FileNotFoundException("Source index not found: " + sourcePathStr);
             }
-            try (FileChannel channel = FileChannel.open(headerPath, StandardOpenOption.READ)) {
-                MemorySegment mapped = channel.map(FileChannel.MapMode.READ_ONLY, 0, 64, Arena.global());
+            try (FileChannel channel = FileChannel.open(headerPath, StandardOpenOption.READ);
+                 Arena arena = Arena.ofConfined()) {
+                MemorySegment mapped = channel.map(FileChannel.MapMode.READ_ONLY, 0, 64, arena);
                 if (mapped.get(ValueLayout.JAVA_BYTE, 0) != 'P' ||
                     mapped.get(ValueLayout.JAVA_BYTE, 1) != 'L' ||
                     mapped.get(ValueLayout.JAVA_BYTE, 2) != 'A' ||
@@ -816,8 +829,9 @@ public class VectorDb {
                 StandardOpenOption.CREATE,
                 StandardOpenOption.WRITE,
                 StandardOpenOption.READ,
-                StandardOpenOption.TRUNCATE_EXISTING)) {
-            MemorySegment mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, 64, Arena.global());
+                StandardOpenOption.TRUNCATE_EXISTING);
+             Arena arena = Arena.ofConfined()) {
+            MemorySegment mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, 64, arena);
             mapped.set(ValueLayout.JAVA_BYTE, 0, (byte) 'P');
             mapped.set(ValueLayout.JAVA_BYTE, 1, (byte) 'L');
             mapped.set(ValueLayout.JAVA_BYTE, 2, (byte) 'A');

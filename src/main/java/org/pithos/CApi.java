@@ -11,8 +11,8 @@ import org.graalvm.nativeimage.c.type.CTypeConversion;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 /// # CApi
@@ -39,6 +39,96 @@ public class CApi {
     private static VectorDb db;
 
     private CApi() {
+    }
+
+    private static float[] readFloatArray(CFloatPointer ptr, int length) {
+        float[] dst = new float[length];
+        MemorySegment.copy(
+                MemorySegment.ofAddress(ptr.rawValue()).reinterpret((long) length * Float.BYTES),
+                ValueLayout.JAVA_FLOAT_UNALIGNED, 0L, dst, 0, length);
+        return dst;
+    }
+
+    private static float[][] readFloatMatrix(CFloatPointer ptr, int rows, int cols) {
+        long totalFloats = (long) rows * cols;
+        MemorySegment seg = MemorySegment.ofAddress(ptr.rawValue()).reinterpret(totalFloats * Float.BYTES);
+        float[][] matrix = new float[rows][cols];
+        for (int r = 0; r < rows; r++) {
+            MemorySegment.copy(seg, ValueLayout.JAVA_FLOAT_UNALIGNED, (long) r * cols * Float.BYTES, matrix[r], 0, cols);
+        }
+        return matrix;
+    }
+
+    private static int[] readIntArray(CIntPointer ptr, int length) {
+        int[] dst = new int[length];
+        MemorySegment.copy(
+                MemorySegment.ofAddress(ptr.rawValue()).reinterpret((long) length * Integer.BYTES),
+                ValueLayout.JAVA_INT_UNALIGNED, 0L, dst, 0, length);
+        return dst;
+    }
+
+    private static long[] readLongArray(CLongPointer ptr, int length) {
+        long[] dst = new long[length];
+        MemorySegment.copy(
+                MemorySegment.ofAddress(ptr.rawValue()).reinterpret((long) length * Long.BYTES),
+                ValueLayout.JAVA_LONG_UNALIGNED, 0L, dst, 0, length);
+        return dst;
+    }
+
+    private static byte[] readByteArray(CCharPointer ptr, int length) {
+        byte[] dst = new byte[length];
+        MemorySegment.copy(
+                MemorySegment.ofAddress(ptr.rawValue()).reinterpret(length),
+                ValueLayout.JAVA_BYTE, 0L, dst, 0, length);
+        return dst;
+    }
+
+    private static void writeLongArray(CLongPointer ptr, long[] src, int length) {
+        MemorySegment.copy(
+                src, 0,
+                MemorySegment.ofAddress(ptr.rawValue()).reinterpret((long) length * Long.BYTES),
+                ValueLayout.JAVA_LONG_UNALIGNED, 0L, length);
+    }
+
+    private static void writeIntArray(CIntPointer ptr, int[] src, int length) {
+        MemorySegment.copy(
+                src, 0,
+                MemorySegment.ofAddress(ptr.rawValue()).reinterpret((long) length * Integer.BYTES),
+                ValueLayout.JAVA_INT_UNALIGNED, 0L, length);
+    }
+
+    private static List<VectorRecord> readVectorRecords(CLongPointer ids, CFloatPointer vectors, int numRecords, int dimension) {
+        long[] javaIds = readLongArray(ids, numRecords);
+        float[][] javaVectors = readFloatMatrix(vectors, numRecords, dimension);
+        List<VectorRecord> records = new ArrayList<>(numRecords);
+        for (int i = 0; i < numRecords; i++) {
+            records.add(new VectorRecord(javaIds[i], javaVectors[i]));
+        }
+        return records;
+    }
+
+    private static void writeSearchResults(List<Index.SearchResult>[] results, int numQueries, int k,
+            CLongPointer outIds, CIntPointer outDistances) {
+        int total = numQueries * k;
+        long[] flatIds = new long[total];
+        int[] flatDists = new int[total];
+        for (int q = 0; q < numQueries; q++) {
+            List<Index.SearchResult> queryResults = results[q];
+            int count = queryResults.size();
+            int base = q * k;
+            for (int i = 0; i < k; i++) {
+                if (i < count) {
+                    Index.SearchResult r = queryResults.get(i);
+                    flatIds[base + i] = r.id();
+                    flatDists[base + i] = r.score();
+                } else {
+                    flatIds[base + i] = -1L;
+                    flatDists[base + i] = Integer.MAX_VALUE;
+                }
+            }
+        }
+        writeLongArray(outIds, flatIds, total);
+        writeIntArray(outDistances, flatDists, total);
     }
 
     /// Initializes the global database coordinator. Must be called once before any database operations.
@@ -75,7 +165,7 @@ public class CApi {
             String filePath = CTypeConversion.toJavaString(path);
             db.loadIndex(indexName, filePath, null, 0);
             return 0;
-        } catch (IOException e) {
+        } catch (IOException _) {
             return -5;
         } catch (Throwable t) {
             t.printStackTrace();
@@ -85,8 +175,8 @@ public class CApi {
 
     /// Maps an existing compiled database off-heap, supplying frozen projection/LoRA weights W ∈ ℝ^(D × D₀).
     ///
-    /// The model weights are used to compute SVD singular values σᵢ, constructing the
-    /// Matryoshka cumulative spectral energy distribution Φ(k) to dynamically target a recall energy budget τ.
+    /// The model weights are used to compute the cumulative spectral energy distribution Φ(k) from
+    /// projection weight row L2 norms, dynamically targeting a recall energy budget τ.
     ///
     /// @param thread the GraalVM isolate thread context
     /// @param name C string specifying unique logical name
@@ -111,14 +201,10 @@ public class CApi {
             int dim = tempIdx.getDimension();
             tempIdx.close();
 
-            float[] javaWeights = new float[dim * loraDim];
-            for (int i = 0; i < javaWeights.length; i++) {
-                javaWeights[i] = weights.read(i);
-            }
-
+            float[] javaWeights = readFloatArray(weights, dim * loraDim);
             db.loadIndex(indexName, filePath, javaWeights, loraDim);
             return 0;
-        } catch (IOException e) {
+        } catch (IOException _) {
             return -5;
         } catch (Throwable t) {
             t.printStackTrace();
@@ -195,31 +281,9 @@ public class CApi {
             }
 
             int dim = index.getDimension();
-            float[][] javaQueries = new float[numQueries][dim];
-            for (int q = 0; q < numQueries; q++) {
-                int qOffset = q * dim;
-                for (int d = 0; d < dim; d++) {
-                    javaQueries[q][d] = queries.read(qOffset + d);
-                }
-            }
-
+            float[][] javaQueries = readFloatMatrix(queries, numQueries, dim);
             List<Index.SearchResult>[] results = index.batchSearch(javaQueries, k);
-
-            for (int q = 0; q < numQueries; q++) {
-                List<Index.SearchResult> queryResults = results[q];
-                int count = queryResults.size();
-                for (int i = 0; i < k; i++) {
-                    long outId = -1;
-                    int outDist = Integer.MAX_VALUE;
-                    if (i < count) {
-                        Index.SearchResult r = queryResults.get(i);
-                        outId = r.id();
-                        outDist = r.score();
-                    }
-                    outIds.write(q * k + i, outId);
-                    outDistances.write(q * k + i, outDist);
-                }
-            }
+            writeSearchResults(results, numQueries, k, outIds, outDistances);
             return 0;
         } catch (Throwable t) {
             t.printStackTrace();
@@ -262,19 +326,9 @@ public class CApi {
             }
 
             int dim = index.getDimension();
-            long totalTiles = index.size();
-
-            float[][] javaQueries = new float[numQueries][dim];
-            int[] javaFamilies = new int[numQueries];
-            int[] javaThresholds = new int[numQueries];
-
-            for (int q = 0; q < numQueries; q++) {
-                for (int j = 0; j < dim; j++) {
-                    javaQueries[q][j] = queries.read(q * dim + j);
-                }
-                javaFamilies[q] = queryFamilies.read(q);
-                javaThresholds[q] = queryThresholds.read(q);
-            }
+            float[][] javaQueries = readFloatMatrix(queries, numQueries, dim);
+            int[] javaFamilies = readIntArray(queryFamilies, numQueries);
+            int[] javaThresholds = readIntArray(queryThresholds, numQueries);
 
             long rawAddress = votingMask.rawValue();
             return index.queryPlanetaryGrid(javaQueries, javaFamilies, javaThresholds, rawAddress, null);
@@ -294,21 +348,8 @@ public class CApi {
         }
         try {
             String filePath = CTypeConversion.toJavaString(path);
-
-            int[] javaTiers = new int[numTiers];
-            for (int i = 0; i < numTiers; i++) {
-                javaTiers[i] = tiers.read(i);
-            }
-
-            List<VectorRecord> records = new ArrayList<>(numRecords);
-            for (int i = 0; i < numRecords; i++) {
-                long id = ids.read(i);
-                float[] vector = new float[dimension];
-                for (int j = 0; j < dimension; j++) {
-                    vector[j] = vectors.read(i * dimension + j);
-                }
-                records.add(new VectorRecord(id, vector));
-            }
+            int[] javaTiers = readIntArray(tiers, numTiers);
+            List<VectorRecord> records = readVectorRecords(ids, vectors, numRecords, dimension);
 
             VectorDb.compileIndexFile(filePath, planetId, planetRadius, dimension, javaTiers, records, qMode);
             return 0;
@@ -328,22 +369,8 @@ public class CApi {
         }
         try {
             String filePath = CTypeConversion.toJavaString(path);
-
-            int[] javaTiers = new int[numTiers];
-            for (int i = 0; i < numTiers; i++) {
-                javaTiers[i] = tiers.read(i);
-            }
-
-            List<VectorRecord> records = new ArrayList<>(numRecords);
-            for (int i = 0; i < numRecords; i++) {
-                long id = ids.read(i);
-                float[] vector = new float[dimension];
-                int offset = i * dimension;
-                for (int j = 0; j < dimension; j++) {
-                    vector[j] = vectors.read(offset + j);
-                }
-                records.add(new VectorRecord(id, vector));
-            }
+            int[] javaTiers = readIntArray(tiers, numTiers);
+            List<VectorRecord> records = readVectorRecords(ids, vectors, numRecords, dimension);
 
             VectorDb.compileIndexFile(filePath, planetId, planetRadius, dimension, javaTiers, records, qMode, sidecarMode);
             return 0;
@@ -363,29 +390,11 @@ public class CApi {
         }
         try {
             String filePath = CTypeConversion.toJavaString(path);
-            int[] javaTiers = new int[numTiers];
-            for (int i = 0; i < numTiers; i++) {
-                javaTiers[i] = tiers.read(i);
-            }
-
-            List<VectorRecord> records = new ArrayList<>(numRecords);
-            for (int i = 0; i < numRecords; i++) {
-                long id = ids.read(i);
-                float[] vector = new float[dimension];
-                int offset = i * dimension;
-                for (int j = 0; j < dimension; j++) {
-                    vector[j] = vectors.read(offset + j);
-                }
-                records.add(new VectorRecord(id, vector));
-            }
-
-            byte[] metaBytes = null;
-            if (metadataPayload.isNonNull() && metadataLen > 0) {
-                metaBytes = new byte[metadataLen];
-                for (int i = 0; i < metadataLen; i++) {
-                    metaBytes[i] = metadataPayload.read(i);
-                }
-            }
+            int[] javaTiers = readIntArray(tiers, numTiers);
+            List<VectorRecord> records = readVectorRecords(ids, vectors, numRecords, dimension);
+            byte[] metaBytes = (metadataPayload.isNonNull() && metadataLen > 0)
+                    ? readByteArray(metadataPayload, metadataLen)
+                    : null;
 
             String metaFormat = metadataFormat.isNonNull() ? CTypeConversion.toJavaString(metadataFormat) : "raw";
             String userJson = userMetadataJson.isNonNull() ? CTypeConversion.toJavaString(userMetadataJson) : null;
@@ -407,11 +416,12 @@ public class CApi {
         String idxName = CTypeConversion.toJavaString(indexName);
         String metaJson = db.getUserMetadata(idxName);
         if (metaJson == null) return 0;
-        byte[] bytes = metaJson.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] bytes = metaJson.getBytes(StandardCharsets.UTF_8);
         int copyLen = Math.min(bytes.length, maxLen - 1);
-        for (int i = 0; i < copyLen; i++) {
-            outBuf.write(i, (byte) bytes[i]);
-        }
+        MemorySegment.copy(
+                bytes, 0,
+                MemorySegment.ofAddress(outBuf.rawValue()).reinterpret(maxLen),
+                ValueLayout.JAVA_BYTE, 0L, copyLen);
         outBuf.write(copyLen, (byte) 0);
         return bytes.length;
     }
@@ -627,14 +637,12 @@ public class CApi {
             }
             if (index instanceof FlatIndex flatIdx) {
                 int dim = flatIdx.getDimension();
-                float[] javaVector = new float[dim];
-                for (int j = 0; j < dim; j++) {
-                    javaVector[j] = inVector.read(j);
-                }
+                float[] javaVector = readFloatArray(inVector, dim);
                 long[] packed = flatIdx.getTransformOperator().transformAndQuantize(javaVector);
-                for (int i = 0; i < packed.length; i++) {
-                    outPacked.write(i, packed[i]);
-                }
+                MemorySegment.copy(
+                        packed, 0,
+                        MemorySegment.ofAddress(outPacked.rawValue()).reinterpret((long) packed.length * Long.BYTES),
+                        ValueLayout.JAVA_LONG_UNALIGNED, 0L, packed.length);
                 return 0;
             }
             return -6;
@@ -708,10 +716,7 @@ public class CApi {
             if (index == null)
                 return -2;
             int dim = index.getDimension();
-            float[] javaVector = new float[dim];
-            for (int i = 0; i < dim; i++) {
-                javaVector[i] = vector.read(i);
-            }
+            float[] javaVector = readFloatArray(vector, dim);
             boolean ok = db.insertIntoDelta(idxName, id, javaVector);
             return ok ? 0 : -2;
         } catch (Throwable t) {
@@ -792,22 +797,24 @@ public class CApi {
                 return -2;
 
             int dim = index.getDimension();
-            float[] javaQuery = new float[dim];
-            for (int i = 0; i < dim; i++) {
-                javaQuery[i] = query.read(i);
-            }
-
+            float[] javaQuery = readFloatArray(query, dim);
             List<Index.SearchResult> results = db.searchMerged(idxName, javaQuery, k);
+
+            long[] flatIds = new long[k];
+            int[] flatDists = new int[k];
             int count = results.size();
             for (int i = 0; i < k; i++) {
                 if (i < count) {
-                    outIds.write(i, results.get(i).id());
-                    outDistances.write(i, results.get(i).score());
+                    Index.SearchResult r = results.get(i);
+                    flatIds[i] = r.id();
+                    flatDists[i] = r.score();
                 } else {
-                    outIds.write(i, -1L);
-                    outDistances.write(i, Integer.MAX_VALUE);
+                    flatIds[i] = -1L;
+                    flatDists[i] = Integer.MAX_VALUE;
                 }
             }
+            writeLongArray(outIds, flatIds, k);
+            writeIntArray(outDistances, flatDists, k);
             return 0;
         } catch (Throwable t) {
             t.printStackTrace();
@@ -904,30 +911,10 @@ public class CApi {
             if (index == null) return -2;
 
             int dim = index.getDimension();
-            float[][] javaQueries = new float[numQueries][dim];
-            for (int q = 0; q < numQueries; q++) {
-                for (int j = 0; j < dim; j++) {
-                    javaQueries[q][j] = queries.read(q * dim + j);
-                }
-            }
+            float[][] javaQueries = readFloatMatrix(queries, numQueries, dim);
 
             List<Index.SearchResult>[] results = db.cudaBatchSearch(idxName, javaQueries, k);
-
-            for (int q = 0; q < numQueries; q++) {
-                List<Index.SearchResult> queryResults = results[q];
-                int count = queryResults.size();
-                for (int i = 0; i < k; i++) {
-                    long outId = -1;
-                    int outDist = Integer.MAX_VALUE;
-                    if (i < count) {
-                        Index.SearchResult r = queryResults.get(i);
-                        outId = r.id();
-                        outDist = r.score();
-                    }
-                    outIds.write(q * k + i, outId);
-                    outDistances.write(q * k + i, outDist);
-                }
-            }
+            writeSearchResults(results, numQueries, k, outIds, outDistances);
             return 0;
         } catch (Throwable t) {
             t.printStackTrace();
@@ -947,19 +934,9 @@ public class CApi {
             if (index == null) return -2;
 
             int dim = index.getDimension();
-            long totalTiles = index.size();
-
-            float[][] javaQueries = new float[numQueries][dim];
-            int[] javaFamilies = new int[numQueries];
-            int[] javaThresholds = new int[numQueries];
-
-            for (int q = 0; q < numQueries; q++) {
-                for (int j = 0; j < dim; j++) {
-                    javaQueries[q][j] = queries.read(q * dim + j);
-                }
-                javaFamilies[q] = queryFamilies.read(q);
-                javaThresholds[q] = queryThresholds.read(q);
-            }
+            float[][] javaQueries = readFloatMatrix(queries, numQueries, dim);
+            int[] javaFamilies = readIntArray(queryFamilies, numQueries);
+            int[] javaThresholds = readIntArray(queryThresholds, numQueries);
 
             long rawAddress = votingMask.rawValue();
             return db.cudaQueryPlanetaryGrid(idxName, javaQueries, javaFamilies, javaThresholds, rawAddress, null);

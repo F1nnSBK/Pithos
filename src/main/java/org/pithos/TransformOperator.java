@@ -16,8 +16,8 @@ import jdk.incubator.vector.VectorOperators;
 /// 3. **Kronecker Fallback (H_u ⊗ Ω_v):** For non-power-of-two block widths, decomposes the block
 ///    into a power-of-two component u and a residual component v using a Discrete Cosine Transform (DCT-II) basis.
 /// 4. **Adaptive Quantization:** 1-bit sign binarization and 2-bit ternary quantization with noise thresholding.
-/// 5. **SVD Spectral Energy Profiling:** Computes the cumulative energy distribution Φ(k) from projection/LoRA weights
-///    using the Jacobi eigenvalue algorithm, enabling dynamic Matryoshka tier budgeting.
+/// 5. **Spectral Energy Profiling:** Computes the cumulative projection weight energy distribution Φ(k) across output dimensions
+///    from row L2 norms of projection/LoRA weights, enabling dynamic Matryoshka tier budgeting.
 ///
 /// All dense vector computations leverage the **Java Vector API (`jdk.incubator.vector`)** to compile
 /// into native SIMD instructions (AVX2, AVX-512, or ARM NEON).
@@ -25,25 +25,27 @@ public final class TransformOperator {
 
     /// Preferred hardware SIMD vector shape for 32-bit floats.
     private static final VectorSpecies<Float> SPECIES = FloatVector.SPECIES_PREFERRED;
+    private static final ThreadLocal<float[]> KRONECKER_SCRATCH = new ThreadLocal<>();
 
     private final int dimension;
     private final int[] tiers;
     private final float[] signs;
+    private final float[][][] tierDctMatrices;
 
     /// Constructs a `TransformOperator` using a deterministic Rademacher seed (`42`).
     ///
     /// @param dimension the total vector dimensionality (D)
     /// @param tiers cumulative Matryoshka tier step boundaries
     public TransformOperator(int dimension, int[] tiers) {
-        this.dimension = dimension;
-        this.tiers = Arrays.copyOf(tiers, tiers.length);
-        this.signs = new float[dimension];
-
-        // Generate Rademacher signs deterministically using seed 42 (matching Python client)
-        Random rand = new Random(42);
-        for (int i = 0; i < dimension; i++) {
-            signs[i] = rand.nextBoolean() ? 1.0f : -1.0f;
+        if (dimension <= 0) {
+            throw new IllegalArgumentException("Dimension must be positive: " + dimension);
         }
+        int[] validatedTiers = validateTiers(dimension, tiers);
+        this.dimension = dimension;
+        this.tiers = validatedTiers;
+        this.signs = createDefaultSigns(dimension);
+        this.tierDctMatrices = buildTierDctMatrices(validatedTiers);
+        super();
     }
 
     /// Constructs a `TransformOperator` with explicit custom preconditioning signs.
@@ -52,12 +54,71 @@ public final class TransformOperator {
     /// @param tiers cumulative Matryoshka tier step boundaries
     /// @param customSigns preconditioning sign array of length `dimension`
     public TransformOperator(int dimension, int[] tiers, float[] customSigns) {
-        this.dimension = dimension;
-        this.tiers = Arrays.copyOf(tiers, tiers.length);
+        if (dimension <= 0) {
+            throw new IllegalArgumentException("Dimension must be positive: " + dimension);
+        }
         if (customSigns == null || customSigns.length != dimension) {
             throw new IllegalArgumentException("Signs length must match dimension: expected " + dimension);
         }
+        int[] validatedTiers = validateTiers(dimension, tiers);
+        this.dimension = dimension;
+        this.tiers = validatedTiers;
         this.signs = Arrays.copyOf(customSigns, customSigns.length);
+        this.tierDctMatrices = buildTierDctMatrices(validatedTiers);
+        super();
+    }
+
+    private static int[] validateTiers(int dimension, int[] tiers) {
+        if (tiers == null || tiers.length == 0) {
+            throw new IllegalArgumentException("Tiers must not be null or empty");
+        }
+        int prev = 0;
+        for (int tier : tiers) {
+            if (tier <= prev || tier > dimension) {
+                throw new IllegalArgumentException("Invalid cumulative tier boundary " + tier + " for dimension " + dimension);
+            }
+            prev = tier;
+        }
+        return Arrays.copyOf(tiers, tiers.length);
+    }
+
+    private static float[] createDefaultSigns(int dimension) {
+        float[] defaultSigns = new float[dimension];
+        Random rand = new Random(42);
+        for (int i = 0; i < dimension; i++) {
+            defaultSigns[i] = rand.nextBoolean() ? 1.0f : -1.0f;
+        }
+        return defaultSigns;
+    }
+
+    private static float[][][] buildTierDctMatrices(int[] tiers) {
+        float[][][] matrices = new float[tiers.length][][];
+        int start = 0;
+        for (int t = 0; t < tiers.length; t++) {
+            int width = tiers[t] - start;
+            if ((width & (width - 1)) != 0) {
+                int u = 1;
+                while ((width % (u << 1)) == 0) {
+                    u <<= 1;
+                }
+                matrices[t] = buildDctMatrix(width / u);
+            }
+            start = tiers[t];
+        }
+        return matrices;
+    }
+
+    private static float[][] buildDctMatrix(int v) {
+        float[][] omega = new float[v][v];
+        float c0 = (float) (1.0 / Math.sqrt(v));
+        double scale = Math.sqrt(2.0 / v);
+        Arrays.fill(omega[0], c0);
+        for (int i = 1; i < v; i++) {
+            for (int j = 0; j < v; j++) {
+                omega[i][j] = (float) (scale * Math.cos(Math.PI * i * (2 * j + 1) / (2.0 * v)));
+            }
+        }
+        return omega;
     }
 
     /// Computes the cumulative prefix energy distribution Φ(k) from projection/LoRA weights W ∈ ℝ^(D × D₀)
@@ -185,9 +246,9 @@ public final class TransformOperator {
 
         // 2. Block-Diagonal Hadamard Rotation
         int start = 0;
-        for (int tier : tiers) {
-            int width = tier - start;
-            rotateBlock(z, start, width);
+        for (int t = 0; t < tiers.length; t++) {
+            int tier = tiers[t];
+            rotateBlock(z, start, tier - start, t, false);
             start = tier;
         }
         return z;
@@ -282,9 +343,9 @@ public final class TransformOperator {
 
         // 1. Inverse rotate by block Hadamard / Kronecker transpose
         int start = 0;
-        for (int tier : tiers) {
-            int width = tier - start;
-            rotateBlock(x, start, width, true);
+        for (int t = 0; t < tiers.length; t++) {
+            int tier = tiers[t];
+            rotateBlock(x, start, tier - start, t, true);
             start = tier;
         }
 
@@ -302,23 +363,13 @@ public final class TransformOperator {
         return x;
     }
 
-    /// Dispatches block rotation: uses O(D · log D) Fast Walsh-Hadamard Transform (FWHT) if
-    /// block width is a power of two, otherwise applies Kronecker factorized rotation.
-    private void rotateBlock(float[] z, int start, int width) {
-        rotateBlock(z, start, width, false);
-    }
-
-    private void rotateBlock(float[] z, int start, int width, boolean inverse) {
-        if ((width & (width - 1)) == 0) {
+    private void rotateBlock(float[] z, int start, int width, int tierIdx, boolean inverse) {
+        float[][] omega = tierDctMatrices[tierIdx];
+        if (omega == null) {
             fwht(z, start, width);
         } else {
-            // Factorize width = u * v where u is the largest power of two
-            int u = 1;
-            while (width % (u * 2) == 0) {
-                u *= 2;
-            }
-            int v = width / u;
-            kroneckerRotate(z, start, u, v, inverse);
+            int v = omega.length;
+            kroneckerRotate(z, start, width / v, v, omega, inverse);
         }
     }
 
@@ -373,22 +424,15 @@ public final class TransformOperator {
     /// Kronecker-factorized orthogonal rotation for non-power-of-two block widths:
     /// `R = H_u ⊗ Ω_v` (and inverse `R^T = H_u ⊗ Ω_v^T`)
     /// where Ω_v ∈ ℝ^(v × v) is an orthogonal DCT-II basis matrix and H_u is a Walsh-Hadamard matrix of size u.
-    private void kroneckerRotate(float[] a, int start, int u, int v, boolean inverse) {
-
-        // Construct deterministic orthogonal matrix Omega_v using DCT basis
-        float[][] omega = new float[v][v];
-        for (int i = 0; i < v; i++) {
-            for (int j = 0; j < v; j++) {
-                if (i == 0) {
-                    omega[i][j] = (float) (1.0 / Math.sqrt(v));
-                } else {
-                    omega[i][j] = (float) (Math.sqrt(2.0 / v) * Math.cos(Math.PI * i * (2 * j + 1) / (2.0 * v)));
-                }
-            }
+    private void kroneckerRotate(float[] a, int start, int u, int v, float[][] omega, boolean inverse) {
+        int needed = v + u;
+        float[] scratch = KRONECKER_SCRATCH.get();
+        if (scratch == null || scratch.length < needed) {
+            scratch = new float[needed];
+            KRONECKER_SCRATCH.set(scratch);
         }
 
-        // Apply Omega_v (or Omega_v^T when inverse == true) to each block of size v
-        float[] temp = new float[u * v];
+        // Apply Omega_v (or Omega_v^T when inverse == true) to each block of size v in-place via scratch[0..v)
         for (int block = 0; block < u; block++) {
             int blockStart = start + block * v;
             for (int i = 0; i < v; i++) {
@@ -398,25 +442,26 @@ public final class TransformOperator {
                         sum += omega[j][i] * a[blockStart + j];
                     }
                 } else {
+                    float[] omegaRow = omega[i];
                     for (int j = 0; j < v; j++) {
-                        sum += omega[i][j] * a[blockStart + j];
+                        sum += omegaRow[j] * a[blockStart + j];
                     }
                 }
-                temp[block * v + i] = sum;
+                scratch[i] = sum;
             }
+            System.arraycopy(scratch, 0, a, blockStart, v);
         }
 
-        // Apply FWHT of size u across block coordinates
-        float[] column = new float[u];
+        // Apply FWHT of size u across block coordinates using scratch[v..v+u)
         for (int coord = 0; coord < v; coord++) {
             for (int block = 0; block < u; block++) {
-                column[block] = temp[block * v + coord];
+                scratch[v + block] = a[start + block * v + coord];
             }
 
-            fwht(column, 0, u);
+            fwht(scratch, v, u);
 
             for (int block = 0; block < u; block++) {
-                a[start + block * v + coord] = column[block];
+                a[start + block * v + coord] = scratch[v + block];
             }
         }
     }

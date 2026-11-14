@@ -661,4 +661,53 @@ class VectorDbTest {
 
         index.close();
     }
+
+    @Test
+    void testSearchMergedShadowingAndBaseTombstones(@TempDir Path tempDir) throws IOException {
+        int dim = 64;
+        int[] tiers = {64};
+
+        float[] base0 = new float[dim];
+        float[] base1 = new float[dim];
+        float[] base2 = new float[dim];
+        float[] updated0 = new float[dim];
+        java.util.Arrays.fill(base0, 0.1f);
+        base0[0] = 1.0f;
+        java.util.Arrays.fill(base1, 0.1f);
+        base1[1] = 1.0f;
+        java.util.Arrays.fill(base2, 0.1f);
+        base2[2] = 1.0f;
+        java.util.Arrays.fill(updated0, -1.0f);
+
+        Path dbPath = tempDir.resolve("db_merged_shadow");
+        VectorDb.compileIndexFile(dbPath.toString(), (byte) 1, 1000L, dim, tiers, List.of(
+                new VectorRecord(10L, base0),
+                new VectorRecord(20L, base1),
+                new VectorRecord(30L, base2)
+        ));
+
+        VectorDb db = new VectorDb();
+        db.loadIndex("idx_shadow", dbPath.toString(), null, 0);
+        DeltaBuffer delta = db.createDeltaBuffer("idx_shadow", 100);
+
+        // Update base ID 10 so its stale base location must not surface
+        delta.insert(10L, updated0);
+        // Delete base ID 20 while keeping ID 30 intact
+        delta.delete(20L);
+
+        List<Index.SearchResult> results = db.searchMerged("idx_shadow", base0, 2);
+        assertEquals(2, results.size());
+        assertEquals(30L, results.getFirst().id(), "Surviving base record 30 should lead after base0 update and deletion");
+        assertTrue(results.stream().noneMatch(r -> r.id() == 20L), "Deleted base record 20 must not appear");
+
+        // Re-opening WAL must preserve base tombstone for ID 20
+        db.close();
+        VectorDb dbReloaded = new VectorDb();
+        dbReloaded.loadIndex("idx_shadow", dbPath.toString(), null, 0);
+        dbReloaded.createDeltaBuffer("idx_shadow", 100);
+        List<Index.SearchResult> afterReload = dbReloaded.searchMerged("idx_shadow", base1, 3);
+        assertTrue(afterReload.stream().noneMatch(r -> r.id() == 20L), "Base tombstone 20 must persist across WAL replay");
+        assertEquals(2, afterReload.size());
+        dbReloaded.close();
+    }
 }
