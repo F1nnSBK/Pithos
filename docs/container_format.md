@@ -17,9 +17,8 @@ The `.pithos` single-file container format embodies this exact philosophy:
 
 ```mermaid
 graph LR
-    SB["Superblock (128 B)<br/>'DIOGENES'"] --> S0["Section 0: IDs<br/>(N × 8 B)"]
-    S0 --> S1["Section 1: Tiers<br/>(Quantized Bits)"]
-    S1 --> S2["Section 2: Delta Log<br/>(Append Buffer)"]
+    SB["Superblock (128 B)<br/>'DIOGENES'"] --> S1["Section 1: IDs<br/>(N × 8 B)"]
+    S1 --> S2["Section 2: Tiers<br/>(Quantized Bits)"]
     S2 --> S3["Section 3: Sidecar<br/>(FP8 / NVFP4 / FP16)"]
     S3 --> S4["Section 4: Prefix Table<br/>(MIH 4x8-Bit CSR)"]
     S4 --> S5["Section 5: Metadata<br/>(JSONL / Arrow IPC)"]
@@ -66,16 +65,16 @@ graph LR
    * For FP32 float bypass: $N \times W_k \times 4$ bytes.
 
 3. **Section 3: Precision Sidecar (`SECTION_SIDECAR`)**
-   * Continuous precision matrix for Gate 3 exact in-engine reranking.
-   * **FP8 E4M3:** $N \times D \times 1$ byte.
-   * **Blackwell NVFP4 E2M1:** $N \times \lceil D / 16 \rceil \times 9$ bytes (microscaled blocks with FP8 scale factor).
-   * **FP16:** $N \times D \times 2$ bytes.
+   * Precision matrix for Gate 3 candidate reranking and zero-copy vector retrieval (`Index.get_vectors()`).
+   * **FP8 E4M3:** $N \times D \times 1$ byte, stored in rotated WHT space (`"space": "wht"`).
+   * **Blackwell NVFP4 E2M1:** $N \times \lceil D / 16 \rceil \times 9$ bytes (microscaled block-16 with FP8 scale factor), stored in rotated WHT space (`"space": "wht"`).
+   * **FP16:** $N \times D \times 2$ bytes, stored in raw input space (`"space": "raw"`).
 
-4. **Section 4: Direct-Mapped Prefix Table (`SECTION_PREFIX_TABLE`)**
-   * Gate 0 inverted CSR index for 16-bit Walsh-Hadamard prefix routing ($2^{16} = 65,536$ buckets).
-   * **Bucket Offsets:** 65,537 `int32` elements (262,148 bytes).
-   * **Postings Slice:** $N \times 4$ bytes (`int32` vector row indices).
-   * Probes exact query bucket + 16 Hamming-1 neighbors to prune 98-99% of search candidates.
+4. **Section 4: 4x8-Bit MIH Prefix Table (`SECTION_PREFIX_TABLE`)**
+   * Gate 0 Multi-Index Hashing (MIH) inverted CSR index partitioning the first 32 bits of the binarized vector into `4` independent 8-bit sub-tables (`256` buckets each).
+   * **Bucket Offsets:** `4 * (256 + 1) = 1,028` `int32` elements (`4,112` bytes total).
+   * **Postings Slice:** $4 \times N \times 4$ bytes (`int32` vector row indices across the 4 chunk tables).
+   * Evaluates exact buckets and 1-bit Hamming neighbor buckets during Gate 0 pruning.
 
 5. **Section 5: Generic Metadata Payload (`SECTION_METADATA`)**
    * Schema-agnostic storage for external attributes, documents, or tabular rows.
@@ -86,7 +85,7 @@ graph LR
 
 ### Table of Contents (TOC JSON Directory)
 
-Located at `toc_offset`, the self-describing directory provides section metadata and an arbitrary user-defined metadata dictionary:
+Located at `toc_offset`, the self-describing directory provides section metadata (including the sidecar coordinate space) and an arbitrary user-defined metadata dictionary:
 
 ```json
 {
@@ -96,8 +95,9 @@ Located at `toc_offset`, the self-describing directory provides section metadata
     "ids": { "offset": 128, "length": 800000, "dtype": "uint64" },
     "tier_0": { "offset": 800128, "length": 800000, "dim_boundary": 64 },
     "tier_1": { "offset": 1600128, "length": 800000, "dim_boundary": 128 },
-    "sidecar": { "offset": 2400128, "length": 12800000, "format": "fp8_e4m3" },
-    "metadata": { "offset": 15200128, "length": 450000, "format": "jsonl" }
+    "sidecar": { "offset": 2400128, "length": 12800000, "format": "fp8_e4m3", "space": "wht" },
+    "prefix_table": { "offset": 15200128, "length": 1604160, "num_chunks": 4, "num_buckets_per_chunk": 256, "format": "mih_csr_4x8" },
+    "metadata": { "offset": 16804288, "length": 450000, "format": "jsonl" }
   },
   "user_metadata": {
     "collection": "multimodal_satellite_embeddings",
@@ -240,5 +240,5 @@ When mounting a `.pithos` single-file container via `FlatIndex.mapFile()`, Pitho
    Every section slice (`SECTION_IDS`, `SECTION_TIERS`, `SECTION_SIDECAR`, `SECTION_PREFIX_TABLE`, `SECTION_METADATA`) is verified against the physical file channel size:
    $$\text{Offset}_{\text{section}} + \text{Length}_{\text{section}} \le \text{FileChannel.size()}$$
 4. **TOC Decompression Guard:**
-   Limits Table of Contents JSON strings to $\le 10\,\text{MB}$, protecting against malicious memory expansion payloads.
+   Limits Table of Contents JSON strings to $\le 50\,\text{MB}$, protecting against malicious memory expansion payloads.
 

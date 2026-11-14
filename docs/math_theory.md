@@ -176,10 +176,10 @@ $$
 
 ## 5. Gate 3: Asymmetric Distance Computation & Early Distance Cutoff
 
-For top-ranked candidates, Gate 3 evaluates exact Euclidean distance using precomputed continuous Look-Up Tables (LUTs) with zero runtime floating-point multiplications.
+For top-ranked candidates from Gate 2, Gate 3 evaluates Euclidean distance using precomputed continuous Look-Up Tables (LUTs) with zero runtime floating-point multiplications. Because the isometric transform $\mathbf{R} \mathbf{D}$ is orthogonal, Euclidean distances measured in WHT space (`"space": "wht"` for FP8 E4M3 and NVFP4 E2M1 sidecars) satisfy $\|\mathbf{z}_q - \mathbf{z}_x\|_2 = \|\mathbf{q} - \mathbf{x}\|_2$, matching raw-space FP16 evaluation (`"space": "raw"`).
 
 ### Asymmetric Query LUT Formulation
-Let $\mathbf{q} \in \mathbb{R}^d$ be the continuous query vector. For an 8-bit quantized database vector $\mathbf{x}$ represented by indices $c_j \in \{0, \dots, 255\}$, the squared Euclidean distance is:
+Let $\mathbf{q} \in \mathbb{R}^d$ be the continuous query vector in the sidecar's coordinate space ($\mathbf{z}_q$ for WHT sidecars, raw $\mathbf{x}_q$ for FP16). For an 8-bit quantized database vector $\mathbf{x}$ represented by indices $c_j \in \{0, \dots, 255\}$, the squared Euclidean distance is:
 
 $$
 \|\mathbf{q} - \mathbf{x}\|_2^2 = \|\mathbf{q}\|_2^2 + \|\mathbf{x}\|_2^2 - 2 \langle \mathbf{q}, \mathbf{x} \rangle
@@ -210,6 +210,4 @@ $$
 S_m > \tau_k
 $$
 
-the vector $\mathbf{x}$ cannot enter the top-$k$ result set. Evaluation terminates immediately at dimension $m$.
-
-**Theoretical Efficiency:** In high-dimensional spaces ($d = 384$), non-matching candidates exceed $\tau_k$ within $m \in [64, 128]$ dimensions, saving $60\%$ to $75\%$ of memory lookups while guaranteeing $100\%$ exact mathematical recall.
+the vector $\mathbf{x}$ cannot enter the top-$k$ result set. Evaluation terminates immediately at dimension $m$, preserving exact top-$k$ ordering across all Gate 3 candidates evaluated against the sidecar representation.

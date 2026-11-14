@@ -2,6 +2,24 @@
 
 ---
 
+## Pithos v2.2.6 Release Notes — Finalized Java 25, Vector API Native Image & Unified WHT Parity
+
+**Release Date:** November 2026  
+**Target Hardware:** NVIDIA Grace Blackwell GB10 / GB200 Superchips, Apple Silicon (M-Series ARM64), AWS Graviton 4, x86_64 (AVX-512 VPOPCNTDQ), NVMe DMA / io_uring.  
+**Package Version:** `pithos_core-2.2.6.jar` / `pithosdb 2.2.6` / `libpithos v2.2.6`
+
+### Summary
+Pithos v2.2.6 completes the migration to finalized JDK 25 syntax (`<release>25</release>` without `--enable-preview`), enables GraalVM 25 Native Image compilation with `-H:+VectorAPISupport` via `Arena.ofAuto()`, replaces SVD sorting with vectorized row-norm cumulative energy pruning, unifies WHT-space FP8/NVFP4 sidecar alignment across container/multi-file/stream layouts, and restores native `vdb_batch_search` execution on Apple Silicon ARM64.
+
+### Key Highlights & Improvements:
+* **Finalized Java 25 & GraalVM 25 Vector API Image:** Uses finalized JEP 467 Markdown Javadoc (`///`), JEP 456 unnamed variables (`_`), JEP 513 flexible constructor bodies, FFM `MemorySegment` / `Arena.ofAuto()` (compatible with `-H:+VectorAPISupport`), `Math.clamp`, `Thread.ofPlatform()`, and `List.getFirst()`.
+* **Methodological Fix — Row-Norm Cumulative Energy (`computeCumulativeEnergy`):** Replaced the Jacobi SVD solver with vectorized FMA computation of coordinate row L2 energy $\Phi(k)$ in `TransformOperator`, preserving Matryoshka tier alignment without axis permutation.
+* **Sub-64-Bit Tier Packing & Kronecker Scratch Reuse:** Added `TransformOperator.extractTierWord` across query and container/multi-file packing paths, and replaced per-call allocations in `kroneckerRotate` with `ThreadLocal<float[]> KRONECKER_SCRATCH`.
+* **Unified WHT-Space Sidecar Alignment:** Declared `"space": "wht"` (FP8/NVFP4) and `"space": "raw"` (FP16) consistently in container TOCs, fallback array paths (`compile_index`, `compile_container`, `compile_container_stream`), `FlatIndex`, and `Index.get_vectors()` back-projection; removed per-search budget mutation from `Index.search()`.
+* **LSM Shadowing, Bulk FFM & Full Apple Silicon Support:** Added `shadowedIds` tracking and WAL-persistent base tombstones in `DeltaBuffer` + `VectorDb.searchMerged`, bulk FFM matrix/array marshaling in `CApi.java`, restored native `vdb_batch_search` + `SidecarMode.NONE` on macOS ARM64, and synchronized `include/pithos.h` and `pithosdb` exports.
+
+---
+
 ## Pithos v2.2.5 Release Notes — Zero-Warning FFI Off-Heap Memory Access & Panama Cleanliness
 
 **Release Date:** August 2026  
@@ -12,7 +30,7 @@
 Pithos v2.2.5 eliminates restricted method warnings (`MemorySegment::reinterpret`) emitted by GraalVM / Java Panama during C-FFI planetary grid scans and ensures native access configuration across all build profiles.
 
 ### Key Highlights & Improvements:
-* **Mac ARM64 Zero-Crash Search Fallback:** Completely bypassed the native C-API `vdb_batch_search` on Apple Silicon (M-Series) devices in favor of a robust, fully-vectorized NumPy exact search fallback, permanently eliminating JVM `SIGSEGV` memory access crashes on Macs.
+* **Mac ARM64 Zero-Crash Search Fallback:** Bypassed native C-API `vdb_batch_search` on Apple Silicon (M-Series) devices in favor of a NumPy exact search fallback in `2.2.5` *(superseded in `v2.2.6`, where native `vdb_batch_search` and `SidecarMode.NONE` are restored on Apple Silicon ARM64)*.
 * **Isolate Lifecycle & Singleton Safety:** Refactored `VectorDb` to utilize thread-safe instance reference counting against a unified `NativeBindings` singleton. This ensures the GraalVM Isolate is never torn down prematurely during concurrent, loop-based, or `pytest` context operations, preventing cross-instance crashes.
 * **MIPS Architecture Hardening:** Fixed a silent `IndexError` during batch scalar untransformation of Maximum Inner Product Search (MIPS) scores by correctly handling scalar normalization arrays.
 * **FP16 Sidecar Distance Tie Resolution:** Fixed an issue where `MemorySegment.copy` operations inside `computeExactL2FP16` failed silently during GraalVM C-API execution, resulting in uniformly identical `1.0` distance evaluations. Replaced with direct `MemorySegment.get` primitive reads, resolving a persistent `AssertionError` during batch multi-candidate resolution on Linux x86_64 environments.

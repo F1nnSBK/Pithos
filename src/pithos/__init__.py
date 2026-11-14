@@ -37,7 +37,7 @@ from .mips import (
 )
 from .ffi import PithosNativeError
 
-__version__ = "2.2.5"
+__version__ = "2.2.6"
 __all__ = [
     "VectorDb",
     "Index",

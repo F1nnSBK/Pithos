@@ -5,6 +5,6 @@ includedir=${prefix}/include
 
 Name: Pithos
 Description: High-Performance Model-Isomorphic Vector Database Engine
-Version: 1.0.5
+Version: 2.2.6
 Libs: -L${libdir} -lpithos
 Cflags: -I${includedir}

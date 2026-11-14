@@ -4,20 +4,21 @@
 
 ---
 
-## 1. Completed Core Milestones (v2.0 – v2.2)
+## 1. Completed Core Milestones (v2.0 – v2.2.6)
 
 | Feature Area | Status | Key Innovations |
 | :--- | :--- | :--- |
 | **Universal Container Format** | **Released (v2.0)** | Schema-agnostic `.pithos` single-file container with embedded Apache Arrow IPC partition directory. |
-| **4x8-Bit MIH Prefix Routing** | **Released (v2.1)** | Direct-mapped CSR inverted table pruning 98.5% of search space in $O(1)$ sub-microsecond time. |
-| **Precision Sidecar Reranking** | **Released (v2.0)** | Asymmetric Query LUTs decoding FP8 (E4M3), NVFP4 (E2M1), FP16 with Monotonic Early Distance Cutoff. |
-| **LSM DeltaBuffer & WAL** | **Released (v2.0)** | Lock-free real-time insertions, tombstone soft-deletes, write-ahead log, and zero-cost binary compactions. |
+| **4x8-Bit MIH Prefix Routing** | **Released (v2.1)** | Direct-mapped CSR inverted table (`4 x 256` buckets) for fast Gate 0 candidate pruning. |
+| **Precision Sidecar Reranking** | **Released (v2.0)** | Asymmetric Query LUTs decoding FP8 (E4M3), NVFP4 (E2M1), and FP16 with Monotonic Early Distance Cutoff. |
+| **LSM DeltaBuffer & WAL** | **Released (v2.0)** | Lock-free real-time insertions, persistent base/delta tombstones, write-ahead log, and zero-cost compactions. |
 | **Zero-Copy NumPy FFI** | **Released (v2.1)** | Direct memory view returns (`search_numpy()`, `batch_search_numpy()`) bypassing Python wrapper conversions. |
-| **CUDA GPU Acceleration** | **Released (v2.0)** | Fused batch Hamming kernels, Fast Walsh-Hadamard transform, and multi-family resonant voting. |
-| **Real Foundation Model Recall**| **Released (v2.2)** | Validated $>92.3\%$ Recall@10 on real Matryoshka models (`nomic-embed-text`, `bge-base`, `text-embedding-3-small`). |
-| **Disruptor 4.0.0 & VarHandles**| **Released (v2.2)** | Replaced `sun.misc.Unsafe` with `java.lang.invoke.VarHandle`, 0 JVM deprecation warnings on Java 25+. |
-| **Zero-Allocation BitSets** | **Released (v2.2)** | `ThreadLocal<long[]>` scratch buffers with 0 heap bytes allocated during search queries. |
+| **CUDA GPU Acceleration** | **Released (v2.0)** | Fused batch Hamming kernels, Fast Walsh-Hadamard transform, FP8 reranking, and multi-family resonant voting. |
+| **Matryoshka Recall Verification**| **Released (v2.2)** | Verified `92.20%` Recall@10 on `D=384` Matryoshka embeddings (`FP8 E4M3` + MIH, `1.94 ms` mean CPU latency). |
+| **Disruptor 4.0.0 & VarHandles**| **Released (v2.2)** | Replaced `sun.misc.Unsafe` with `java.lang.invoke.VarHandle` and FFM `MemorySegment`, zero warnings on Java 25+. |
+| **Zero-Allocation BitSets** | **Released (v2.2)** | `ThreadLocal<long[]>` scratch buffers minimizing heap allocations during search queries. |
 | **Zero-Overhead Security** | **Released (v2.2)** | Defensive C-API pointer guards, Superblock/TOC bounds verification, and path traversal sanitization. |
+| **Java 25, Vector API & WHT Parity**| **Released (v2.2.6)** | Finalized Java 25 syntax with GraalVM `-H:+VectorAPISupport`, row-norm energy pruning replacing Jacobi SVD, unified WHT-space FP8/NVFP4 alignment across all layouts, and full native macOS ARM64 execution. |
 
 ---
 

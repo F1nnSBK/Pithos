@@ -72,14 +72,16 @@ Before binarization, raw input embeddings are transformed using a structured ort
     \mathbf{H}_{2^m} = \frac{1}{\sqrt{2}} \begin{bmatrix} \mathbf{H}_{2^{m-1}} & \mathbf{H}_{2^{m-1}} \\ \mathbf{H}_{2^{m-1}} & -\mathbf{H}_{2^{m-1}} \end{bmatrix} \quad \text{with } \mathbf{H}_1 = [1].
     $$
 
+- **Kronecker Orthogonal Rotation for Composite Dimensions ($\mathbf{R} = \mathbf{H}_u \otimes \mathbf{\Omega}_v$):** When a tier width $w$ is not a power of two, `TransformOperator` factors $w = u \cdot v$ (with $u$ the largest power-of-two divisor and $v$ the odd residual) and applies an orthonormal $v \times v$ DCT-II transform followed by a size-$u$ FWHT using thread-local scratch buffers (`KRONECKER_SCRATCH`). Arbitrary non-64-aligned tier boundaries are sliced bit-accurately via `TransformOperator.extractTierWord()`.
+
 ---
 
-## 2. SVD-Driven Spectral Truncation
+## 2. Row-Norm Cumulative Energy Pruning
 
-At load time, Pithos can ingest the embedding model's adapter weight matrix $\mathbf{W} \in \mathbb{R}^{D \times r}$. The engine executes a native **Jacobi SVD solver** to compute singular values $\sigma_1, \dots, \sigma_D$ by applying iterative orthogonal rotations to diagonalize the covariance matrix $\mathbf{C} = \mathbf{W}^T \mathbf{W}$. This reconstructs the cumulative spectral energy distribution $\Phi(k)$:
+At load time, Pithos can ingest the embedding model's projection/LoRA weight matrix $\mathbf{W} \in \mathbb{R}^{D \times D_0}$. Instead of applying an SVD axis permutation that would break Matryoshka prefix alignment, `TransformOperator.computeCumulativeEnergy` evaluates the squared L2 energy of each coordinate row $i$ directly via Java Vector API FMA instructions:
 
 $$
-\Phi(k) = \frac{\sum_{i=1}^{k} \sigma_i^2}{\sum_{j=1}^{\min(D,r)} \sigma_j^2}
+e_i = \sum_{j=1}^{D_0} W_{i,j}^2, \qquad \Phi(k) = \frac{\sum_{i=1}^{k} e_i}{\sum_{i=1}^{D} e_i}
 $$
 
 Given an energy budget $\tau \in (0, 1]$, Pithos computes the pruning tier boundary:
@@ -88,7 +90,7 @@ $$
 \mathcal{T}(S,\tau) = \min \{ k \mid \Phi(s_k) \ge \tau \}
 $$
 
-All database columns matching tiers $k > \mathcal{T}(S,\tau)$ are bypassed during search, saving memory bus I/O bandwidth.
+All database columns matching tiers $k > \mathcal{T}(S,\tau)$ are bypassed during Gate 2 scanning, saving memory bus I/O bandwidth while preserving exact Matryoshka coordinate alignment.
 
 ---
 
@@ -116,9 +118,9 @@ Query vectors cascade through four hardware-aligned evaluation gates:
 - Collects the top-$K_{\text{candidate}}$ records for precision refinement.
 
 ### Gate 3: Precision Sidecar Reranking with Monotonic Early Cutoff
-- Maps candidate vectors directly from FP8 (E4M3), NVFP4 (E2M1), or FP16 sidecar memory.
-- Uses precomputed continuous query Look-Up Tables (LUTs) in L1 cache (zero floating-point multiplications).
-- Breaks Euclidean distance accumulation immediately when partial sum exceeds the current $k$-th best distance $\tau_k$, saving $50\%$ to $70\%$ of compute while preserving $100\%$ exact recall.
+- Maps candidate vectors directly from **FP8 (E4M3)** (`"space": "wht"`), **NVFP4 (E2M1)** (`"space": "wht"`), or **FP16** (`"space": "raw"`) sidecar memory, or falls back to asymmetric rotated L2 distance estimation on 1-bit/2-bit columns when `SidecarMode.NONE` is active.
+- Uses precomputed continuous query Look-Up Tables (LUTs) in L1 cache for FP8 evaluation (zero floating-point multiplications in the inner loop).
+- Breaks Euclidean distance accumulation immediately when the monotonic partial sum exceeds the current $k$-th best candidate distance $\tau_k$, preserving exact top-$k$ ordering among Gate 3 candidates while reducing dimension evaluations.
 
 ---
 
@@ -154,7 +156,7 @@ Pithos incorporates defense-in-depth security mechanisms designed to provide max
    All entry points in `CApi.java` validate external client pointers (`name`, `path`, `query`, `outIds`, `outDistances`) and scalar ranges ($k > 0$, $D \in [1, 65536]$) in $< 0.2\,\text{ns}$ before Java memory slicing, preventing `SIGSEGV` segmentation faults and memory corruption from untrusted caller environments.
 
 2. **Superblock & Container Slicing Bounds Verification:**
-   During container mounting, all section offsets and lengths are verified against physical `FileChannel.size()`. Files with tampered or forged offsets are safely rejected before memory slicing. The Table of Contents (TOC) is limited to 10 MB to prevent decompression bombs.
+   During container mounting, all section offsets and lengths are verified against physical `FileChannel.size()`. Files with tampered or forged offsets are safely rejected before memory slicing. The Table of Contents (TOC) is limited to 50 MB to prevent memory exhaustion payloads.
 
 3. **Path Traversal & Filesystem Sanitization:**
    Index names and filepaths are canonicalized via `Path.normalize()`, blocking directory traversal (`../`) and null-byte injection attacks.

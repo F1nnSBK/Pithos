@@ -6,16 +6,16 @@
 [![Java 25](https://img.shields.io/badge/Java-25%20(Vector%20API%20%26%20FFM)-orange)](https://openjdk.org/)
 [![Native Image](https://img.shields.io/badge/GraalVM-Native%20Image-red)](https://www.graalvm.org/)
 
-**Pithos** is a high-performance **Model-Isomorphic Database (MIDB)** and Ahead-of-Time (AOT) compiled vector search engine designed for **Matryoshka-structured binary embeddings** at planetary scale, compiled into a standalone native shared library (`.dylib` / `.so`) via **GraalVM Native Image**.
+**Pithos** is a high-performance **Model-Isomorphic Database (MIDB)** and Ahead-of-Time (AOT) compiled vector search engine designed for **Matryoshka-structured binary embeddings**, compiled into a standalone native shared library (`.dylib` / `.so`) via **GraalVM Native Image**.
 
 ### What is a Model-Isomorphic Database (MIDB)?
 Traditional vector databases treat embeddings as generic high-dimensional arrays. A **Model-Isomorphic Database (MIDB)** structurally mirrors the latent geometry and spectral energy distribution of the neural embedding model:
-- **SVD-Driven Spectral Truncation:** Columnar tiers are allocated according to cumulative singular value energy (Φ(k)) derived from model projection/LoRA weights.
-- **Isometric Preconditioning & Rotation:** Eliminates spatial burstiness via Rademacher sign flipping and spreads embedding energy uniformly with block-diagonal Fast Walsh-Hadamard Transforms (H_BD).
-- **3-Gate Read-Path Cascade:** 1-cycle metadata filtering → Matryoshka early-exit Hamming scanning → exact FP16 in-engine reranking.
+- **Row-Energy Prefix Pruning (Φ(k)):** Cumulative row L2 energy (`||W_{i,:}||_2^2`) derived from projection/LoRA weights (`TransformOperator.computeCumulativeEnergy`), preserving Matryoshka coordinate alignment without SVD axis permutation.
+- **Isometric Preconditioning & Rotation:** Eliminates spatial burstiness via Rademacher sign flipping and spreads embedding energy uniformly using block-diagonal Fast Walsh-Hadamard Transforms (`H_BD`) for power-of-two blocks, Kronecker-factorized orthogonal rotations (`H_u ⊗ Ω_v` with DCT-II) for arbitrary non-power-of-two dimensions, and exact sub-64-bit tier bit-masking.
+- **4-Gate Read-Path Cascade:** Gate 0 (`4x8-Bit` MIH CSR prefix routing) → Gate 1 (64-bit liveliness & tombstone metadata bitmask) → Gate 2 (Matryoshka tiered SIMD Hamming scan via Java Vector API AVX-512 / ARM NEON) → Gate 3 (Asymmetric Distance Computation with **FP8 E4M3**, **NVFP4 E2M1**, **FP16**, or rotated binary/ternary L2 fallback + monotonic early cutoff).
 - **Zero-GC Off-Heap Memory:** Bypasses garbage collection entirely using the **Java Foreign Function & Memory (FFM) API (Project Panama)** and POSIX memory-mapped I/O (`mmap`).
-- **Hardware SIMD & CUDA:** Vectorized with Java Vector API (AVX-512 / ARM NEON) and native NVIDIA CUDA kernels for batch distance computation and multi-family resonant voting.
-- **Pythonic Zero-Copy FFI:** Seamless integration with NumPy arrays via `pithosdb`.
+- **Hardware SIMD & CUDA:** Vectorized with Java Vector API (`jdk.incubator.vector`) and optional native NVIDIA CUDA kernels for batch distance computation, Walsh-Hadamard transforms, FP8 reranking, and multi-family resonant voting.
+- **Pythonic Zero-Copy FFI:** Seamless integration with NumPy arrays via `pithosdb` (or `pithos`).
 
 ---
 
@@ -30,30 +30,38 @@ uv pip install pithosdb
 ```
 
 ```python
-import pithosdb
 import numpy as np
+from pithosdb import VectorDb, SidecarMode, QuantizationMode
 
-# 1. Open database off-heap (Zero JVM overhead)
-with pithosdb.VectorDb() as db:
-    # 2. Compile an index from float embeddings
-    records = np.random.randn(10_000, 384).astype(np.float32)
-    pithosdb.VectorDb.compile_index(
-        base_path="temp/sample_index",
-        records=records,
-        tiers=[64, 128, 256, 384]
-    )
-    
-    # 3. Memory-map index & run zero-copy batch k-NN search
-    index = db.load_index("sample", "temp/sample_index")
-    queries = np.random.randn(10, 384).astype(np.float32)
+# 1. Generate normalized embeddings
+rng = np.random.default_rng(42)
+records = rng.standard_normal((10_000, 384)).astype(np.float32)
+records /= np.linalg.norm(records, axis=1, keepdims=True)
+
+# 2. Compile into a universal self-contained .pithos container (FP8 E4M3 + 4x8 MIH)
+VectorDb.compile_container(
+    path="temp/sample_index.pithos",
+    records=records,
+    tiers=[64, 128, 256, 384],
+    q_mode=QuantizationMode.ONE_BIT,
+    sidecar_mode=SidecarMode.FP8,
+)
+
+# 3. Memory-map off-heap & run zero-copy k-NN search + real-time LSM writes
+with VectorDb() as db:
+    index = db.load_index("sample", "temp/sample_index.pithos")
+    queries = records[:10]
+
+    # Object search or zero-copy flat NumPy FFI views
     results = index.search(queries, k=5)
-    
-    for q_idx, matches in enumerate(results):
-        print(f"Query {q_idx} Top Matches: {matches}")
+    out_ids, out_dists = index.search_numpy(queries[0], k=5)
+    print(f"Top-5 IDs: {out_ids}, Scaled Distances: {out_dists}")
 
-    # 4. Real-time Ingestion via LSM DeltaBuffer
+    # Real-time ingestion & tombstone-aware merged search via LSM DeltaBuffer + WAL
     delta = db.create_delta_buffer("sample", flush_threshold=1000)
-    delta.insert(record_id=42, vector=np.random.randn(384).astype(np.float32))
+    delta.insert(record_id=42, vector=records[0])
+    merged_hits = index.search_merged(queries[0], k=5)
+    print(f"Merged Top Matches: {merged_hits}")
 ```
 
 ---
@@ -70,6 +78,7 @@ Precompiled native libraries are automatically published on GitHub Releases:
 | `libpithos-linux-x86_64.so` | Linux (x86_64) | AVX2 / AVX-512 |
 | `libpithos-linux-aarch64.so` | Linux (ARM64 / Graviton) | NEON SIMD |
 | `libpithos-linux-cuda-x86_64.so` | Linux (x86_64) | NVIDIA CUDA GPU |
+| `libpithos-linux-cuda-aarch64.so` | Linux (ARM64 / Grace) | NVIDIA CUDA GPU |
 | `pithos.h` / `graal_isolate.h` | C/C++ Headers | Standalone C-ABI |
 
 ---
@@ -77,32 +86,30 @@ Precompiled native libraries are automatically published on GitHub Releases:
 ## System Architecture & Features
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                 Client Layer (Python / C / C++)             │
-│            pithosdb (ctypes Zero-Copy NumPy / FFI)          │
-└──────────────────────────────┬──────────────────────────────┘
-                               │ C-ABI (vdb_*)
-┌──────────────────────────────▼──────────────────────────────┐
-│                    Pithos Core Engine                       │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │   LMAX Disruptor Lock-Free Multi-Threaded Workers     │  │
-│  └───────────────────────────┬───────────────────────────┘  │
-│                              │                              │
-│  ┌───────────────────────────▼───────────────────────────┐  │
-│  │               3-Gate Read-Path Cascade                │  │
-│  │  Gate 1: Metadata & Tombstone Filter (1 cycle)        │  │
-│  │  Gate 2: Matryoshka Early-Exit Hamming Scan (SIMD)    │  │
-│  │  Gate 3: In-Engine FP16 / Asymmetric Reranking        │  │
-│  └───────────────────────────────────────────────────────┘  │
-│                              │                              │
-│  ┌───────────────────────────▼───────────────────────────┐  │
-│  │       Project Panama Off-Heap Storage (POSIX mmap)    │  │
-│  │       - <name> (64B Header)                           │  │
-│  │       - <name>_tier_*.bin (Packed Columnar Bits)      │  │
-│  │       - <name>_metadata.bin (Attributes & Flags)      │  │
-│  │       - <name>_fp16.bin (Half-Precision Sidecar)      │  │
-│  └───────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    Client Layer (Python / C / C++)                      │
+│               pithosdb (ctypes Zero-Copy NumPy / C-FFI)                 │
+└───────────────────┬─────────────────────────────────┬───────────────────┘
+                    │ C-ABI Read Path (vdb_*)         │ Write Path (vdb_insert / WAL)
+┌───────────────────▼────────────────────┐  ┌─────────▼───────────────────┐
+│   Parallel Read Workers (IntStream)    │  │  LSM DeltaBuffer + _wal.bin │
+│  ┌──────────────────────────────────┐  │  │  LMAX Disruptor 4.0.0       │
+│  │  4-Gate Read-Path Cascade        │  │  │  Lock-Free Ring Buffer +    │
+│  │  Gate 0: 4x8-Bit MIH CSR Routing │  │  │  Shadowed IDs & Tombstones  │
+│  │  Gate 1: 64-Bit Liveliness Mask  │  │  └─────────┬───────────────────┘
+│  │  Gate 2: Tiered SIMD Hamming Scan│  │            │
+│  │  Gate 3: FP8 / NVFP4 / FP16 / L2 │  │            │ Unified
+│  │          Reranking (Early Cutoff)│  │            │ search_merged
+│  └────────────────┬─────────────────┘  │            │
+└───────────────────┼────────────────────┘            │
+                    ▼                                 ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│             Project Panama Off-Heap Storage (POSIX mmap)                │
+│  • Single-File Container (.pithos, DIOGENES v2):                        │
+│    Superblock (128 B), IDs, Matryoshka Tiers, Sidecar (FP8/NVFP4/FP16), │
+│    4x8 MIH CSR Prefix Table, Metadata (Arrow IPC / JSONL), TOC, Trailer │
+│  • Or Multi-File Layout (<name>, <name>_tier_*.bin, <name>_fp{16,8,4})  │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -111,9 +118,12 @@ Precompiled native libraries are automatically published on GitHub Releases:
 
 Detailed architectural guides, mathematical specifications, and C-API references:
 
-- **[Architectural Principles & Core Innovations](docs/architecture.md):** Mathematical foundations, block-diagonal Walsh-Hadamard rotations, SVD-driven spectral truncation, and the 3-gate read-path cascade.
-- **[C-API Reference & Runtime Configuration](docs/c_api_reference.md):** Complete declarations of entry points (`libpithos`), FFI mappings, CUDA wrappers, and hardware co-design guidelines (FPGA/DMA offloading).
-- **[CUDA GPU Acceleration Guide](docs/cuda_integration.md):** Shared memory popcount kernels, asynchronous stream pipelines, and multi-family voting.
+- **[Universal Single-File Container (.pithos)](docs/container_format.md):** Binary specification of the schema-agnostic `DIOGENES` v2 container format, 4x8 MIH CSR tables, and Arrow IPC metadata.
+- **[Architectural Principles & Core Innovations](docs/architecture.md):** Mathematical foundations, Kronecker/Walsh-Hadamard rotations, row-energy prefix pruning, and the 4-gate cascaded read-path.
+- **[Mathematical Foundations](docs/math_theory.md):** Isometric transforms, Kronecker composite-dimension proofs, sub-Gaussian energy flattening, MIH collision bounds, and Gate 3 early cutoff.
+- **[C-API Reference & Runtime Configuration](docs/c_api_reference.md):** Complete C-ABI entry points (`pithos.h`), FFI mappings, sidecar configuration, and FPGA/DMA co-design interfaces.
+- **[CUDA GPU Acceleration Guide](docs/cuda_integration.md):** CUDA kernels (`pithos_kernels.h`), host-device wrappers (`pithos_cuda.h`), and Docker build setup.
+- **[Release Notes](docs/release_notes.md):** Detailed changelog through Pithos v2.2.6.
 
 ---
 
@@ -122,6 +132,7 @@ Detailed architectural guides, mathematical specifications, and C-API references
 ### Prerequisites
 - **GraalVM JDK 25** (with `native-image`)
 - **Apache Maven 3.9+**
+- **Python 3.9+** with `numpy` (and `pytest` for tests)
 - *(Optional)* **NVIDIA CUDA Toolkit 12+** for GPU kernels
 
 ### 1. Compile Native Library (macOS & Linux)
@@ -133,9 +144,10 @@ mvn clean package -DskipTests
 ```
 The compiled shared library is generated in `target/pithos.dylib` (macOS) or `target/pithos.so` (Linux).
 
-### 2. Run Test Suite
+### 2. Run Test Suites
 ```bash
-mvn test
+mvn clean test
+pytest -v
 ```
 
 ### 3. Build with CUDA Support (Linux)

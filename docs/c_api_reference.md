@@ -7,8 +7,8 @@ This document details the native C interface exposed by the compiled `libpithos`
 ## Developer Integration Demos
 
 For direct references on how to link and call Pithos:
-- **[ZeroCostDemo.java](../examples/java/ZeroCostDemo.java):** Demonstrates Java-level GC-free memory mapping via Project Panama's Foreign Function & Memory (FFM) API.
-- **[demo.c](../examples/cpp/demo.c):** A complete, self-contained C/C++ search client showing isolate management and native query scans.
+- **[ZeroCostDemo.java](https://github.com/F1nnSBK/Pithos/blob/main/examples/java/ZeroCostDemo.java):** Demonstrates Java-level GC-free memory mapping via Project Panama's Foreign Function & Memory (FFM) API.
+- **[demo.c](https://github.com/F1nnSBK/Pithos/blob/main/examples/cpp/demo.c):** A complete, self-contained C/C++ search client showing isolate management and native query scans.
 
 ---
 
@@ -17,25 +17,31 @@ For direct references on how to link and call Pithos:
 The compiled native shared library exposes the following dynamic functions:
 
 ```c
-// Creates a GraalVM isolate context for JVM execution
+// Creates a GraalVM isolate context for native execution
 int graal_create_isolate(graal_isolate_params_t* params, graal_isolate_t** isolate, graal_isolatethread_t** thread);
 
 // Initializes the Pithos database coordinator
 int vdb_init(graal_isolatethread_t* thread);
 
-// Maps an existing multi-tier database off-heap (equal spectral distribution fallback)
+// Health check returning 42 when the native isolate and C-API bridge are responsive
+int vdb_ping(graal_isolatethread_t* thread);
+
+// Maps an existing multi-tier or .pithos container database off-heap (equal spectral distribution fallback)
 int vdb_load_index(graal_isolatethread_t* thread, char* name, char* path);
 
-// Maps an existing database and supplies frozen LoRA weight matrices to compute spectral energy
+// Maps an existing database and supplies frozen projection/LoRA weight matrices to compute cumulative row L2 energy
 int vdb_load_index_with_weights(graal_isolatethread_t* thread, char* name, char* path, float* weights, int loraDim);
 
 // Retrieves database metadata attributes (dimension, size, planet settings, tiers count)
 int vdb_get_info(graal_isolatethread_t* thread, char* indexName, int* outDimension, long long* outSize, char* outPlanetId, long long* outPlanetRadius, int* outTiersCount);
 
+// Returns the active sidecar mode (0=None, 1=FP16, 2=FP8 E4M3, 3=NVFP4 E2M1)
+int vdb_get_sidecar_mode(graal_isolatethread_t* thread, const char* indexName);
+
 // Compiles raw float records into a multi-tier database file layout with configurable quantization (qMode: 0=1-bit, 1=2-bit, 2=FP32 bypass)
 int vdb_compile_index_file(graal_isolatethread_t* thread, char* path, char planetId, long long planetRadius, int dimension, int* tiers, int numTiers, long long* ids, float* vectors, int numRecords, int qMode);
 
-// Compiles raw float records into a multi-tier database file layout with optional FP16/FP8 sidecar
+// Compiles raw float records into a multi-tier database file layout with configurable precision sidecar (sidecarMode: 0=None, 1=FP16, 2=FP8 E4M3, 3=NVFP4)
 int vdb_compile_index_file_ext(graal_isolatethread_t* thread, char* path, char planetId, long long planetRadius, int dimension, int* tiers, int numTiers, long long* ids, float* vectors, int numRecords, int qMode, int sidecarMode);
 
 // Compiles raw float records into a universal schema-agnostic single-file .pithos container (DIOGENES format)
@@ -50,6 +56,12 @@ int vdb_compact_indexes(graal_isolatethread_t* thread, char* sourcePathsJoined, 
 // Retrieves the raw off-heap virtual memory address and length of a specific index tier (FPGA/DMA direct access)
 int vdb_get_tier_address(graal_isolatethread_t* thread, char* indexName, int tierIdx, long long* outAddress, long long* outLength);
 
+// Retrieves the raw off-heap virtual memory address and length of the 64-bit metadata mask buffer
+int vdb_get_metadata_address(graal_isolatethread_t* thread, char* indexName, long long* outAddress, long long* outLength);
+
+// Retrieves the raw off-heap virtual memory address and length of the 64-bit record IDs buffer
+int vdb_get_ids_address(graal_isolatethread_t* thread, char* indexName, long long* outAddress, long long* outLength);
+
 // Binarizes a single float vector using the index's Walsh-Hadamard preconditioning (asymmetric offloading)
 int vdb_transform_and_quantize(graal_isolatethread_t* thread, char* indexName, float* inVector, long long* outPacked);
 
@@ -59,10 +71,10 @@ int vdb_batch_search(graal_isolatethread_t* thread, char* indexName, float* quer
 // Multi-Family Resonant Voting search over raw float queries
 long long vdb_query_planetary_grid(graal_isolatethread_t* thread, char* indexName, float* queries, int* queryFamilies, int* queryThresholds, int numQueries, char* votingMask);
 
-// Sets the parallel Disruptor chunk sweep size
+// Sets the parallel scan chunk size for multi-threaded search dispatch
 int vdb_set_chunk_size(graal_isolatethread_t* thread, char* indexName, long long chunkSize);
 
-// Sets the active energy budget (0.0 to 1.0) to prune lower tiers dynamically
+// Sets the active row-norm cumulative energy budget (0.0 to 1.0) to prune trailing tiers dynamically
 int vdb_set_energy_budget(graal_isolatethread_t* thread, char* indexName, double tau);
 
 // Returns record size of mapped index
@@ -73,6 +85,9 @@ int vdb_drop_index(graal_isolatethread_t* thread, char* indexName);
 
 // Shuts down database and frees mapped pages
 int vdb_close(graal_isolatethread_t* thread);
+
+// Hints the GraalVM isolate runtime to compact managed heap memory
+int vdb_shrink_to_fit(graal_isolatethread_t* thread);
 
 // Tears down GraalVM isolate thread
 int graal_tear_down_isolate(graal_isolatethread_t* thread);
@@ -87,20 +102,20 @@ int vdb_insert(graal_isolatethread_t* thread, char* indexName, long long id, flo
 // Marks a record as deleted (tombstoned) in the delta buffer (logged to WAL)
 int vdb_delete_from_delta(graal_isolatethread_t* thread, char* indexName, long long id);
 
-// Returns current record count in the delta buffer
-int vdb_delta_size(graal_isolatethread_t* thread, char* indexName);
+// Returns current live record count in the delta buffer
+long long vdb_delta_size(graal_isolatethread_t* thread, char* indexName);
 
 // Returns 1 if delta buffer size exceeds flush threshold, 0 otherwise
 int vdb_needs_flush(graal_isolatethread_t* thread, char* indexName);
 
-// Runs a unified batch search across both base index and writeable delta buffer
-int vdb_search_merged(graal_isolatethread_t* thread, char* indexName, float* queries, int numQueries, int k, long long* outIds, int* outDistances);
+// Runs a unified single-query search across both base index and writeable delta buffer (applying tombstones & shadowed IDs)
+int vdb_search_merged(graal_isolatethread_t* thread, const char* indexName, const float* query, int k, long long* outIds, int* outDistances);
 
 // Backups/flushes the current delta buffer state into a binary backup file
 int vdb_backup_delta(graal_isolatethread_t* thread, char* indexName, char* backupPath);
 
-// Restores delta buffer state from a binary backup file (with mode parameter)
-int vdb_restore_delta(graal_isolatethread_t* thread, char* indexName, char* backupPath, int mode);
+// Restores delta buffer state from a binary backup file (with flush threshold)
+int vdb_restore_delta(graal_isolatethread_t* thread, char* indexName, char* backupPath, int flushThreshold);
 
 // ====================================================================
 // CUDA Acceleration Functions
@@ -148,18 +163,17 @@ Configured during compilation via the `qMode` parameter in `vdb_compile_index_fi
 - **`1`**: 2-bit ternary (active mask + signs, enabling exact asymmetric binary/ternary distance estimators).
 - **`2`**: FP32 raw bypass (skips quantization, saves raw rotated 32-bit floating point values for low dimensions).
 
-### 2. FP16 Stage 2 Reranking & Optional Sidecar
-By default, Pithos compiles and exports the raw vectors in IEEE 754 half-precision to a sidecar file named `<basePath>_fp16.bin` for high-recall Stage 2 reranking.
-- **Optional Compilation**: You can bypass FP16 sidecar creation via `vdb_compile_index_file_ext` by setting `writeFp16 = 0` (or `write_fp16=False` in Python). This results in an **84% reduction in disk footprint** and **2.6x faster index compilation**.
-- **Auto-detection & Fallback**: If Pithos finds the `<basePath>_fp16.bin` file when loading the index via `vdb_load_index`, it maps it off-heap and enables Stage 2 reranking automatically. If absent or deleted, the search path dynamically falls back to asymmetric L2 distance calculations directly on the binarized/ternary columns.
-- **Performance Trade-Off**:
-  - *With FP16*: Primarily a **recall-maximizer**, bringing KNN Recall@10 up to exact levels (e.g., ~53% on synthetic hyper-spheres) through native Stage-2 float reranking.
-  - *Without FP16*: A **speed-and-space optimizer** (84% smaller size). KNN recall drops (e.g. to ~30%), but **Multi-Family Resonant Voting** remains completely unaffected, executing at maximum speed and identical match counts.
-- **Bulk FFM Copy Optimization**: POINT-lookup accesses during Stage 2 are optimized using native FFM `MemorySegment.copy` (bulk copies replacing element-by-element off-heap JVM crossings) to deliver native speedups over FAISS.
+### 2. Gate 3 Precision Sidecar Modes (`sidecarMode`)
+Pithos supports configurable precision sidecars via `vdb_compile_index_file_ext`, `vdb_compile_container`, or `SidecarMode` in Python:
+- **`0` (`SIDECAR_NONE`):** No float sidecar file is written. Gate 3 falls back to asymmetric rotated L2 distance estimation directly over the 1-bit or 2-bit ternary tiers, reducing disk footprint significantly while keeping Multi-Family Resonant Voting intact.
+- **`1` (`SIDECAR_FP16`):** Writes IEEE 754 half-precision floats (`2 B/dim`) in raw input space (`"space": "raw"`).
+- **`2` (`SIDECAR_FP8`, Python default):** Writes OCP/NVIDIA FP8 E4M3 values (`1 B/dim`) in rotated WHT space (`"space": "wht"`) and evaluates Gate 3 via an L1-cache query LUT with monotonic early distance cutoff.
+- **`3` (`SIDECAR_FP4`):** Writes microscaled NVFP4 E2M1 block-16 records (`9 B` per 16 dimensions) in rotated WHT space (`"space": "wht"`).
 
 ### 3. Search & Runtime Parameters
-- **Information Budget ($\tau$)**: Change the dynamic pruning threshold on the fly via `vdb_set_energy_budget`. E.g., setting $\tau = 0.90$ bypasses columns corresponding to less significant singular vectors, reducing memory bandwidth usage.
-- **Parallel Chunk Size**: Optimize Disruptor worker granularity using `vdb_set_chunk_size`.
+- **Information Budget ($\tau$):** Change the dynamic row-norm cumulative energy pruning threshold on the fly via `vdb_set_energy_budget`. E.g., setting $\tau = 0.90$ bypasses trailing tiers beyond the cumulative weight energy threshold, reducing memory bandwidth usage.
+- **Parallel Chunk Size:** Adjust parallel worker scan granularity via `vdb_set_chunk_size`.
+- **Bulk FFM Marshaling:** C-API matrix and result transfers in `CApi.java` use block-level `MemorySegment.copy` (`readFloatMatrix`, `readIntArray`, `writeSearchResults`) to eliminate per-element FFI crossing overhead.
 
 ### 4. FPGA / Custom Hardware Acceleration (Co-Design)
 Pithos is specifically designed for hybrid CPU-FPGA/GPU acceleration workflows, where the host CPU handles the application orchestration and the hardware accelerator performs massive Hamming sweeps:

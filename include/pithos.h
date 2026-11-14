@@ -86,6 +86,13 @@ typedef struct {
 int vdb_init(graal_isolatethread_t *thread);
 
 /**
+ * Health check returning 42 when the native isolate and C-API bridge are responsive.
+ * @param thread GraalVM isolate thread context.
+ * @return 42.
+ */
+int vdb_ping(graal_isolatethread_t *thread);
+
+/**
  * Closes the database coordinator and unmaps all loaded indices.
  * @param thread GraalVM isolate thread context.
  * @return 0 on success, negative error code on failure.
@@ -113,7 +120,7 @@ int vdb_shrink_to_fit(graal_isolatethread_t *thread);
 int vdb_load_index(graal_isolatethread_t *thread, const char *name, const char *path);
 
 /**
- * Memory-maps an index with frozen projection/LoRA weights for SVD spectral energy truncation.
+ * Memory-maps an index with frozen projection/LoRA weights for row L2 norm cumulative spectral energy pruning.
  * @param thread GraalVM isolate thread context.
  * @param name Unique logical name identifier.
  * @param path Base filepath prefix on disk.
@@ -156,7 +163,7 @@ int vdb_get_sidecar_mode(graal_isolatethread_t *thread, const char *name);
 int vdb_drop_index(graal_isolatethread_t *thread, const char *name);
 
 /**
- * Sets the parallel batch scan chunk size for LMAX Disruptor ring buffer worker threads.
+ * Sets the parallel batch scan chunk size for parallel multi-threaded scan dispatch.
  */
 int vdb_set_chunk_size(graal_isolatethread_t *thread, const char *name, int64_t chunk_size);
 
@@ -295,13 +302,13 @@ int vdb_compile_index_file(graal_isolatethread_t *thread, const char *path, int8
                            int32_t num_records, int32_t q_mode);
 
 /**
- * Compiles raw float records with optional FP16 sidecar generation for Stage 2 reranking.
+ * Compiles raw float records with configurable precision sidecar (0=None, 1=FP16, 2=FP8 E4M3, 3=NVFP4) for Stage 3 reranking.
  */
 int vdb_compile_index_file_ext(graal_isolatethread_t *thread, const char *path, int8_t planet_id,
                                int64_t planet_radius, int32_t dimension,
                                const int32_t *tiers, int32_t num_tiers,
                                const int64_t *ids, const float *vectors,
-                               int32_t num_records, int32_t q_mode, int32_t write_fp16);
+                               int32_t num_records, int32_t q_mode, int32_t sidecar_mode);
 
 /**
  * Compiles raw float records into a universal schema-agnostic single-file .pithos container (DIOGENES format).
@@ -328,17 +335,6 @@ int vdb_compile_container(graal_isolatethread_t *thread, const char *path, int32
                           int32_t metric_type, int32_t q_mode, int32_t sidecar_mode,
                           const char *metadata_payload, int32_t metadata_len,
                           const char *metadata_format, const char *user_metadata_json);
-
-/**
- * Compiles a single-file container inside an ephemeral GraalVM isolate,
- * guaranteeing complete memory reclamation (0 byte residual RSS) upon completion.
- */
-int vdb_compile_container_isolated(const char *path, int32_t dimension,
-                                   const int32_t *tiers, int32_t num_tiers,
-                                   const int64_t *ids, const float *vectors, int32_t num_records,
-                                   int32_t metric_type, int32_t q_mode, int32_t sidecar_mode,
-                                   const char *metadata_payload, int32_t metadata_len,
-                                   const char *metadata_format, const char *user_metadata_json);
 
 /**
  * Retrieves the user metadata JSON string embedded in a loaded single-file .pithos container.

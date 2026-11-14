@@ -47,9 +47,9 @@ graph TD
     - **LSM-Tree Delta Buffer & WAL:** Real-time lock-free insertions and tombstone soft-deletes with zero-cost snapshots.
 
 === "Asymmetric Search (ADC)"
-    - **Continuous FP32 Fidelity:** Queries are evaluated in 100% continuous 32-bit floating point precision against compressed database records.
-    - **Precomputed Query LUTs:** Zero floating-point multiplication during Gate 3 candidate reranking.
-    - **100% Top-1 Exact Recall on High-Dimensional Foundation Model Benchmarks.**
+    - **Continuous FP32 Fidelity:** Queries are evaluated in continuous 32-bit floating-point precision against compressed database sidecar records (`FP8 E4M3` / `NVFP4 E2M1` in `"wht"` space, `FP16` in `"raw"` space).
+    - **Precomputed Query LUTs:** Zero floating-point multiplications during Gate 3 candidate reranking for `FP8`.
+    - **Exact Gate 3 Cutoff:** Monotonic early distance cutoff preserves exact Euclidean top-k ordering across all Gate 3 candidates while pruning unpromising dimensions early.
 
 ---
 
@@ -93,14 +93,24 @@ with VectorDb() as db:
 
 ---
 
-## Benchmark Summary (High-Dimensional Foundation Embeddings, D=384)
+## Storage Layouts & Verified Matryoshka Benchmark
 
-| Index Mode | Storage (B/dim) | 2.72B Dataset Size | Recall@1 | Recall@10 | Search Latency |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **FP16 Sidecar** | 2.00 B/dim | 2.23 TB | 100.00% | 94.40% | 196.1 µs |
-| **FP8 Sidecar (E4M3)** | **1.00 B/dim** | **1.19 TB (-44%)** | **100.00%** | **94.40%** | **185.8 µs** |
-| **NVFP4 Sidecar (E2M1)** | **0.56 B/dim** | **668 GB (-65%)** | **96.80%** | **89.20%** | **172.1 µs** |
-| **Bit-Only (No Sidecar)**| 0.125 B/dim | 165 GB (-92%) | 88.40% | 78.10% | 142.3 µs |
+### Analytical Storage Overhead per Vector
+
+| Index Mode | Sidecar Storage (B/dim) | Coordinate Space | Purpose |
+| :--- | :--- | :--- | :--- |
+| **FP16 Sidecar** | 2.00 B/dim | `"raw"` | Full IEEE-754 half-precision reranking |
+| **FP8 Sidecar (E4M3)** | **1.00 B/dim** | `"wht"` | Default balanced precision & compact L1-friendly reranking |
+| **NVFP4 Sidecar (E2M1)** | **0.5625 B/dim** (`9 B / 16 dims`) | `"wht"` | Microscaled block-16 quantization with FP8 scale factor |
+| **Bit-Only (`SidecarMode.NONE`)** | 0 B/dim (`0.125 B/dim` tiers) | `"wht"` | Rotated asymmetric L2 estimator on 1-bit / 2-bit tiers |
+
+### Verified Matryoshka Benchmark (`benchmarks/verify_real_model_recall.py`, Apple Silicon CPU)
+
+Single-thread CPU evaluation on `N = 20,000` Matryoshka-structured embeddings (`D = 384`, `.pithos` container with `FP8 E4M3` sidecar & `4x8` MIH prefix table):
+
+- **Container Footprint:** `8.70 MB` (`456.3 B/vec`)
+- **Recall@1 / Recall@10:** `89.00%` / `92.20%`
+- **Search Latency:** `1.94 ms` mean, `3.24 ms` P95 (`514.4 QPS`)
 
 ---
 
@@ -110,6 +120,6 @@ with VectorDb() as db:
 - [**Architectural Principles**](architecture.md): Deep dive into off-heap virtual memory, memory layouts, and 4-gate cascaded execution.
 - [**GPU Acceleration**](cuda_integration.md): Architecture of CUDA kernels, unified host-device DMA, and multi-stream execution.
 - [**C-API Reference**](c_api_reference.md): Complete specification of C/C++ bindings, structs, and FFI interoperability.
-- [**Mathematical Foundations**](math_theory.md): SVD spectral energy decay, Sylvester-Hadamard isometric rotations, and MIH collision bounds.
-- [**Release Notes**](release_notes.md): Detailed changelog for Pithos v2.0.0, v2.1.0, and v2.2.0 releases.
+- [**Mathematical Foundations**](math_theory.md): Row-norm prefix energy distribution, Kronecker/Hadamard isometric rotations, and MIH collision bounds.
+- [**Release Notes**](release_notes.md): Detailed changelog for Pithos v2.0.0 through v2.2.6 releases.
 - [**Roadmap & Next Steps**](next_steps.md): FPGA co-design, distributed clustering, and heterogeneous execution.

@@ -34,8 +34,8 @@ Instead of applying dense matrix multiplications, Pithos applies recursive Sylve
 ### 2.2.1 Arbitrary & Non-Power-of-Two Dimensions (Kronecker Rotation)
 Real-world embedding models frequently have dimensions that are not powers of two or multiples of 64 (e.g., $d = 384, 768, 960, 1536$):
 - **Kronecker-Factorized Rotation ($R = H_u \otimes \Omega_v$):** For any tier width $w$, Pithos factorizes $w = u \cdot v$ (where $u$ is the largest power-of-two divisor). It applies a fast $u$-point Walsh-Hadamard transform combined with a $v \times v$ orthonormal Discrete Cosine Transform (DCT-II) basis matrix $\Omega_v$. This guarantees 100% exact isometric norm preservation without zero-padding distortion.
-- **Bitpacking & SIMD Popcount Alignment:** Datasets whose dimensions are not divisible by 64 are packed into $\lceil d / 64 \rceil$ 64-bit words. Trailing padding bits are strictly zero-masked, ensuring zero corruption during bitwise SIMD Hamming distance calculations.
-- **Sidecar Handling:** FP8 and FP16 sidecars maintain exact continuous dimensions with 64-byte row-offset cache-line alignment; NVFP4 pads only the sub-16 dimension block boundary with 0.0 before scaling.
+- **Bitpacking & SIMD Popcount Alignment:** Datasets whose dimensions are not divisible by 64 are packed into $\lceil d / 64 \rceil$ 64-bit words. Arbitrary non-64-aligned tier bounds are extracted with `TransformOperator.extractTierWord`, and trailing padding bits are strictly zero-masked during SIMD Hamming scans.
+- **Sidecar Coordinate Spaces & Handling:** **FP8 (E4M3)** and **NVFP4 (E2M1)** sidecars are stored in rotated WHT space (`"space": "wht"`) aligned with `zQuery` and automatically back-projected via `Index.get_vectors()`; **FP16** sidecars are stored in raw input space (`"space": "raw"`). NVFP4 pads only the sub-16 block boundary with `0.0` prior to scale extraction.
 
 ### 2.3 PolarQuant Binarization & Quantization Modes
 Transformed coordinates are converted into compact representations:
@@ -46,8 +46,8 @@ Transformed coordinates are converted into compact representations:
 ### 2.4 Matryoshka Representation Learning (MRL) Tiers
 Pithos exploits the hierarchical structure of modern representation models by slicing dimensions into cumulative prefix tiers (e.g., $T_0 < T_1 < \dots < T_K = D$). Unlikely candidates are pruned at smaller prefix tiers before loading higher-order dimensions.
 
-### 2.5 SVD Spectral Energy Decay
-When adapter or projection weights are supplied at index load time, Pithos runs an in-engine Jacobi Singular Value Decomposition (SVD) solver to compute singular values and reconstruct the cumulative spectral energy distribution $\Phi(k)$. An energy budget parameter $\tau \in (0, 1]$ enables dynamic runtime pruning of trailing singular vector columns.
+### 2.5 Row-Norm Cumulative Spectral Energy
+When projection or LoRA weights $W \in \mathbb{R}^{D \times D_0}$ are supplied at index load time, `TransformOperator.computeCumulativeEnergy` evaluates the squared L2 energy of each coordinate row via Java Vector API FMA instructions to compute the cumulative prefix energy distribution $\Phi(k)$ without permuting coordinates. An energy budget parameter $\tau \in (0, 1]$ enables dynamic runtime pruning of trailing Matryoshka tiers.
 
 ---
 
@@ -98,7 +98,7 @@ A self-contained file format with 64-byte cache-line alignment:
 - **Section 1 (IDs):** Contiguous `uint64_t` array of vector IDs.
 - **Section 2 (Tiers):** Contiguous columnar bitpacked Matryoshka tiers.
 - **Section 3 (Sidecar):** Contiguous FP8 E4M3, NVFP4, or FP16 float sidecars.
-- **Section 4 (Prefix Table):** CSR bucket offsets (65,537 int32s) and postings for Gate 0 MIH routing.
+- **Section 4 (Prefix Table):** 4x8-Bit MIH CSR bucket offsets (`4 x 256` buckets, `1,028` `int32` offsets = `4,112` bytes) and `4 * N` `int32` postings for Gate 0 MIH routing.
 - **Section 5 (Metadata Payload):** Embedded raw data, JSON Lines, or Apache Arrow IPC streams.
 - **Table of Contents (TOC):** JSON directory describing section offsets, lengths, data types, and custom user metadata.
 - **Trailer (20 Bytes):** Magic signature `"PITHOSDB"`, TOC offset, and TOC length for integrity verification.
@@ -125,7 +125,7 @@ A self-contained file format with 64-byte cache-line alignment:
 ### 4.6 Multi-Layer Zero-Overhead Security Model
 - **Defensive Pointer & Range Guards:** All C-API entry points validate pointers, dimension ranges, and top-k limits before dereferencing, preventing `SIGSEGV` errors from untrusted client callers.
 - **Container Slicing Bounds Checks:** All section offsets and lengths are verified against the physical file channel size during container mounting.
-- **TOC Decompression Guard:** Imposes a strict 10 MB limit on Table of Contents JSON payloads to prevent memory expansion attacks.
+- **TOC Decompression Guard:** Imposes a strict 50 MB limit on Table of Contents JSON payloads to prevent memory exhaustion payloads.
 - **Path Traversal Sanitization:** Normalizes all paths (`Path.normalize()`) and rejects null-byte injections.
 - **Multi-Tenant Memory Isolation:** Thread-local scratch buffers are deterministically wiped before and after query runs.
 
@@ -238,7 +238,7 @@ target_link_libraries(my_search_app PRIVATE Pithos::pithos)
 Pithos can be imported directly in Java 25 applications without JNI wrappers:
 ```java
 import org.pithos.FlatIndex;
-import org.pithos.SearchResult;
+import org.pithos.Index.SearchResult;
 import java.util.List;
 
 public class App {
