@@ -1,0 +1,113 @@
+/* Pithos Custom Styles for MkDocs Material */
+
+/* 1. Expand Content Grid Width for wide data tables, diagrams & code */
+.md-grid {
+  max-width: 88rem; /* ~1408px for comfortable widescreen readability */
+}
+
+.md-sidebar--primary {
+  width: 14.5rem;
+}
+
+.md-sidebar--secondary {
+  width: 14.5rem;
+}
+
+/* 2. Typography & Table Enhancements */
+.md-typeset {
+  font-size: 0.82rem;
+  line-height: 1.7;
+}
+
+.md-typeset h1 {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.md-typeset h2 {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin-top: 2em;
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+  padding-bottom: 0.3em;
+}
+
+.md-typeset table:not([class]) {
+  display: table;
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5em 0;
+  font-size: 0.8rem;
+}
+
+.md-typeset table:not([class]) th {
+  background-color: rgba(30, 41, 59, 0.6);
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+/* 3. Mermaid Diagrams High-Contrast Dark-Mode Styling */
+.mermaid {
+  display: flex;
+  justify-content: center;
+  margin: 2rem 0;
+  background-color: transparent !important;
+}
+
+.mermaid svg {
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+/* Ensure all text inside Mermaid nodes and labels is crisp and high-contrast */
+[data-md-color-scheme="slate"] .mermaid .node rect,
+[data-md-color-scheme="slate"] .mermaid .node circle,
+[data-md-color-scheme="slate"] .mermaid .node ellipse,
+[data-md-color-scheme="slate"] .mermaid .node polygon,
+[data-md-color-scheme="slate"] .mermaid .node path {
+  fill: #1e293b !important;
+  stroke: #475569 !important;
+  stroke-width: 1.5px !important;
+}
+
+[data-md-color-scheme="slate"] .mermaid .node .label,
+[data-md-color-scheme="slate"] .mermaid .node text,
+[data-md-color-scheme="slate"] .mermaid .label text,
+[data-md-color-scheme="slate"] .mermaid span.nodeLabel {
+  color: #f8fafc !important;
+  fill: #f8fafc !important;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+}
+
+[data-md-color-scheme="slate"] .mermaid .cluster rect {
+  fill: rgba(15, 23, 42, 0.7) !important;
+  stroke: #334155 !important;
+  stroke-width: 1px !important;
+}
+
+[data-md-color-scheme="slate"] .mermaid .cluster .nodeLabel {
+  color: #94a3b8 !important;
+  fill: #94a3b8 !important;
+  font-weight: 600 !important;
+}
+
+[data-md-color-scheme="slate"] .mermaid .edgeLabel {
+  background-color: #0f172a !important;
+  color: #cbd5e1 !important;
+  fill: #cbd5e1 !important;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+[data-md-color-scheme="slate"] .mermaid .edgePath .path {
+  stroke: #64748b !important;
+  stroke-width: 1.5px !important;
+}
+
+[data-md-color-scheme="slate"] .mermaid .arrowheadPath {
+  fill: #64748b !important;
+}
