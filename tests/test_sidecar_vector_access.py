@@ -328,7 +328,9 @@ class TestSidecarVectorAccess(unittest.TestCase):
             stream_path = os.path.join(tmpdir, "stream_fp8.pithos")
             VectorDb.compile_container_stream(
                 path=stream_path,
-                chunks=[(vecs[:40], ids[:40]), (vecs[40:], ids[40:])],
+                record_stream=[(ids[:40], vecs[:40]), (ids[40:], vecs[40:])],
+                total_records=num_vecs,
+                dimension=dim,
                 tiers=tiers,
                 sidecar_mode=SidecarMode.FP8,
             )
