@@ -559,62 +559,6 @@ def _back_project_array(
     return x[0] if is_1d else x
 
 
-def _populate_sub64_container_tiers(
-    path: str, vecs: np.ndarray, dimension: int, tiers_arr: Sequence[int], q_mode: int = 0
-) -> None:
-    """Ensures sub-64-bit tier sections in .pithos containers are populated even when built via legacy dylibs."""
-    try:
-        file_size = os.path.getsize(path)
-        if file_size < 148:
-            return
-        with open(path, "rb") as f:
-            f.seek(file_size - 20)
-            trailer = f.read(20)
-            if trailer[12:20] != b"PITHOSDB":
-                return
-            toc_offset = int.from_bytes(trailer[0:8], byteorder="little", signed=True)
-            toc_len = int.from_bytes(trailer[8:12], byteorder="little", signed=True)
-            f.seek(toc_offset)
-            toc = json.loads(f.read(toc_len).decode("utf-8"))
-        sections = toc.get("sections", {})
-        z_vecs = _precondition_and_rotate_array(vecs, dimension, tiers_arr)
-        if int(q_mode) == 1:
-            abs_z = np.sort(np.abs(z_vecs), axis=1)
-            thresh_idx = min(dimension - 1, int(dimension * 0.20))
-            thresholds = abs_z[:, thresh_idx : thresh_idx + 1]
-        prev_bound = 0
-        with open(path, "r+b") as f:
-            for k, end_bound in enumerate(tiers_arr):
-                end_b = int(end_bound)
-                width = end_b - prev_bound
-                t_sec = sections.get(f"tier_{k}")
-                if t_sec and (width & 63) != 0 and t_sec.get("length", 0) > 0:
-                    if int(q_mode) == 1:
-                        z_slice = z_vecs[:, prev_bound:end_b]
-                        m_bits = (np.abs(z_slice) >= thresholds).astype(np.uint8)
-                        s_bits = ((z_slice >= 0) & (m_bits == 1)).astype(np.uint8)
-                        s_packed = np.packbits(s_bits, axis=-1, bitorder="little")
-                        m_packed = np.packbits(m_bits, axis=-1, bitorder="little")
-                        packed = np.concatenate([s_packed, m_packed], axis=-1).tobytes()
-                        t0_mih_src = s_packed.tobytes()
-                    else:
-                        bits = (z_vecs[:, prev_bound:end_b] >= 0).astype(np.uint8)
-                        packed = np.packbits(bits, axis=-1, bitorder="little").tobytes()
-                        t0_mih_src = packed
-                    if len(packed) == t_sec["length"]:
-                        f.seek(t_sec["offset"])
-                        f.write(packed)
-                        if k == 0 and "prefix_table" in sections:
-                            p_sec = sections["prefix_table"]
-                            mih_bytes = _build_mih_csr_table(t0_mih_src, len(vecs))
-                            if p_sec.get("offset", 0) > 0 and len(mih_bytes) == p_sec.get("length", 0):
-                                f.seek(p_sec["offset"])
-                                f.write(mih_bytes)
-                prev_bound = end_b
-    except Exception:
-        pass
-
-
 # ==============================================================================
 # Enumerations & Data Classes
 # ==============================================================================
@@ -2653,6 +2597,7 @@ class VectorDb:
         sidecar_len = 0
         sidecar_format = "none"
         sidecar_bpr = 0
+        sidecar_space = "raw"
         if actual_sidecar == SidecarMode.FP16:
             sidecar_offset = current_offset
             sidecar_bpr = dimension * 2
@@ -2664,6 +2609,7 @@ class VectorDb:
             sidecar_bpr = dimension * 1
             sidecar_len = total_records * sidecar_bpr
             sidecar_format = "fp8_e4m3"
+            sidecar_space = "wht"
             current_offset = _align64(current_offset + sidecar_len)
         elif actual_sidecar == SidecarMode.FP4:
             num_blocks = (dimension + 15) // 16
@@ -2671,6 +2617,7 @@ class VectorDb:
             sidecar_offset = current_offset
             sidecar_len = total_records * sidecar_bpr
             sidecar_format = "nvfp4_e2m1"
+            sidecar_space = "wht"
             current_offset = _align64(current_offset + sidecar_len)
 
         # Multi-Index Hashing (MIH) Section (4 chunks x 256 buckets CSR)
@@ -2711,6 +2658,7 @@ class VectorDb:
             "offset": sidecar_offset,
             "length": sidecar_len,
             "format": sidecar_format,
+            "space": sidecar_space,
         }
         toc_dict["sections"]["prefix_table"] = {
             "offset": prefix_table_offset,
@@ -2875,7 +2823,8 @@ class VectorDb:
                                 with open(fp8_chunk, "rb") as f_s:
                                     shutil.copyfileobj(f_s, out_f)
                             else:
-                                out_f.write(_encode_fp8_e4m3_array(b_vecs).tobytes())
+                                rot_vecs = _precondition_and_rotate_array(b_vecs, dimension, tiers_arr)
+                                out_f.write(_encode_fp8_e4m3_array(rot_vecs).tobytes())
                         elif actual_sidecar == SidecarMode.FP4:
                             out_f.seek(sidecar_offset + processed_records * sidecar_bpr)
                             fp4_chunk = f"{tmp_base}_fp4.bin"
@@ -2883,7 +2832,8 @@ class VectorDb:
                                 with open(fp4_chunk, "rb") as f_s:
                                     shutil.copyfileobj(f_s, out_f)
                             else:
-                                out_f.write(_encode_nvfp4_blocks_array(b_vecs).tobytes())
+                                rot_vecs = _precondition_and_rotate_array(b_vecs, dimension, tiers_arr)
+                                out_f.write(_encode_nvfp4_blocks_array(rot_vecs).tobytes())
 
                         for f_pattern in glob.glob(f"{tmp_base}*"):
                             try:
@@ -3029,7 +2979,8 @@ class VectorDb:
                 os.remove(fp16_file)
             fp8_file = f"{base_path}_fp8.bin"
             if not os.path.exists(fp8_file) or os.path.getsize(fp8_file) != num_records * dimension:
-                fp8_bytes = _encode_fp8_e4m3_array(vecs).tobytes()
+                rot_vecs = _precondition_and_rotate_array(vecs, dimension, tiers_arr)
+                fp8_bytes = _encode_fp8_e4m3_array(rot_vecs).tobytes()
                 with open(fp8_file, "wb") as f:
                     f.write(fp8_bytes)
             with open(base_path, "r+b") as f:
@@ -3043,7 +2994,8 @@ class VectorDb:
             num_blocks = (dimension + 15) // 16
             bytes_per_rec = num_blocks * 9
             if not os.path.exists(fp4_file) or os.path.getsize(fp4_file) != num_records * bytes_per_rec:
-                fp4_bytes = _encode_nvfp4_blocks_array(vecs).tobytes()
+                rot_vecs = _precondition_and_rotate_array(vecs, dimension, tiers_arr)
+                fp4_bytes = _encode_nvfp4_blocks_array(rot_vecs).tobytes()
                 with open(fp4_file, "wb") as f:
                     f.write(fp4_bytes)
             with open(base_path, "r+b") as f:

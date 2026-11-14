@@ -418,15 +418,14 @@ public final class PithosContainer {
 
         long totalFileSize = currentOffset + TRAILER_SIZE;
 
-        // Open target file and map for writing in a bounded shared Arena
+        // Open target file and map for parallel writing with an automatic Arena
         try (FileChannel channel = FileChannel.open(targetFile,
                 StandardOpenOption.CREATE,
                 StandardOpenOption.WRITE,
                 StandardOpenOption.READ,
-                StandardOpenOption.TRUNCATE_EXISTING);
-             Arena writeArena = Arena.ofShared()) {
+                StandardOpenOption.TRUNCATE_EXISTING)) {
 
-            MemorySegment mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, totalFileSize, writeArena);
+            MemorySegment mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, totalFileSize, Arena.ofAuto());
 
             // 1. Write Superblock (128 Bytes)
             for (int i = 0; i < 8; i++) {

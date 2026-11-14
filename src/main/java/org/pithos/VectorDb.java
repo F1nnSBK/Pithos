@@ -506,7 +506,8 @@ public class VectorDb {
         FileChannel[] tierChannels = new FileChannel[numTiers];
         MemorySegment[] tierMappeds = new MemorySegment[numTiers];
 
-        try (Arena tierArena = Arena.ofShared()) {
+        Arena tierArena = Arena.ofAuto();
+        try {
             int prevBound = 0;
             for (int k = 0; k < numTiers; k++) {
                 int width = tiers[k] - prevBound;
@@ -597,10 +598,9 @@ public class VectorDb {
                     StandardOpenOption.CREATE,
                     StandardOpenOption.WRITE,
                     StandardOpenOption.READ,
-                    StandardOpenOption.TRUNCATE_EXISTING);
-                 Arena writeArena = Arena.ofShared()) {
+                    StandardOpenOption.TRUNCATE_EXISTING)) {
                 long fp16Bytes = totalRecords * dimension * 2L;
-                MemorySegment fp16Mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, fp16Bytes, writeArena);
+                MemorySegment fp16Mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, fp16Bytes, Arena.ofAuto());
                 java.util.stream.IntStream.range(0, (int) totalRecords).parallel().forEach(i -> {
                     float[] vec = records.get(i).vector();
                     long rowOffset = (long) i * dimension * 2L;
@@ -617,10 +617,9 @@ public class VectorDb {
                     StandardOpenOption.CREATE,
                     StandardOpenOption.WRITE,
                     StandardOpenOption.READ,
-                    StandardOpenOption.TRUNCATE_EXISTING);
-                 Arena writeArena = Arena.ofShared()) {
+                    StandardOpenOption.TRUNCATE_EXISTING)) {
                 long fp8Bytes = totalRecords * dimension * 1L;
-                MemorySegment fp8Mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, fp8Bytes, writeArena);
+                MemorySegment fp8Mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, fp8Bytes, Arena.ofAuto());
                 java.util.stream.IntStream.range(0, (int) totalRecords).parallel().forEach(i -> {
                     float[] z = transformer.preconditionAndRotate(records.get(i).vector());
                     long rowOffset = (long) i * dimension;
@@ -640,10 +639,9 @@ public class VectorDb {
                     StandardOpenOption.CREATE,
                     StandardOpenOption.WRITE,
                     StandardOpenOption.READ,
-                    StandardOpenOption.TRUNCATE_EXISTING);
-                 Arena writeArena = Arena.ofShared()) {
+                    StandardOpenOption.TRUNCATE_EXISTING)) {
                 long fp4Bytes = totalRecords * (long) bytesPerRecord;
-                MemorySegment fp4Mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, fp4Bytes, writeArena);
+                MemorySegment fp4Mapped = channel.map(FileChannel.MapMode.READ_WRITE, 0, fp4Bytes, Arena.ofAuto());
                 java.util.stream.IntStream.range(0, (int) totalRecords).parallel().forEach(i -> {
                     float[] z = transformer.preconditionAndRotate(records.get(i).vector());
                     long rowOffset = (long) i * bytesPerRecord;

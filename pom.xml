@@ -103,7 +103,6 @@
                         <buildArg>--enable-native-access=ALL-UNNAMED</buildArg>
                         <buildArg>-H:+UnlockExperimentalVMOptions</buildArg>
                         <buildArg>-H:+VectorAPISupport</buildArg>
-                        <buildArg>-H:+SharedArenaSupport</buildArg>
                         <buildArg>--gc=serial</buildArg>
                         <buildArg>-R:MaxHeapSize=4g</buildArg>
                         <buildArg>--parallelism=3</buildArg>
@@ -223,7 +222,6 @@ EOF
                                 <buildArg>--enable-native-access=ALL-UNNAMED</buildArg>
                                 <buildArg>-H:+UnlockExperimentalVMOptions</buildArg>
                                 <buildArg>-H:+VectorAPISupport</buildArg>
-                                <buildArg>-H:+SharedArenaSupport</buildArg>
                                 <buildArg>--gc=serial</buildArg>
                                 <buildArg>-R:MaxHeapSize=4g</buildArg>
                                 <buildArg>--parallelism=2</buildArg>
